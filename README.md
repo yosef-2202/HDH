@@ -2,7 +2,7 @@
 
 **Hệ thống AI Giám sát Hành vi** là một ứng dụng web đa luồng, tích hợp trí tuệ nhân tạo để phát hiện và cảnh báo các hành vi bất thường (như vấp ngã, đánh nhau) theo thời gian thực. Đây là dự án thuộc học phần Hệ Điều Hành (HDH)[cite: 13], được thiết kế theo kiến trúc Modular nhằm tối ưu hóa hiệu suất xử lý hình ảnh trên máy chủ.
 
-🔗 **Truy cập Website:** (Tại Đây)[http://hdh.tbgroup.qzz.io:24706]
+🔗 **Truy cập Website:** http://hdh.tbgroup.qzz.io:24706
 
 ## ⚙️ Tính năng cốt lõi
 Hệ thống được chia thành 5 module xử lý độc lập:
