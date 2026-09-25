@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Hệ thống AI Giám sát</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="logo-container">HỆ THỐNG AI</div>
+        <!-- Đã xóa khối .user-profile chứa ảnh và tên -->
+        
+        <div class="nav-menu">
+            <div class="nav-category">Chức năng chính</div>
+            <a href="/video" class="nav-link">🎬 Xử lý Video Upload</a>
+            <a href="/rtsp" class="nav-link">📡 Luồng RTSP</a>
+            <a href="/camera" class="nav-link">📷 Xử lý Camera local</a>
+            <a href="/image" class="nav-link">🖼️ Xử lý Ảnh</a>
+            <a href="/chatbot" class="nav-link">🤖 Chatbot AI</a>
+            
+            <div class="nav-category">Hệ thống</div>
+            <a href="/settings" class="nav-link">⚙️ Cài đặt</a>
+        </div>
+    </div>
+
+    <!-- Main -->
+    <div class="main-content">
+        <div class="header">
+            <h3>BẢNG ĐIỀU KHIỂN HỆ THỐNG</h3>
+            <div>Thoát</div>
+        </div>
+        
+        <div class="content-wrapper">
+            {% block content %}{% endblock %}
+        </div>
+
+        <!-- System Log Terminal -->
+        <div class="terminal-container">
+            <div class="terminal-header">
+                <div class="mac-btns">
+                    <div class="mac-btn mac-close"></div>
+                    <div class="mac-btn mac-min"></div>
+                    <div class="mac-btn mac-max"></div>
+                </div>
+                <div class="term-title">System AI Terminal</div>
+                <div class="term-status">Đang hoạt động...</div>
+            </div>
+            <div id="logContent" class="log-content">
+                <!-- Log lines will be injected here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Global Logger Script -->
+    <script>
+        const SystemLog = {
+            formatTime: function() {
+                const now = new Date();
+                return `[${now.toLocaleTimeString('en-US', { hour12: true })}]`;
+            },
+            add: function(message, type = 'info') {
+                const logBox = document.getElementById('logContent');
+                const timeStr = this.formatTime();
+                let colorClass = '';
+                
+                switch(type) {
+                    case 'success': colorClass = 'log-success'; break;
+                    case 'warning': colorClass = 'log-warning'; break;
+                    case 'error': colorClass = 'log-error'; break;
+                    default: colorClass = 'log-info'; break;
+                }
+
+                const logLine = document.createElement('div');
+                logLine.className = 'log-line';
+                logLine.innerHTML = `<span class="log-time">${timeStr}</span> <span class="${colorClass}">${message}</span>`;
+                
+                logBox.appendChild(logLine);
+                logBox.scrollTop = logBox.scrollHeight; // Auto scroll
+            }
+        };
+
+        // Init message
+        window.onload = () => {
+            SystemLog.add("Hệ thống khởi động thành công.", "success");
+            SystemLog.add("Sẵn sàng nhận lệnh từ các module...", "info");
+        };
+    </script>
+</body>
+</html>

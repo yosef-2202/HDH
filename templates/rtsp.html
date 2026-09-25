@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Quản lý Luồng RTSP</h2><br>
+<div class="card" style="max-width: 800px;">
+    <div class="card-header">Camera IP / RTSP</div>
+    <div style="display: flex; gap: 15px; align-items: center; margin-bottom: 20px;">
+        <input type="text" class="form-control" style="margin-bottom: 0;" placeholder="Nhập đường dẫn RTSP (vd: rtsp://admin:123@ip:554/stream)">
+        <label style="display: flex; align-items: center; cursor: pointer; background: #f0f7ff; padding: 8px 15px; border-radius: 20px; border: 1px solid #104c7d; white-space: nowrap;">
+            <input type="checkbox" id="rtspToggle" checked onchange="toggleRTSP()" style="margin-right: 8px;">
+            <span id="rtspStatusText" style="color: #104c7d; font-weight: bold;">Đang hoạt động</span>
+        </label>
+    </div>
+    <div id="rtspContent" style="background: #000; height: 400px; color: white; display: flex; align-items: center; justify-content: center; border-radius: 4px;">
+        [Luồng RTSP - Mô hình AI chưa được cài đặt]
+    </div>
+    <div id="rtspMaintenance" style="display: none; background: #fff3cd; height: 400px; color: #856404; flex-direction: column; align-items: center; justify-content: center; border-radius: 4px; border: 1px solid #ffeeba;">
+        <h3>🚧 HỆ THỐNG ĐANG BẢO TRÌ</h3>
+        <p>Luồng RTSP đã được tạm tắt.</p>
+    </div>
+</div>
+<script>
+    function toggleRTSP() {
+        const isChecked = document.getElementById('rtspToggle').checked;
+        document.getElementById('rtspContent').style.display = isChecked ? 'flex' : 'none';
+        document.getElementById('rtspMaintenance').style.display = isChecked ? 'none' : 'flex';
+        const text = document.getElementById('rtspStatusText');
+        text.innerText = isChecked ? "Đang hoạt động" : "Đang bảo trì";
+        text.style.color = isChecked ? "#104c7d" : "#856404";
+    }
+</script>
+{% endblock %}

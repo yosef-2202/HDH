@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Cài đặt Hệ thống</h2><br>
+<div class="card" style="max-width: 600px;">
+    <div class="card-header">Cấu hình API & Model</div>
+    <form id="settingsForm">
+        <label style="font-weight: bold;">Chọn Mô hình xử lý (Core Model):</label>
+        <select class="form-control" name="modelType">
+            <option value="yolo">YOLOv8 Pose (Chưa cài đặt model)</option>
+            <option value="mediapipe">MediaPipe (Chưa cài đặt model)</option>
+        </select>
+
+        <label style="font-weight: bold;">API Token (Dành cho Chatbot/LLM):</label>
+        <input type="password" class="form-control" name="apiToken" placeholder="Nhập Token OpenAI / HuggingFace...">
+
+        <label style="font-weight: bold;">Ngưỡng cảnh báo (Threshold):</label>
+        <input type="number" class="form-control" name="threshold" value="0.85" step="0.05">
+
+        <button type="button" onclick="saveSettings()" class="btn btn-primary" style="width: 100%;">Lưu Cài Đặt</button>
+    </form>
+</div>
+<script>
+    function saveSettings() {
+        alert("Đã lưu cài đặt! (Chức năng lưu DB chưa được cài đặt)");
+    }
+</script>
+{% endblock %}

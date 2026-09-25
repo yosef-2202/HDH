@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Quản lý Video Upload</h2><br>
+<div class="card" style="max-width: 800px;">
+    <div class="card-header">Tải lên và Phân tích Video</div>
+    <form action="/api/upload_video" method="POST" enctype="multipart/form-data">
+        <label style="display: block; font-weight: bold; margin-bottom: 8px;">Chọn video từ máy tính:</label>
+        <input type="file" name="file" accept="video/*" class="form-control" style="border: 1px dashed #ccc;">
+        <button type="submit" class="btn btn-primary">Tải lên & Phân tích</button>
+    </form>
+    <hr style="margin: 20px 0; border-top: 1px solid #eee;">
+    <div style="background: #000; height: 350px; color: white; display: flex; align-items: center; justify-content: center;">
+        [Khu vực phát Video - Mô hình AI chưa được cài đặt]
+    </div>
+</div>
+{% endblock %}

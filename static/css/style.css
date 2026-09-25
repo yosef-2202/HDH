@@ -1,0 +1,45 @@
+/* Giao diện Terminal Log */
+.terminal-container {
+    background: #1e1e1e;
+    margin: 0 20px 20px 20px;
+    border-radius: 8px;
+    box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+    display: flex;
+    flex-direction: column;
+    height: 220px;
+    border: 1px solid #333;
+    font-family: 'Consolas', 'Courier New', monospace;
+}
+
+.terminal-header {
+    display: flex;
+    align-items: center;
+    background: #2d2d2d;
+    padding: 10px 15px;
+    border-radius: 8px 8px 0 0;
+    border-bottom: 2px solid #00c853; /* Thanh tiến trình giả lập */
+}
+
+.mac-btns { display: flex; gap: 8px; margin-right: 20px; }
+.mac-btn { width: 12px; height: 12px; border-radius: 50%; }
+.mac-close { background: #ff5f56; }
+.mac-min { background: #ffbd2e; }
+.mac-max { background: #27c93f; }
+
+.term-title { flex: 1; color: #fff; font-weight: bold; font-size: 13px; }
+.term-status { color: #00c853; font-size: 12px; }
+
+.log-content {
+    flex: 1;
+    padding: 15px;
+    overflow-y: auto;
+    background: #1e1e1e;
+    border-radius: 0 0 8px 8px;
+}
+
+.log-line { font-size: 13px; margin-bottom: 8px; line-height: 1.5; }
+.log-time { color: #888; margin-right: 8px; }
+.log-info { color: #d4d4d4; }
+.log-success { color: #27c93f; }
+.log-warning { color: #ffbd2e; }
+.log-error { color: #ff5f56; }

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Hệ thống AI Giám sát</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="logo-container">HỆ THỐNG AI</div>
+        <div class="user-profile">
+            <div class="avatar"></div>
+            <h4>Yosef</h4>
+            <span style="font-size: 12px; color: #888;">Quản trị viên</span>
+        </div>
+        <div class="nav-menu">
+            <div class="nav-category">Chức năng chính</div>
+            <a href="/video" class="nav-link">📹 Xử lý Video & RTSP</a>
+            <a href="/camera" class="nav-link">📷 Xử lý Camera</a>
+            <a href="/image" class="nav-link">🖼️ Xử lý Ảnh</a>
+            <a href="/chatbot" class="nav-link">🤖 Chatbot AI</a>
+            
+            <div class="nav-category">Hệ thống</div>
+            <a href="/settings" class="nav-link">⚙️ Cài đặt</a>
+        </div>
+    </div>
+
+    <!-- Main -->
+    <div class="main-content">
+        <div class="header">
+            <h3>BẢNG ĐIỀU KHIỂN HỆ THỐNG</h3>
+            <div>Admin</div>
+        </div>
+        <div class="content-wrapper">
+            <!-- Các trang con sẽ được chèn vào đây -->
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+</body>
+</html>
