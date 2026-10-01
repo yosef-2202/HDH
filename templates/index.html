@@ -1,41 +1,86 @@
-<!DOCTYPE html>
-<html lang="vi">
-<head>
-    <meta charset="UTF-8">
-    <title>Hệ thống AI Giám sát</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-</head>
-<body>
-    <!-- Sidebar -->
-    <div class="sidebar">
-        <div class="logo-container">HỆ THỐNG AI</div>
-        <div class="user-profile">
-            <div class="avatar"></div>
-            <h4>Yosef</h4>
-            <span style="font-size: 12px; color: #888;">Quản trị viên</span>
-        </div>
-        <div class="nav-menu">
-            <div class="nav-category">Chức năng chính</div>
-            <a href="/video" class="nav-link">📹 Xử lý Video & RTSP</a>
-            <a href="/camera" class="nav-link">📷 Xử lý Camera</a>
-            <a href="/image" class="nav-link">🖼️ Xử lý Ảnh</a>
-            <a href="/chatbot" class="nav-link">🤖 Chatbot AI</a>
-            
-            <div class="nav-category">Hệ thống</div>
-            <a href="/settings" class="nav-link">⚙️ Cài đặt</a>
+{% extends "base.html" %}
+{% block title %}Tổng quan - Hệ Thống AI{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h3 class="fw-bold mb-0 text-dark">Bảng điều khiển</h3>
+        <p class="text-muted small mb-0">Hệ thống phân tích AI tập trung</p>
+    </div>
+    <span class="badge bg-success-subtle text-success border border-success px-3 py-2 rounded-pill shadow-sm">
+        <i class="fa-solid fa-server me-1"></i> Server đang hoạt động
+    </span>
+</div>
+
+<!-- STATS CARDS REALTIME -->
+<div class="row mb-5">
+    <div class="col-xl-4 col-md-6 mb-4">
+        <div class="card custom-card h-100 py-2" style="border-left: 5px solid #3182ce;">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <div class="text-xs fw-bold text-primary text-uppercase mb-1" style="font-size: 0.8rem;">Đang xử lý (Active Jobs)</div>
+                        <div class="h5 mb-0 fw-bold text-dark"><span id="stat-active-jobs">0</span> / <span id="stat-max-jobs">2</span> Job</div>
+                    </div>
+                    <div class="col-auto"><i class="fa-solid fa-microchip fa-2x text-muted opacity-50"></i></div>
+                </div>
+            </div>
         </div>
     </div>
 
-    <!-- Main -->
-    <div class="main-content">
-        <div class="header">
-            <h3>BẢNG ĐIỀU KHIỂN HỆ THỐNG</h3>
-            <div>Admin</div>
-        </div>
-        <div class="content-wrapper">
-            <!-- Các trang con sẽ được chèn vào đây -->
-            {% block content %}{% endblock %}
+    <div class="col-xl-4 col-md-6 mb-4">
+        <div class="card custom-card h-100 py-2" style="border-left: 5px solid #d69e2e;">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <div class="text-xs fw-bold text-warning text-uppercase mb-1" style="font-size: 0.8rem;">Hàng chờ (Queue)</div>
+                        <div class="h5 mb-0 fw-bold text-dark"><span id="stat-queue">0</span> Job đang đợi</div>
+                    </div>
+                    <div class="col-auto"><i class="fa-solid fa-list-check fa-2x text-muted opacity-50"></i></div>
+                </div>
+            </div>
         </div>
     </div>
-</body>
-</html>
+    
+    <div class="col-xl-4 col-md-6 mb-4">
+        <div class="card custom-card h-100 py-2" style="border-left: 5px solid #38a169;">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <div class="text-xs fw-bold text-success text-uppercase mb-1" style="font-size: 0.8rem;">Gemini Tokens</div>
+                        <div class="h5 mb-0 fw-bold text-dark">2 API Keys (Round-Robin)</div>
+                    </div>
+                    <div class="col-auto"><i class="fa-solid fa-key fa-2x text-muted opacity-50"></i></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- THÀNH VIÊN -->
+<h4 class="fw-bold text-dark mb-4 border-bottom pb-2">Thành viên phát triển</h4>
+<div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-5 g-3 mb-4">
+    <div class="col"><div class="card custom-card text-center py-4 h-100"><div class="card-body px-2"><img src="https://ui-avatars.com/api/?name=TV1&background=3182ce&color=fff&size=70" class="rounded-circle mb-3 shadow-sm"><h6 class="fw-bold mb-1">Thành Viên 1</h6><p class="text-muted small mb-3">Nhóm trưởng / Backend</p></div></div></div>
+    <div class="col"><div class="card custom-card text-center py-4 h-100"><div class="card-body px-2"><img src="https://ui-avatars.com/api/?name=TV2&background=38a169&color=fff&size=70" class="rounded-circle mb-3 shadow-sm"><h6 class="fw-bold mb-1">Thành Viên 2</h6><p class="text-muted small mb-3">AI & Computer Vision</p></div></div></div>
+    <div class="col"><div class="card custom-card text-center py-4 h-100"><div class="card-body px-2"><img src="https://ui-avatars.com/api/?name=TV3&background=d69e2e&color=fff&size=70" class="rounded-circle mb-3 shadow-sm"><h6 class="fw-bold mb-1">Thành Viên 3</h6><p class="text-muted small mb-3">Data Processing</p></div></div></div>
+    <div class="col"><div class="card custom-card text-center py-4 h-100"><div class="card-body px-2"><img src="https://ui-avatars.com/api/?name=TV4&background=e53e3e&color=fff&size=70" class="rounded-circle mb-3 shadow-sm"><h6 class="fw-bold mb-1">Thành Viên 4</h6><p class="text-muted small mb-3">Frontend Developer</p></div></div></div>
+    <div class="col"><div class="card custom-card text-center py-4 h-100"><div class="card-body px-2"><img src="https://ui-avatars.com/api/?name=TV5&background=805ad5&color=fff&size=70" class="rounded-circle mb-3 shadow-sm"><h6 class="fw-bold mb-1">Thành Viên 5</h6><p class="text-muted small mb-3">Tester & QA</p></div></div></div>
+</div>
+
+<script>
+    // Cập nhật số Job theo thời gian thực (Mỗi 2 giây)
+    function fetchSystemStats() {
+        fetch('/api/stats')
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('stat-active-jobs').innerText = data.active_jobs;
+                document.getElementById('stat-max-jobs').innerText = data.concurrent_jobs;
+                document.getElementById('stat-queue').innerText = data.queue_size;
+            })
+            .catch(err => console.error("Lỗi lấy dữ liệu:", err));
+    }
+    
+    fetchSystemStats(); // Gọi ngay lần đầu
+    setInterval(fetchSystemStats, 2000); // Lặp lại mỗi 2 giây
+</script>
+{% endblock %}
