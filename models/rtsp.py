@@ -113,12 +113,12 @@ def analyze_frame_with_ai(frame, recent_frames, alert_id):
         print("=> LỖI: Chưa cấu hình Token API", file=sys.stderr)
         return
 
-    prompt = """Bạn là hệ thống giám sát an ninh bằng AI. Nhiệm vụ của bạn là PHÁT HIỆN CON NGƯỜI và phân tích hành vi của HỌ.
-Tuyệt đối không báo cáo các vật thể vô tri hoặc động vật (ví dụ: xe cộ, chó, mèo).
-Nếu trong ảnh không có con người, chỉ trả lời chữ: 'Không'.
-Nếu trong ảnh có người, hãy phân tích kỹ các hành vi như: đi bộ, chạy, nhìn, tương tác với đồ vật, hoặc tương tác với người khác.
-Liệt kê MỖI NGƯỜI (CON NGƯỜI) TRÊN 1 DÒNG theo định dạng sau:
-[Hành động chính của người] - [Mô tả chi tiết về người đó] | ymin, xmin, ymax, xmax"""
+    prompt = """Bạn là hệ thống AI giám sát an ninh camera thông minh.
+NHIỆM VỤ: Phân tích ảnh, CHỈ PHÁT HIỆN CON NGƯỜI và mô tả hành vi của họ HOÀN TOÀN BẰNG TIẾNG VIỆT.
+TUYỆT ĐỐI KHÔNG dùng tiếng Anh. Bỏ qua mô tả quần áo rườm rà, tập trung vào hành động.
+Nếu không có con người, trả lời chính xác chữ: 'Không'.
+Nếu có người, hãy liệt kê MỖI NGƯỜI TRÊN MỘT DÒNG theo đúng định dạng:
+[Hành động chính: Đi lại/Đứng quan sát/Nhìn ngó/Tương tác/Đánh nhau] - [Mô tả chi tiết hành động bằng tiếng Việt] | ymin, xmin, ymax, xmax"""
     
     max_retries = max(1, len(valid_apis)) 
     

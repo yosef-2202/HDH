@@ -30,7 +30,7 @@
     <div class="col-12 col-lg-8">
         <div class="card custom-card h-100 border-0 shadow-sm">
             <div class="card-header bg-white border-bottom py-3 d-flex flex-wrap align-items-center gap-2">
-                <div class="input-group input-group-sm flex-grow-1" style="min-width: 250px;">
+                <div class="input-group input-group-sm flex-grow-1 flex-nowrap" style="min-width: 250px;">
                     <input type="text" id="rtspInput" class="form-control" placeholder="Nhập đường dẫn RTSP..." value="">
                     <button class="btn btn-outline-secondary" type="button" onclick="pasteLink()" title="Dán link">
                         <i class="fa-solid fa-paste"></i>
@@ -39,7 +39,7 @@
                         <i class="fa-solid fa-xmark"></i>
                     </button>
                 </div>
-                <div class="d-flex gap-2">
+                <div class="d-flex gap-2 ms-auto">
                     <button class="btn btn-primary btn-sm fw-bold px-3 px-md-4" onclick="startStream()" style="white-space: nowrap;">
                         <i class="fa-solid fa-play me-1"></i> Phát
                     </button>
@@ -49,12 +49,12 @@
                 </div>
             </div>
             
-            <div class="card-body p-0 bg-dark d-flex align-items-center justify-content-center" style="height: 450px; overflow: hidden; position: relative;">
-                <div id="rtspPlaceholder" class="text-secondary text-center p-3">
+            <div class="card-body p-0 bg-dark d-flex align-items-center justify-content-center" style="aspect-ratio: 16/9; max-height: 600px; overflow: hidden; position: relative;">
+                <div id="rtspPlaceholder" class="text-secondary text-center p-3 w-100">
                     <i class="fa-solid fa-satellite-dish fa-3x mb-3 d-block text-center"></i>
                     [Chưa có tín hiệu luồng]
                 </div>
-                <img id="videoStream" src="" style="width: 100%; height: 100%; object-fit: contain; display: none;">
+                <img id="videoStream" class="w-100 h-100 object-fit-contain" src="" style="display: none;">
             </div>
         </div>
     </div>
@@ -113,7 +113,7 @@
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close" onclick="closeTempVideo()"></button>
       </div>
       <div class="modal-body p-0 text-center" style="min-height: 400px; background: #000; position: relative;">
-        <video id="replayVideo" controls autoplay style="width: 100%; max-height: 400px; display: none;" type="video/webm"></video>
+        <video id="replayVideo" controls autoplay class="w-100 object-fit-contain" style="display: none;" type="video/webm"></video>
         <div id="dummyPlayer" class="d-flex flex-column align-items-center justify-content-center h-100 w-100 py-5">
             <i class="fa-solid fa-circle-play fa-4x text-primary mb-3"></i>
             <h5 id="tempVideoId" class="text-muted">Đang phát đoạn cắt...</h5>
