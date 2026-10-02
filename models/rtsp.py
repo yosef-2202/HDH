@@ -64,7 +64,8 @@ def get_api_credentials():
     ai_provider = selected_api['provider']
     
     if ai_provider == 'gemini': 
-        model_name = 'gemini-2.5-flash'
+        # Cập nhật theo yêu cầu của Google API mới nhất
+        model_name = 'gemini-3.8-flash'
     else:
         model_name = selected_api.get('model', '').strip()
         if not model_name: model_name = 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free'
@@ -149,7 +150,13 @@ Nếu có người, hãy liệt kê MỖI NGƯỜI TRÊN MỘT DÒNG theo đúng
                 }
                 response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload, timeout=30)
                 response.raise_for_status() 
-                text = response.json()['choices'][0]['message']['content'].strip()
+                
+                # Sửa lỗi 'choices' bằng cách kiểm tra JSON trả về một cách an toàn
+                res_data = response.json()
+                if 'choices' in res_data and len(res_data['choices']) > 0:
+                    text = res_data['choices'][0]['message']['content'].strip()
+                else:
+                    raise Exception(f"OpenRouter trả về dữ liệu không hợp lệ: {res_data}")
             
             process_time = round(time.time() - start_time, 2)
             lines = text.split('\n')
@@ -337,7 +344,8 @@ def api_status_check():
         try:
             if provider == 'gemini':
                 genai.configure(api_key=token)
-                genai.get_model('models/gemini-2.5-flash')
+                # Cập nhật hàm check status tương ứng
+                genai.get_model('models/gemini-3.8-flash')
                 status[key_name] = {"text": "Hoạt động (Gemini)", "color": "success"}
             else:
                 res = requests.get("https://openrouter.ai/api/v1/auth/key", headers={"Authorization": f"Bearer {token}"}, timeout=5)
