@@ -1,12 +1,17 @@
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 from urllib.parse import quote_plus
+from werkzeug.middleware.proxy_fix import ProxyFix
+import json
 
 # Import module RTSP
 from models.rtsp import rtsp_bp
 
 app = Flask(__name__)
 app.secret_key = 'hdh_secret_key_2026'
+
+# Khai báo ProxyFix giúp ứng dụng nhận diện chuẩn xác IP thực
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
 # --- CẤU HÌNH MYSQL ---
 db_user = 'u50283_95Wuon3aKO'
@@ -24,16 +29,15 @@ class SystemSettings(db.Model):
     __tablename__ = 'system_settings'
     id = db.Column(db.Integer, primary_key=True)
     setting_key = db.Column(db.String(50), unique=True, nullable=False)
-    setting_value = db.Column(db.String(255), nullable=True)
+    setting_value = db.Column(db.Text, nullable=True) # Dùng Text để lưu JSON không giới hạn
 
 with app.app_context():
     db.create_all()
-    # Khai báo 5 chức năng chính và các thông số cần thiết
+    # Khai báo cấu hình mặc định, bao gồm cả biến cho module RTSP
     default_settings = {
         'system_pin': '123456',
-        'token1': '',
-        'token2': '',
-        'concurrent_jobs': '2',
+        'rtsp_api_list': '[]',
+        'rtsp_concurrent_jobs': '2',
         'enable_video': 'true',
         'enable_rtsp': 'true',
         'enable_chatbot': 'true',
@@ -79,29 +83,22 @@ def verify_pin():
 
 @app.route('/')
 @app.route('/index')
-def index():
-    return render_template('index.html')
+def index(): return render_template('index.html')
 
 @app.route('/video')
-def video():
-    return render_template('video.html')
+def video(): return render_template('video.html')
 
 @app.route('/rtsp')
-def rtsp():
-    return render_template('rtsp.html')
+def rtsp(): return render_template('rtsp.html')
 
 @app.route('/image')
-def image():
-    return render_template('image.html')
+def image(): return render_template('image.html')
 
 @app.route('/chatbot')
-def chatbot():
-    return render_template('chatbot.html')
+def chatbot(): return render_template('chatbot.html')
 
 @app.route('/realtime')
-def realtime():
-    # Render giao diện web chờ cho tính năng này
-    return render_template('realtime.html')
+def realtime(): return render_template('realtime.html')
 
 @app.route('/settings')
 def settings_page():
@@ -109,23 +106,19 @@ def settings_page():
         return redirect(url_for('index'))
     return render_template('settings.html')
 
-# --- API THỐNG KÊ ĐÃ FIX LỖI NHẢY SỐ ---
 @app.route('/api/stats')
 def api_stats():
-    max_jobs = int(get_setting('concurrent_jobs', 2))
     return jsonify({
-        "active_jobs": 0,
-        "concurrent_jobs": max_jobs,
+        "active_jobs": 0, 
+        "concurrent_jobs": int(get_setting('rtsp_concurrent_jobs', 2)), 
         "queue_size": 0
     })
 
+# API Quản lý Bật/Tắt Module chính
 @app.route('/api/config', methods=['GET', 'POST'])
 def api_config():
     if request.method == 'POST':
         data = request.get_json()
-        update_setting('token1', data.get('token1', ''))
-        update_setting('token2', data.get('token2', ''))
-        update_setting('concurrent_jobs', str(data.get('concurrent_jobs', 2)))
         update_setting('enable_video', 'true' if data.get('enable_video') else 'false')
         update_setting('enable_rtsp', 'true' if data.get('enable_rtsp') else 'false')
         update_setting('enable_chatbot', 'true' if data.get('enable_chatbot') else 'false')
@@ -134,8 +127,6 @@ def api_config():
         return jsonify({"success": True})
     
     return jsonify({
-        "gemini_tokens": [get_setting('token1'), get_setting('token2')],
-        "concurrent_jobs": int(get_setting('concurrent_jobs', 2)),
         "enable_video": get_setting('enable_video') == 'true',
         "enable_rtsp": get_setting('enable_rtsp') == 'true',
         "enable_chatbot": get_setting('enable_chatbot') == 'true',

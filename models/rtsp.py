@@ -4,6 +4,11 @@ import threading
 import time
 import sys
 import os
+import queue
+import uuid
+import json
+import base64
+import requests
 from datetime import datetime
 import google.generativeai as genai
 from PIL import Image
@@ -15,246 +20,244 @@ camera_lock = threading.Lock()
 
 global_logs = []
 global_alerts = []
-gemini_is_analyzing = False
-token_turn = 0 
 last_api_call_time = 0
+
+analysis_queue = queue.Queue(maxsize=100)
+token_lock = threading.Lock()
+token_turn = 0
+
+workers_started = False
+worker_lock = threading.Lock()
 
 os.makedirs('static/temp', exist_ok=True)
 
-def record_short_clip(frame_list, alert_id, bboxes=None):
+def get_api_credentials():
+    global token_turn
+    from app import app, get_setting
+    with app.app_context():
+        try:
+            api_list = json.loads(get_setting('rtsp_api_list', '[]'))
+        except:
+            api_list = []
+        
+        forced_model_mode = get_setting('rtsp_forced_model_mode', 'auto')
+        
+    valid_apis = [api for api in api_list if api.get('key', '').strip() != '']
+    
+    if not valid_apis: return None, None, None, None, None
+
+    with token_lock:
+        if forced_model_mode == 'auto':
+            selected_api = valid_apis[token_turn % len(valid_apis)]
+            token_turn += 1
+        else:
+            filtered_apis = [api for api in valid_apis if api['provider'] == forced_model_mode]
+            if filtered_apis:
+                selected_api = filtered_apis[token_turn % len(filtered_apis)]
+                token_turn += 1
+            else:
+                selected_api = valid_apis[token_turn % len(valid_apis)]
+                token_turn += 1
+        
+    api_label = f"Token_{token_turn}"
+    api_key = selected_api['key'].strip()
+    ai_provider = selected_api['provider']
+    
+    if ai_provider == 'gemini': 
+        model_name = 'gemini-2.5-flash'
+    else:
+        model_name = selected_api.get('model', '').strip()
+        if not model_name: model_name = 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free'
+        
+    return api_label, api_key, valid_apis, model_name, ai_provider
+
+def start_workers_if_needed():
+    global workers_started
+    with worker_lock:
+        if not workers_started:
+            from app import app, get_setting
+            with app.app_context():
+                try: num_workers = int(get_setting('rtsp_concurrent_jobs', 2)) 
+                except: num_workers = 2
+            
+            for i in range(num_workers):
+                threading.Thread(target=ai_worker, daemon=True, name=f"AI-Worker-{i}").start()
+            workers_started = True
+
+def ai_worker():
+    while True:
+        task = analysis_queue.get()
+        if task is None: break
+        frame, recent_frames, alert_id = task
+        analyze_frame_with_ai(frame, recent_frames, alert_id)
+        analysis_queue.task_done()
+
+def record_short_clip(frame_list, alert_id):
     if not frame_list: return
     try:
         height, width, _ = frame_list[0].shape
         filepath = f"static/temp/{alert_id}.webm"
         fourcc = cv2.VideoWriter_fourcc(*'VP80')
         out = cv2.VideoWriter(filepath, fourcc, 15.0, (width, height))
-
-        # Lưu trữ mảng tọa độ khung cho TỪNG frame
-        tracked_boxes_per_frame = [ [] for _ in range(len(frame_list)) ]
-        
-        if bboxes and len(bboxes) > 0:
-            trackers = []
-            for bbox in bboxes:
-                ymin, xmin, ymax, xmax = bbox
-                # Quy đổi về pixel
-                y1 = max(0, int(ymin * height / 1000))
-                x1 = max(0, int(xmin * width / 1000))
-                y2 = min(height, int(ymax * height / 1000))
-                x2 = min(width, int(xmax * width / 1000))
-                
-                w_box = max(1, x2 - x1)
-                h_box = max(1, y2 - y1)
-                initial_bbox = (x1, y1, w_box, h_box)
-                
-                # Khởi tạo tracker cho TỪNG người
-                try:
-                    tracker = cv2.TrackerKCF_create()
-                    tracker.init(frame_list[-1], initial_bbox)
-                    trackers.append({'tracker': tracker, 'last_box': initial_bbox})
-                except AttributeError:
-                    # Fallback nếu OpenCV không có module Tracker
-                    trackers.append({'tracker': None, 'last_box': initial_bbox})
-            
-            # Gán hộp ở frame cuối cùng (mốc do AI phân tích)
-            tracked_boxes_per_frame[-1] = [t['last_box'] for t in trackers]
-
-            # Tracking giật lùi về quá khứ cho tất cả các đối tượng
-            for i in range(len(frame_list) - 2, -1, -1):
-                current_frame_boxes = []
-                for t in trackers:
-                    if t['tracker'] is not None:
-                        success, box = t['tracker'].update(frame_list[i])
-                        if success:
-                            t['last_box'] = box
-                            current_frame_boxes.append(box)
-                        else:
-                            current_frame_boxes.append(t['last_box']) # Nếu mất dấu, giữ hộp ở vị trí cũ
-                    else:
-                        current_frame_boxes.append(t['last_box'])
-                tracked_boxes_per_frame[i] = current_frame_boxes
-
-        # Ghi frame kèm tất cả các bounding box
-        for i, f in enumerate(frame_list):
-            frame_copy = f.copy()
-            if bboxes and i < len(tracked_boxes_per_frame):
-                for box in tracked_boxes_per_frame[i]:
-                    tx, ty, tw, th = [int(v) for v in box]
-                    cv2.rectangle(frame_copy, (tx, ty), (tx + tw, ty + th), (0, 0, 255), 2)
-            out.write(frame_copy)
-            
+        for f in frame_list:
+            out.write(f)
         out.release()
     except Exception as e:
         print(f"=> LỖI LƯU VIDEO TEMP: {e}", file=sys.stderr)
 
-def analyze_frame_with_gemini(frame, recent_frames, alert_id):
-    global gemini_is_analyzing, global_logs, global_alerts, token_turn
-    try:
-        from app import app, get_setting
-        with app.app_context():
-            token1 = get_setting('token1', '').strip()
-            token2 = get_setting('token2', '').strip()
-            
-        active_tokens = []
-        if token1: active_tokens.append(("API 1", token1))
-        if token2: active_tokens.append(("API 2", token2))
-        
-        if not active_tokens:
-            print("=> LỖI: Chưa cấu hình Token Gemini", file=sys.stderr)
-            return
+def analyze_frame_with_ai(frame, recent_frames, alert_id):
+    global global_logs, global_alerts
+    
+    api_label, api_key, valid_apis, model_name, ai_provider = get_api_credentials()
+    if not api_key:
+        print("=> LỖI: Chưa cấu hình Token API", file=sys.stderr)
+        return
 
-        api_label, api_key = active_tokens[token_turn % len(active_tokens)]
-        token_turn += 1
+    prompt = """Bạn là hệ thống giám sát an ninh bằng AI. Nhiệm vụ của bạn là PHÁT HIỆN CON NGƯỜI và phân tích hành vi của HỌ.
+Tuyệt đối không báo cáo các vật thể vô tri hoặc động vật (ví dụ: xe cộ, chó, mèo).
+Nếu trong ảnh không có con người, chỉ trả lời chữ: 'Không'.
+Nếu trong ảnh có người, hãy phân tích kỹ các hành vi như: đi bộ, chạy, nhìn, tương tác với đồ vật, hoặc tương tác với người khác.
+Liệt kê MỖI NGƯỜI (CON NGƯỜI) TRÊN 1 DÒNG theo định dạng sau:
+[Hành động chính của người] - [Mô tả chi tiết về người đó] | ymin, xmin, ymax, xmax"""
+    
+    max_retries = max(1, len(valid_apis)) 
+    
+    for attempt in range(max_retries):
+        try:
+            start_time = time.time()
+            text = ""
+            
+            if ai_provider == 'gemini':
+                genai.configure(api_key=api_key)
+                model = genai.GenerativeModel(model_name)
+                rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                pil_img = Image.fromarray(rgb_frame)
+                response = model.generate_content([prompt, pil_img])
+                text = response.text.strip()
+            else:
+                ret, buffer = cv2.imencode('.jpg', frame)
+                img_b64 = base64.b64encode(buffer).decode('utf-8')
+                image_data_url = f"data:image/jpeg;base64,{img_b64}"
+                
+                headers = {
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json"
+                }
+                payload = {
+                    "model": model_name,
+                    "messages": [{"role": "user", "content": [{"type": "text", "text": prompt}, {"type": "image_url", "image_url": {"url": image_data_url}}]}]
+                }
+                response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload, timeout=30)
+                response.raise_for_status() 
+                text = response.json()['choices'][0]['message']['content'].strip()
+            
+            process_time = round(time.time() - start_time, 2)
+            lines = text.split('\n')
+            detected_persons = []
+            
+            for line in lines:
+                if "|" in line:
+                    parts = line.split("|")
+                    try:
+                        coords = parts[1].strip().replace('[','').replace(']','').split(",")
+                        if len(coords) == 4:
+                            session_id = str(uuid.uuid4())[:6].upper()
+                            detected_persons.append(f"[Phiên: {session_id}] {parts[0].strip()}")
+                    except: pass
+            
+            if detected_persons:
+                behavior_title = f"Phát hiện {len(detected_persons)} người ({ai_provider})"
+                action_desc = "<br>".join([f"- {p}" for p in detected_persons])
+                
+                threading.Thread(target=record_short_clip, args=(list(recent_frames), alert_id)).start()
+                
+                timestamp = datetime.now().strftime("%H:%M:%S")
+                log_msg = f"[{timestamp}] [{api_label}] {behavior_title} (Đang chờ: {analysis_queue.qsize()}) - Tốc độ: {process_time}s"
+                
+                if len(global_logs) > 50: global_logs.pop(0)
+                global_logs.append(log_msg)
 
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-3.8-flash')
-
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        pil_img = Image.fromarray(rgb_frame)
-        
-        # PROMPT MỚI: Bắt buộc tách từng người, mô tả sâu và xuất toạ độ riêng
-        prompt = """Bạn là AI giám sát an ninh. Phân tích ảnh và tìm TỪNG NGƯỜI một cách riêng biệt.
-Nếu không có ai, trả lời 'Không'.
-Nếu có người, hãy liệt kê MỖI NGƯỜI TRÊN 1 DÒNG theo định dạng:
-[Mô tả chi tiết người đó đang làm gì] | ymin, xmin, ymax, xmax
-(ymin, xmin, ymax, xmax là toạ độ hộp bao quanh người tỷ lệ 0-1000).
-Ví dụ:
-Người áo đen đang với tay lấy đồ | 200, 300, 800, 600
-Người đội nón đang đẩy xe | 350, 500, 900, 700"""
-        
-        start_time = time.time()
-        response = model.generate_content([prompt, pil_img])
-        process_time = round(time.time() - start_time, 2)
-        
-        text = response.text.strip()
-        lines = text.split('\n')
-        
-        detected_persons = []
-        bboxes = []
-        
-        # Parse từng dòng để bóc tách nhiều người
-        for line in lines:
-            if "|" in line:
-                parts = line.split("|")
-                desc = parts[0].strip()
-                try:
-                    coords = parts[1].strip().replace('[','').replace(']','').split(",")
-                    if len(coords) == 4:
-                        bbox = tuple(int(x.strip()) for x in coords)
-                        detected_persons.append(desc)
-                        bboxes.append(bbox)
-                except:
-                    pass
-        
-        if detected_persons:
-            # Render thông báo nhiều người
-            num_people = len(detected_persons)
-            behavior_title = f"Phát hiện {num_people} người"
-            action_desc = "<br>".join([f"- {person}" for person in detected_persons])
+                global_alerts.insert(0, {
+                    "id": alert_id,
+                    "time": timestamp,
+                    "behavior": behavior_title,
+                    "process_time": f"{process_time}s",
+                    "level": "Theo dõi",
+                    "badge": "info",
+                    "desc": action_desc,
+                    "api_info": f"{ai_provider}: ...{api_key[-4:]}",
+                    "temp_video_url": f"/static/temp/{alert_id}.webm" 
+                })
+                if len(global_alerts) > 20: global_alerts.pop()
             
-            threading.Thread(target=record_short_clip, args=(list(recent_frames), alert_id, bboxes)).start()
+            break 
             
-            timestamp = datetime.now().strftime("%H:%M:%S")
-            masked_key = f"...{api_key[-4:]}"
-            
-            log_msg = f"[{timestamp}] [{api_label}] {behavior_title} (Xử lý: {process_time}s) - Cấp độ: Lưu ý"
-            
-            if len(global_logs) > 50: global_logs.pop(0)
-            global_logs.append(log_msg)
-
-            global_alerts.insert(0, {
-                "id": alert_id,
-                "time": timestamp,
-                "behavior": behavior_title,
-                "process_time": f"{process_time}s",
-                "level": "Lưu ý",
-                "badge": "warning",
-                "desc": action_desc,
-                "api_info": f"{api_label}: {masked_key}",
-                "temp_video_url": f"/static/temp/{alert_id}.webm" 
-            })
-            if len(global_alerts) > 20: global_alerts.pop()
-    except Exception as e:
-        print(f"=> LỖI GEMINI API: {e}", file=sys.stderr)
-    finally:
-        gemini_is_analyzing = False
+        except Exception as e:
+            if attempt < max_retries - 1:
+                api_label, api_key, valid_apis, model_name, ai_provider = get_api_credentials() 
+                time.sleep(1)
+            else:
+                print(f"=> LỖI TOÀN BỘ TOKEN: {e}", file=sys.stderr)
 
 def generate_frames(rtsp_url):
-    global camera, gemini_is_analyzing, global_logs, global_alerts, last_api_call_time
+    global camera, last_api_call_time
+    start_workers_if_needed() 
     
     with camera_lock:
-        if camera is not None:
-            camera.release()
+        if camera is not None: camera.release()
         camera = cv2.VideoCapture(rtsp_url)
     
     recent_frames = [] 
-    api_cooldown = 5 # RÚT NGẮN XUỐNG 5 GIÂY (để quét nhiều hơn)
+    api_cooldown = 4 
 
     while True:
         with camera_lock:
             success, frame = camera.read()
-            
-        if not success:
-            break
-        else:
-            frame_resized = cv2.resize(frame, (640, 360))
-            
-            recent_frames.append(frame_resized.copy())
-            if len(recent_frames) > 45: 
-                recent_frames.pop(0)
-            
-            current_time = time.time()
-            time_since_last_call = current_time - last_api_call_time
-            countdown = max(0, int(api_cooldown - time_since_last_call))
-            
-            if countdown == 0 and not gemini_is_analyzing:
-                gemini_is_analyzing = True
-                last_api_call_time = current_time
-                alert_id = f"temp_vid_{int(time.time())}"
-                threading.Thread(target=analyze_frame_with_gemini, args=(frame_resized.copy(), list(recent_frames), alert_id)).start()
+        if not success: break
+        
+        frame_resized = cv2.resize(frame, (640, 360))
+        recent_frames.append(frame_resized.copy())
+        if len(recent_frames) > 45: recent_frames.pop(0)
+        
+        current_time = time.time()
+        countdown = max(0, int(api_cooldown - (current_time - last_api_call_time)))
+        
+        if countdown == 0 and not analysis_queue.full():
+            last_api_call_time = current_time
+            alert_id = f"temp_vid_{int(time.time())}"
+            analysis_queue.put((frame_resized.copy(), list(recent_frames), alert_id))
 
-            status_text = f"AI Cooldown: {countdown}s" if countdown > 0 else "AI: Dang phan tich..."
-            cv2.putText(frame_resized, status_text, (400, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255) if countdown > 0 else (0, 255, 0), 2)
-            cv2.putText(frame_resized, "Gemini AI: ON", (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
+        q_size = analysis_queue.qsize()
+        status_text = f"Queue: {q_size}/100 - Cooldown: {countdown}s" if countdown > 0 else f"Queue: {q_size}/100 - Waiting..."
+        cv2.putText(frame_resized, status_text, (350, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 165, 0) if q_size > 0 else (0, 255, 0), 2)
 
-            ret, buffer = cv2.imencode('.jpg', frame_resized, [int(cv2.IMWRITE_JPEG_QUALITY), 50])
-            time.sleep(0.066) 
-            
-            frame_bytes = buffer.tobytes()
-            yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+        ret, buffer = cv2.imencode('.jpg', frame_resized, [int(cv2.IMWRITE_JPEG_QUALITY), 50])
+        time.sleep(0.066) 
+        yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
 
+# --- CÁC ROUTE API DÀNH RIÊNG CHO MODULE RTSP ---
 @rtsp_bp.route('/rtsp')
-def rtsp_page():
-    return render_template('rtsp.html')
+def rtsp_page(): return render_template('rtsp.html')
 
 @rtsp_bp.route('/video_feed')
 def video_feed():
     rtsp_url = request.args.get('url', '')
-    if not rtsp_url:
-        return "Vui lòng cung cấp đường dẫn RTSP", 400
-    
+    if not rtsp_url: return "Vui lòng cung cấp đường dẫn RTSP", 400
     global global_logs, global_alerts
     global_logs.clear()
     global_alerts.clear()
-    global_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] [SYSTEM] Bắt đầu kết nối luồng & kích hoạt Gemini AI...")
-        
+    global_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] [SYSTEM] Kết nối luồng & khởi động Hàng Chờ...")
     return Response(generate_frames(rtsp_url), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @rtsp_bp.route('/api/rtsp/data')
-def rtsp_data():
-    return jsonify({
-        "logs": global_logs,
-        "alerts": global_alerts
-    })
-    
+def rtsp_data(): return jsonify({"logs": global_logs, "alerts": global_alerts})
+
 @rtsp_bp.route('/api/rtsp/delete_temp/<clip_id>', methods=['POST'])
 def delete_temp(clip_id):
     filepath = f"static/temp/{clip_id}.webm"
     if os.path.exists(filepath):
-        try:
-            os.remove(filepath)
-        except:
-            pass
+        try: os.remove(filepath)
+        except: pass
     return jsonify({"success": True})
 
 @rtsp_bp.route('/api/rtsp/clear_cache', methods=['POST'])
@@ -264,24 +267,71 @@ def clear_cache():
     global_alerts.clear()
     return jsonify({"success": True})
 
+@rtsp_bp.route('/api/rtsp/set_mode', methods=['POST'])
+def set_model_mode():
+    from app import app, update_setting
+    data = request.get_json()
+    mode = data.get('mode', 'auto')
+    with app.app_context():
+        update_setting('rtsp_forced_model_mode', mode)
+    return jsonify({"success": True})
+
+@rtsp_bp.route('/api/rtsp/config', methods=['GET', 'POST'])
+def rtsp_config_api():
+    from app import app, get_setting, update_setting
+    if request.method == 'POST':
+        data = request.get_json()
+        api_list_data = data.get('api_list', [])
+        
+        with app.app_context():
+            update_setting('rtsp_api_list', json.dumps(api_list_data))
+            update_setting('rtsp_concurrent_jobs', str(data.get('concurrent_jobs', 2)))
+            update_setting('rtsp_forced_model_mode', data.get('forced_model_mode', 'auto'))
+            
+        return jsonify({"success": True})
+    
+    with app.app_context():
+        try: api_list_parsed = json.loads(get_setting('rtsp_api_list', '[]'))
+        except: api_list_parsed = []
+        
+        concurrent_jobs = int(get_setting('rtsp_concurrent_jobs', 2))
+        forced_model_mode = get_setting('rtsp_forced_model_mode', 'auto')
+        
+    return jsonify({
+        "api_list": api_list_parsed,
+        "concurrent_jobs": concurrent_jobs,
+        "forced_model_mode": forced_model_mode
+    })
+
 @rtsp_bp.route('/api/rtsp/gemini_status')
-def gemini_status():
+def api_status_check():
     from app import app, get_setting
     with app.app_context():
-        token1 = get_setting('token1', '').strip()
-        token2 = get_setting('token2', '').strip()
+        try: api_list = json.loads(get_setting('rtsp_api_list', '[]'))
+        except: api_list = []
     
     status = {}
-    for i, token in enumerate([token1, token2], start=1):
-        key_name = f"API_Key_{i}"
-        if not token:
-            status[key_name] = {"text": "Trống", "color": "secondary"}
-            continue
-        try:
-            genai.configure(api_key=token)
-            genai.get_model('models/gemini-3.8-flash')
-            status[key_name] = {"text": "Hoạt động", "color": "success"}
-        except Exception:
-            status[key_name] = {"text": "Lỗi / Die", "color": "danger"}
+    for i, api in enumerate(api_list, start=1):
+        key_name = f"API_{i}"
+        token = api.get('key', '').strip()
+        provider = api.get('provider', 'gemini')
+        if not token: continue
             
+        try:
+            if provider == 'gemini':
+                genai.configure(api_key=token)
+                genai.get_model('models/gemini-2.5-flash')
+                status[key_name] = {"text": "Hoạt động (Gemini)", "color": "success"}
+            else:
+                res = requests.get("https://openrouter.ai/api/v1/auth/key", headers={"Authorization": f"Bearer {token}"}, timeout=5)
+                if res.status_code == 200:
+                    status[key_name] = {"text": "Hoạt động (OpenRouter)", "color": "success"}
+                else:
+                    status[key_name] = {"text": "Lỗi Token", "color": "danger"}
+        except Exception:
+            status[key_name] = {"text": "Lỗi Mạng", "color": "danger"}
+            
+    if not status:
+        status["Hệ thống"] = {"text": "Chưa có API Key nào được thiết lập", "color": "secondary"}
+        
     return jsonify(status)

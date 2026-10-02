@@ -1,66 +1,58 @@
 {% extends "base.html" %}
-{% block title %}Cài đặt hệ thống - Hệ Thống AI{% endblock %}
+{% block title %}Cài đặt hệ thống - AI Vision{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h3 class="fw-bold mb-0 text-dark">Cài đặt hệ thống</h3>
+    <h3 class="fw-bold mb-0 text-dark">Bảng điều khiển Trung tâm</h3>
 </div>
 
-<div class="row">
-    <div class="col-lg-8">
-        <div class="card custom-card p-4">
+<div class="row justify-content-center">
+    <div class="col-12 col-lg-8 mx-auto"> 
+        <div class="card custom-card p-4 border-0 shadow-sm">
             <form id="configForm">
-                <h5 class="fw-bold mb-4 border-bottom pb-2">Cấu hình API & Hiệu suất</h5>
-                <div class="mb-4">
-                    <label class="form-label fw-bold text-muted small text-uppercase">Gemini API Key 1</label>
-                    <input type="text" class="form-control" id="token1" placeholder="Nhập mã token thứ nhất...">
-                </div>
-                <div class="mb-4">
-                    <label class="form-label fw-bold text-muted small text-uppercase">Gemini API Key 2</label>
-                    <input type="text" class="form-control" id="token2" placeholder="Nhập mã token thứ hai...">
-                </div>
-
-                <div class="mb-4 bg-light p-3 rounded border">
-                    <label class="form-label fw-bold d-block text-dark">Số lượng Job xử lý đồng thời (Đơn/Đa luồng)</label>
-                    <small class="text-muted d-block mb-2">Nhập 1 để chạy Đơn luồng. Nhập >1 để chạy Đa luồng (Khuyến nghị: 2 - 4).</small>
-                    <input type="number" class="form-control" id="concurrentJobs" min="1" max="10" style="width: 150px;" value="2">
-                </div>
-
-                <h5 class="fw-bold mb-4 border-bottom pb-2 mt-5">Quản lý 5 Tính năng (Bật/Tắt)</h5>
-                <div class="row mb-4">
-                    <div class="col-md-6 mb-3">
-                        <div class="form-check form-switch d-flex align-items-center gap-2">
-                            <input class="form-check-input fs-5 m-0" type="checkbox" role="switch" id="enableVideo">
-                            <label class="form-check-label fw-bold" for="enableVideo">Xử lý Video (Tải file)</label>
+                <h5 class="fw-bold mb-4 border-bottom pb-2 text-primary">
+                    <i class="fa-solid fa-power-off me-2"></i>Quản lý Tính năng Hệ thống
+                </h5>
+                <p class="text-muted small mb-4">Bật hoặc tắt các module tại đây. (Cấu hình Token và Model AI sẽ được thiết lập riêng bên trong giao diện của từng tính năng).</p>
+                
+                <div class="row g-4 mb-4">
+                    <div class="col-12 col-sm-6">
+                        <div class="form-check form-switch p-3 bg-light rounded border d-flex justify-content-between align-items-center m-0">
+                            <label class="form-check-label fw-bold m-0" for="enableVideo">Xử lý Video (Tải file)</label>
+                            <input class="form-check-input fs-4 m-0" type="checkbox" role="switch" id="enableVideo">
                         </div>
                     </div>
-                    <div class="col-md-6 mb-3">
-                        <div class="form-check form-switch d-flex align-items-center gap-2">
-                            <input class="form-check-input fs-5 m-0" type="checkbox" role="switch" id="enableRtsp">
-                            <label class="form-check-label fw-bold" for="enableRtsp">Xử lý Luồng RTSP</label>
+                    <div class="col-12 col-sm-6">
+                        <div class="form-check form-switch p-3 bg-light rounded border d-flex justify-content-between align-items-center m-0">
+                            <label class="form-check-label fw-bold m-0" for="enableRtsp">Xử lý Luồng RTSP</label>
+                            <input class="form-check-input fs-4 m-0" type="checkbox" role="switch" id="enableRtsp">
                         </div>
                     </div>
-                    <div class="col-md-6 mb-3">
-                        <div class="form-check form-switch d-flex align-items-center gap-2">
-                            <input class="form-check-input fs-5 m-0" type="checkbox" role="switch" id="enableChatbot">
-                            <label class="form-check-label fw-bold" for="enableChatbot">Chatbot AI (Upload)</label>
+                    <div class="col-12 col-sm-6">
+                        <div class="form-check form-switch p-3 bg-light rounded border d-flex justify-content-between align-items-center m-0">
+                            <label class="form-check-label fw-bold m-0" for="enableChatbot">Chatbot AI (Upload)</label>
+                            <input class="form-check-input fs-4 m-0" type="checkbox" role="switch" id="enableChatbot">
                         </div>
                     </div>
-                    <div class="col-md-6 mb-3">
-                        <div class="form-check form-switch d-flex align-items-center gap-2">
-                            <input class="form-check-input fs-5 m-0" type="checkbox" role="switch" id="enableImage">
-                            <label class="form-check-label fw-bold" for="enableImage">Xử lý Ảnh</label>
+                    <div class="col-12 col-sm-6">
+                        <div class="form-check form-switch p-3 bg-light rounded border d-flex justify-content-between align-items-center m-0">
+                            <label class="form-check-label fw-bold m-0" for="enableImage">Phân tích Ảnh</label>
+                            <input class="form-check-input fs-4 m-0" type="checkbox" role="switch" id="enableImage">
                         </div>
                     </div>
-                    <div class="col-md-6 mb-3">
-                        <div class="form-check form-switch d-flex align-items-center gap-2">
-                            <input class="form-check-input fs-5 m-0" type="checkbox" role="switch" id="enableRealtime">
-                            <label class="form-check-label fw-bold" for="enableRealtime">Phân tích Realtime</label>
+                    <div class="col-12 col-sm-6">
+                        <div class="form-check form-switch p-3 bg-light rounded border d-flex justify-content-between align-items-center m-0">
+                            <label class="form-check-label fw-bold m-0" for="enableRealtime">Phân tích Realtime</label>
+                            <input class="form-check-input fs-4 m-0" type="checkbox" role="switch" id="enableRealtime">
                         </div>
                     </div>
                 </div>
 
-                <button type="submit" class="btn btn-primary px-4 fw-bold"><i class="fa-solid fa-floppy-disk me-2"></i>Lưu cấu hình</button>
+                <div class="d-grid d-md-flex justify-content-md-end mt-4">
+                    <button type="submit" class="btn btn-primary btn-lg px-5 fw-bold shadow-sm">
+                        <i class="fa-solid fa-floppy-disk me-2"></i>Lưu trạng thái
+                    </button>
+                </div>
             </form>
         </div>
     </div>
@@ -70,10 +62,6 @@
     fetch('/api/config')
         .then(res => res.json())
         .then(data => {
-            document.getElementById('token1').value = data.gemini_tokens[0];
-            document.getElementById('token2').value = data.gemini_tokens[1];
-            document.getElementById('concurrentJobs').value = data.concurrent_jobs;
-            
             document.getElementById('enableVideo').checked = data.enable_video;
             document.getElementById('enableRtsp').checked = data.enable_rtsp;
             document.getElementById('enableChatbot').checked = data.enable_chatbot;
@@ -84,9 +72,6 @@
     document.getElementById('configForm').addEventListener('submit', function(e) {
         e.preventDefault();
         const payload = {
-            token1: document.getElementById('token1').value,
-            token2: document.getElementById('token2').value,
-            concurrent_jobs: document.getElementById('concurrentJobs').value,
             enable_video: document.getElementById('enableVideo').checked,
             enable_rtsp: document.getElementById('enableRtsp').checked,
             enable_chatbot: document.getElementById('enableChatbot').checked,
@@ -102,7 +87,7 @@
         .then(res => res.json())
         .then(data => {
             if(data.success) {
-                alert('Đã lưu cấu hình thành công!');
+                alert('Đã lưu trạng thái Bật/Tắt module thành công!');
                 window.location.reload();
             }
         });
