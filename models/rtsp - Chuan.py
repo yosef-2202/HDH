@@ -10,6 +10,8 @@ import json
 import base64
 import requests
 from datetime import datetime
+import google.generativeai as genai
+from PIL import Image
 
 rtsp_bp = Blueprint('rtsp_bp', __name__)
 
@@ -38,22 +40,36 @@ def get_api_credentials():
         except:
             api_list = []
         
+        forced_model_mode = get_setting('rtsp_forced_model_mode', 'auto')
+        
     valid_apis = [api for api in api_list if api.get('key', '').strip() != '']
     
-    if not valid_apis: return None, None, None, None
+    if not valid_apis: return None, None, None, None, None
 
     with token_lock:
-        selected_api = valid_apis[token_turn % len(valid_apis)]
-        token_turn += 1
+        if forced_model_mode == 'auto':
+            selected_api = valid_apis[token_turn % len(valid_apis)]
+            token_turn += 1
+        else:
+            filtered_apis = [api for api in valid_apis if api['provider'] == forced_model_mode]
+            if filtered_apis:
+                selected_api = filtered_apis[token_turn % len(filtered_apis)]
+                token_turn += 1
+            else:
+                selected_api = valid_apis[token_turn % len(valid_apis)]
+                token_turn += 1
         
     api_label = f"Token_{token_turn}"
     api_key = selected_api['key'].strip()
+    ai_provider = selected_api['provider']
     
-    model_name = selected_api.get('model', '').strip()
-    if not model_name: 
-        model_name = 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free'
+    if ai_provider == 'gemini': 
+        model_name = 'gemini-2.5-flash'
+    else:
+        model_name = selected_api.get('model', '').strip()
+        if not model_name: model_name = 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free'
         
-    return api_label, api_key, valid_apis, model_name
+    return api_label, api_key, valid_apis, model_name, ai_provider
 
 def start_workers_if_needed():
     global workers_started
@@ -61,8 +77,8 @@ def start_workers_if_needed():
         if not workers_started:
             from app import app, get_setting
             with app.app_context():
-                try: num_workers = int(get_setting('rtsp_concurrent_jobs', 10)) 
-                except: num_workers = 10
+                try: num_workers = int(get_setting('rtsp_concurrent_jobs', 2)) 
+                except: num_workers = 2
             
             for i in range(num_workers):
                 threading.Thread(target=ai_worker, daemon=True, name=f"AI-Worker-{i}").start()
@@ -92,7 +108,7 @@ def record_short_clip(frame_list, alert_id):
 def analyze_frame_with_ai(frame, recent_frames, alert_id):
     global global_logs, global_alerts
     
-    api_label, api_key, valid_apis, model_name = get_api_credentials()
+    api_label, api_key, valid_apis, model_name, ai_provider = get_api_credentials()
     if not api_key:
         print("=> LỖI: Chưa cấu hình Token API", file=sys.stderr)
         return
@@ -109,23 +125,31 @@ Nếu có người, hãy liệt kê MỖI NGƯỜI TRÊN MỘT DÒNG theo đúng
     for attempt in range(max_retries):
         try:
             start_time = time.time()
+            text = ""
             
-            ret, buffer = cv2.imencode('.jpg', frame)
-            img_b64 = base64.b64encode(buffer).decode('utf-8')
-            image_data_url = f"data:image/jpeg;base64,{img_b64}"
-            
-            headers = {
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json"
-            }
-            payload = {
-                "model": model_name,
-                "messages": [{"role": "user", "content": [{"type": "text", "text": prompt}, {"type": "image_url", "image_url": {"url": image_data_url}}]}]
-            }
-            
-            response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload, timeout=30)
-            response.raise_for_status() 
-            text = response.json()['choices'][0]['message']['content'].strip()
+            if ai_provider == 'gemini':
+                genai.configure(api_key=api_key)
+                model = genai.GenerativeModel(model_name)
+                rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                pil_img = Image.fromarray(rgb_frame)
+                response = model.generate_content([prompt, pil_img])
+                text = response.text.strip()
+            else:
+                ret, buffer = cv2.imencode('.jpg', frame)
+                img_b64 = base64.b64encode(buffer).decode('utf-8')
+                image_data_url = f"data:image/jpeg;base64,{img_b64}"
+                
+                headers = {
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json"
+                }
+                payload = {
+                    "model": model_name,
+                    "messages": [{"role": "user", "content": [{"type": "text", "text": prompt}, {"type": "image_url", "image_url": {"url": image_data_url}}]}]
+                }
+                response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload, timeout=30)
+                response.raise_for_status() 
+                text = response.json()['choices'][0]['message']['content'].strip()
             
             process_time = round(time.time() - start_time, 2)
             lines = text.split('\n')
@@ -159,7 +183,7 @@ Nếu có người, hãy liệt kê MỖI NGƯỜI TRÊN MỘT DÒNG theo đúng
                 unique_actions = list(set(main_actions))
                 action_summary = ", ".join(unique_actions)
                 
-                behavior_title = f"{action_summary} (OpenRouter)"
+                behavior_title = f"{action_summary} ({ai_provider})"
                 action_desc = "<br>".join([f"- {p}" for p in detected_persons])
                 
                 threading.Thread(target=record_short_clip, args=(list(recent_frames), alert_id)).start()
@@ -178,38 +202,19 @@ Nếu có người, hãy liệt kê MỖI NGƯỜI TRÊN MỘT DÒNG theo đúng
                     "level": "Theo dõi",
                     "badge": "info",
                     "desc": action_desc,
-                    "api_info": f"OpenRouter: ...{api_key[-4:]}",
+                    "api_info": f"{ai_provider}: ...{api_key[-4:]}",
                     "temp_video_url": f"/static/temp/{alert_id}.webm" 
                 })
                 if len(global_alerts) > 20: global_alerts.pop()
             
             break 
             
-        except requests.exceptions.RequestException as e:
-            is_429 = hasattr(e, 'response') and e.response is not None and e.response.status_code == 429
-            
-            if attempt < max_retries - 1:
-                if is_429:
-                    timestamp = datetime.now().strftime("%H:%M:%S")
-                    msg = f"[{timestamp}] [CẢNH BÁO] {api_label} bị Rate Limit (429), nghỉ 3s rồi đổi Token..."
-                    if len(global_logs) > 50: global_logs.pop(0)
-                    global_logs.append(msg)
-                    
-                    time.sleep(3) # Bắt buộc Worker nghỉ ngơi 3s trước khi nhảy qua Token khác
-                else:
-                    time.sleep(1)
-                    
-                api_label, api_key, valid_apis, model_name = get_api_credentials() 
-            else:
-                err_msg = "429 Too Many Requests" if is_429 else str(e)
-                print(f"=> LỖI TOÀN BỘ TOKEN OPENROUTER: {err_msg}", file=sys.stderr)
-                
         except Exception as e:
             if attempt < max_retries - 1:
-                api_label, api_key, valid_apis, model_name = get_api_credentials() 
+                api_label, api_key, valid_apis, model_name, ai_provider = get_api_credentials() 
                 time.sleep(1)
             else:
-                print(f"=> LỖI KHÔNG XÁC ĐỊNH: {e}", file=sys.stderr)
+                print(f"=> LỖI TOÀN BỘ TOKEN: {e}", file=sys.stderr)
 
 def generate_frames(rtsp_url):
     global camera, last_api_call_time
@@ -220,7 +225,7 @@ def generate_frames(rtsp_url):
         camera = cv2.VideoCapture(rtsp_url)
     
     recent_frames = [] 
-    api_cooldown = 5 # Tăng cooldown từ 4s lên 5s để giãn cách frame đầu vào cho OpenRouter
+    api_cooldown = 4 
 
     while True:
         with camera_lock:
@@ -247,7 +252,7 @@ def generate_frames(rtsp_url):
         time.sleep(0.066) 
         yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
 
-# --- CÁC ROUTE API ---
+# --- CÁC ROUTE API DÀNH RIÊNG CHO MODULE RTSP ---
 @rtsp_bp.route('/rtsp')
 def rtsp_page(): return render_template('rtsp.html')
 
@@ -279,6 +284,15 @@ def clear_cache():
     global_alerts.clear()
     return jsonify({"success": True})
 
+@rtsp_bp.route('/api/rtsp/set_mode', methods=['POST'])
+def set_model_mode():
+    from app import app, update_setting
+    data = request.get_json()
+    mode = data.get('mode', 'auto')
+    with app.app_context():
+        update_setting('rtsp_forced_model_mode', mode)
+    return jsonify({"success": True})
+
 @rtsp_bp.route('/api/rtsp/config', methods=['GET', 'POST'])
 def rtsp_config_api():
     from app import app, get_setting, update_setting
@@ -288,7 +302,8 @@ def rtsp_config_api():
         
         with app.app_context():
             update_setting('rtsp_api_list', json.dumps(api_list_data))
-            update_setting('rtsp_concurrent_jobs', str(data.get('concurrent_jobs', 10))) 
+            update_setting('rtsp_concurrent_jobs', str(data.get('concurrent_jobs', 2)))
+            update_setting('rtsp_forced_model_mode', data.get('forced_model_mode', 'auto'))
             
         return jsonify({"success": True})
     
@@ -296,11 +311,13 @@ def rtsp_config_api():
         try: api_list_parsed = json.loads(get_setting('rtsp_api_list', '[]'))
         except: api_list_parsed = []
         
-        concurrent_jobs = int(get_setting('rtsp_concurrent_jobs', 10))
+        concurrent_jobs = int(get_setting('rtsp_concurrent_jobs', 2))
+        forced_model_mode = get_setting('rtsp_forced_model_mode', 'auto')
         
     return jsonify({
         "api_list": api_list_parsed,
-        "concurrent_jobs": concurrent_jobs
+        "concurrent_jobs": concurrent_jobs,
+        "forced_model_mode": forced_model_mode
     })
 
 @rtsp_bp.route('/api/rtsp/gemini_status')
@@ -314,14 +331,20 @@ def api_status_check():
     for i, api in enumerate(api_list, start=1):
         key_name = f"API_{i}"
         token = api.get('key', '').strip()
+        provider = api.get('provider', 'gemini')
         if not token: continue
             
         try:
-            res = requests.get("https://openrouter.ai/api/v1/auth/key", headers={"Authorization": f"Bearer {token}"}, timeout=5)
-            if res.status_code == 200:
-                status[key_name] = {"text": "Hoạt động (OpenRouter)", "color": "success"}
+            if provider == 'gemini':
+                genai.configure(api_key=token)
+                genai.get_model('models/gemini-2.5-flash')
+                status[key_name] = {"text": "Hoạt động (Gemini)", "color": "success"}
             else:
-                status[key_name] = {"text": "Lỗi Token", "color": "danger"}
+                res = requests.get("https://openrouter.ai/api/v1/auth/key", headers={"Authorization": f"Bearer {token}"}, timeout=5)
+                if res.status_code == 200:
+                    status[key_name] = {"text": "Hoạt động (OpenRouter)", "color": "success"}
+                else:
+                    status[key_name] = {"text": "Lỗi Token", "color": "danger"}
         except Exception:
             status[key_name] = {"text": "Lỗi Mạng", "color": "danger"}
             

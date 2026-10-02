@@ -10,13 +10,6 @@
         </div>
     </div>
     <div class="d-flex gap-2 align-items-center">
-        <!-- Dropdown lựa chọn Model ra ngoài màn hình chính -->
-        <select class="form-select shadow-sm border-primary text-primary fw-bold" id="mainScreenModelMode" onchange="updateModelMode(this.value)" style="width: auto; cursor: pointer;">
-            <option value="auto">Tự động (Luân phiên)</option>
-            <option value="gemini">Chỉ dùng Gemini</option>
-            <option value="openrouter">Chỉ dùng OpenRouter</option>
-        </select>
-        
         <!-- Nút gọi hàm kiểm tra PIN bằng JS -->
         <button class="btn btn-outline-primary shadow-sm" onclick="openConfigWithPin()">
             <i class="fa-solid fa-gear me-1"></i> Cấu hình Token
@@ -126,7 +119,7 @@
   </div>
 </div>
 
-<!-- MODAL CẤU HÌNH API DÀNH RIÊNG CHO MODULE RTSP -->
+<!-- MODAL CẤU HÌNH API -->
 <div class="modal fade" id="rtspConfigModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-xl modal-dialog-centered">
     <div class="modal-content border-0 shadow">
@@ -137,7 +130,7 @@
       <div class="modal-body p-4 bg-light">
           
         <div class="d-flex flex-wrap justify-content-between align-items-center border-bottom pb-2 mb-3 gap-2">
-            <h6 class="fw-bold text-dark m-0">Danh sách API Key</h6>
+            <h6 class="fw-bold text-dark m-0">Danh sách API Key (OpenRouter)</h6>
             <button type="button" class="btn btn-sm btn-success fw-bold px-3" onclick="addRtspApiRow()">
                 <i class="fa-solid fa-plus me-1"></i>Thêm Token
             </button>
@@ -150,7 +143,7 @@
         <h6 class="fw-bold mb-2 border-bottom pb-2 mt-4 text-dark">Hiệu suất Worker</h6>
         <div class="bg-white p-3 rounded border mb-2 shadow-sm">
             <label class="form-label fw-bold small text-dark">Số luồng Worker (Jobs)</label>
-            <input type="number" class="form-control mb-2" id="rtspConcurrentJobs" min="1" max="50" style="max-width: 150px;" value="2">
+            <input type="number" class="form-control mb-2" id="rtspConcurrentJobs" min="1" max="50" style="max-width: 150px;" value="10">
             <small class="text-muted d-block">Hệ thống đẩy Job vào hàng chờ. Số worker quyết định khả năng xử lý đồng thời. Khuyến nghị: Bằng số lượng Token.</small>
         </div>
 
@@ -195,19 +188,6 @@
         });
     }
 
-    // --- API LƯU NHANH MODE TỪ TRANG CHỦ ---
-    function updateModelMode(mode) {
-        fetch('/api/rtsp/set_mode', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ mode: mode })
-        }).then(res => res.json()).then(data => {
-            if(data.success) {
-                console.log("Đã cập nhật Model Mode:", mode);
-            }
-        });
-    }
-
     // --- LOGIC CẤU HÌNH API DÀNH RIÊNG CHO RTSP ---
     function renderRtspApiRows() {
         const container = document.getElementById('rtspApiListContainer');
@@ -219,30 +199,21 @@
         }
 
         rtspApiList.forEach((api, index) => {
-            const isGemini = api.provider === 'gemini';
             const html = `
                 <div class="row g-2 mb-3 align-items-end bg-white p-3 rounded border mx-0 position-relative shadow-sm">
                     <button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0 m-2" style="width: 30px; height: 30px; padding: 0;" onclick="removeRtspApiRow(${index})" title="Xóa Token này">
                         <i class="fa-solid fa-xmark"></i>
                     </button>
-                    <div class="col-12 col-md-3">
-                        <label class="form-label fw-bold text-dark small">Nhà cung cấp</label>
-                        <select class="form-select" onchange="updateRtspApiField(${index}, 'provider', this.value)">
-                            <option value="gemini" ${isGemini ? 'selected' : ''}>Google Gemini</option>
-                            <option value="openrouter" ${api.provider === 'openrouter' ? 'selected' : ''}>OpenRouter</option>
-                        </select>
-                    </div>
-                    <div class="col-12 col-md-5">
+                    <div class="col-12 col-md-6">
                         <label class="form-label fw-bold text-dark small">API Key</label>
-                        <input type="text" class="form-control" placeholder="Nhập Token..." value="${api.key}" onchange="updateRtspApiField(${index}, 'key', this.value)">
+                        <input type="text" class="form-control" placeholder="Nhập Token OpenRouter..." value="${api.key || ''}" onchange="updateRtspApiField(${index}, 'key', this.value)">
                     </div>
-                    <div class="col-12 col-md-4">
+                    <div class="col-12 col-md-6">
                         <label class="form-label fw-bold text-dark small">Tên Model</label>
                         <input type="text" class="form-control text-muted" 
-                            placeholder="${isGemini ? 'Mặc định (gemini-2.5-flash)' : 'VD: nvidia/nemotron...'}" 
-                            value="${isGemini ? '' : api.model}" 
-                            onchange="updateRtspApiField(${index}, 'model', this.value)"
-                            ${isGemini ? 'disabled' : ''}>
+                            placeholder="VD: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free" 
+                            value="${api.model || ''}" 
+                            onchange="updateRtspApiField(${index}, 'model', this.value)">
                     </div>
                 </div>
             `;
@@ -251,7 +222,7 @@
     }
 
     function addRtspApiRow() {
-        rtspApiList.push({ provider: 'gemini', key: '', model: '' });
+        rtspApiList.push({ key: '', model: '' });
         renderRtspApiRows();
     }
 
@@ -262,24 +233,21 @@
 
     function updateRtspApiField(index, field, value) {
         rtspApiList[index][field] = value;
-        if (field === 'provider') renderRtspApiRows();
     }
 
     fetch('/api/rtsp/config')
         .then(res => res.json())
         .then(data => {
             rtspApiList = data.api_list || [];
-            document.getElementById('rtspConcurrentJobs').value = data.concurrent_jobs || 2;
-            document.getElementById('mainScreenModelMode').value = data.forced_model_mode || 'auto';
+            document.getElementById('rtspConcurrentJobs').value = data.concurrent_jobs || 10;
             renderRtspApiRows();
         });
 
     function saveRtspConfig() {
-        const validApiList = rtspApiList.filter(api => api.key.trim() !== '');
+        const validApiList = rtspApiList.filter(api => (api.key || '').trim() !== '');
         const payload = {
             api_list: validApiList,
-            concurrent_jobs: document.getElementById('rtspConcurrentJobs').value,
-            forced_model_mode: document.getElementById('mainScreenModelMode').value
+            concurrent_jobs: document.getElementById('rtspConcurrentJobs').value
         };
 
         fetch('/api/rtsp/config', {
