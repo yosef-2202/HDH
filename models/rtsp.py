@@ -154,6 +154,7 @@ Nếu có người, hãy liệt kê MỖI NGƯỜI TRÊN MỘT DÒNG theo đúng
             process_time = round(time.time() - start_time, 2)
             lines = text.split('\n')
             detected_persons = []
+            main_actions = []
             
             for line in lines:
                 if "|" in line:
@@ -162,11 +163,27 @@ Nếu có người, hãy liệt kê MỖI NGƯỜI TRÊN MỘT DÒNG theo đúng
                         coords = parts[1].strip().replace('[','').replace(']','').split(",")
                         if len(coords) == 4:
                             session_id = str(uuid.uuid4())[:6].upper()
-                            detected_persons.append(f"[Phiên: {session_id}] {parts[0].strip()}")
+                            raw_action = parts[0].strip()
+                            detected_persons.append(f"[Phiên: {session_id}] {raw_action}")
+                            
+                            main_act = "Phát hiện người"
+                            if "[" in raw_action and "]" in raw_action:
+                                bracket_content = raw_action.split("]")[0].replace("[", "")
+                                if ":" in bracket_content:
+                                    main_act = bracket_content.split(":")[1].strip()
+                                else:
+                                    main_act = bracket_content.strip()
+                            elif "-" in raw_action:
+                                main_act = raw_action.split("-")[0].strip()
+                                
+                            main_actions.append(main_act)
                     except: pass
             
             if detected_persons:
-                behavior_title = f"Phát hiện {len(detected_persons)} người ({ai_provider})"
+                unique_actions = list(set(main_actions))
+                action_summary = ", ".join(unique_actions)
+                
+                behavior_title = f"{action_summary} ({ai_provider})"
                 action_desc = "<br>".join([f"- {p}" for p in detected_persons])
                 
                 threading.Thread(target=record_short_clip, args=(list(recent_frames), alert_id)).start()
