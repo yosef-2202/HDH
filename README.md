@@ -2,6 +2,8 @@
 
 Hệ thống AI Platform là một ứng dụng web dạng Modular được xây dựng bằng **Flask** (Python) và **Jinja2** kết hợp Bootstrap 5. Dự án cung cấp một bảng điều khiển tập trung để xử lý, phân tích dữ liệu đa phương tiện và hỗ trợ trợ lý ảo AI.
 
+## Demo [Link](http://hdhs.tbgroup.qzz.io)
+
 ## 🌟 Các tính năng chính
 
 Hệ thống được thiết kế linh hoạt, cho phép bật/tắt từng tính năng trực tiếp từ trang Quản trị:
