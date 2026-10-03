@@ -97,12 +97,24 @@ def analyze_frame_with_ai(frame, recent_frames, alert_id):
     if not api_key:
         return
 
-    prompt = """Bạn là hệ thống AI giám sát an ninh camera thông minh.
-NHIỆM VỤ: Phân tích ảnh, CHỈ PHÁT HIỆN CON NGƯỜI và mô tả hành vi của họ HOÀN TOÀN BẰNG TIẾNG VIỆT.
-TUYỆT ĐỐI KHÔNG dùng tiếng Anh. Bỏ qua mô tả quần áo rườm rà, tập trung vào hành động.
-Nếu không có con người, trả lời chính xác chữ: 'Không'.
-Nếu có người, hãy liệt kê MỖI NGƯỜI TRÊN MỘT DÒNG theo đúng định dạng:
-[Hành động chính: Đi lại/Đứng quan sát/Nhìn ngó/Tương tác/Đánh nhau] - [Mô tả chi tiết hành động bằng tiếng Việt] | ymin, xmin, ymax, xmax"""
+    prompt = """Bạn là hệ thống AI giám sát an ninh, giao thông và cảnh quan qua camera thông minh.
+NHIỆM VỤ: Phân tích ảnh, PHÁT HIỆN CON NGƯỜI, PHƯƠNG TIỆN VÀ ĐỘNG VẬT (chó, bò, v.v.), mô tả mọi hành vi của chúng và DỰ ĐOÁN tình huống. HOÀN TOÀN BẰNG TIẾNG VIỆT.
+
+QUY TẮC CỐT LÕI:
+1. TUYỆT ĐỐI KHÔNG dùng tiếng Anh.
+2. Bỏ qua mô tả ngoại hình rườm rà. Tập trung tối đa vào tư thế, hành động, quỹ đạo di chuyển.
+3. Nếu không có bất kỳ Người, Xe cộ hay Động vật nào trong ảnh, trả lời chính xác chữ: 'Không'.
+
+ĐỊNH DẠNG TRẢ LỜI (Tuân thủ nghiêm ngặt):
+
+PHẦN 1: DANH SÁCH ĐỐI TƯỢNG (Mỗi đối tượng liệt kê trên một dòng)
+[Loại đối tượng] | [Hành vi chính] | [Mô tả chi tiết]
+VD: [Người] | [Đi bộ] | [Đang đi qua đường]
+VD: [Ô tô] | [Đứng yên] | [Đang đậu ở giữa lô]
+
+PHẦN 2: KẾT LUẬN & DỰ ĐOÁN TÌNH HUỐNG
+- Mức độ an toàn: [Bình thường / Đáng ngờ / Vi phạm / Cảnh báo / Nguy hiểm khẩn cấp]
+- Dự đoán sự việc: [Suy luận tình huống]"""
     
     max_retries = max(1, len(valid_apis)) 
     
@@ -131,52 +143,79 @@ Nếu có người, hãy liệt kê MỖI NGƯỜI TRÊN MỘT DÒNG theo đúng
             response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload, timeout=30)
             response.raise_for_status() 
             
-            # Kiểm tra an toàn cấu trúc JSON trả về
-            res_json = response.json()
+            try:
+                res_json = response.json()
+            except ValueError:
+                raise ValueError("API không trả về định dạng JSON (có thể server API quá tải).")
+                
             if not res_json or 'choices' not in res_json or len(res_json['choices']) == 0:
                 raise ValueError("API trả về dữ liệu không hợp lệ (thiếu trường 'choices')")
                 
             text = res_json['choices'][0]['message']['content'].strip()
-            
             process_time = round(time.time() - start_time, 2)
-            lines = text.split('\n')
-            detected_persons = []
+            
+            if text.lower().startswith("không") and len(text) < 15:
+                timestamp = datetime.now().strftime("%H:%M:%S")
+                log_msg = f"[{timestamp}] [{api_label}] Không phát hiện đối tượng (Tốc độ: {process_time}s)"
+                if len(global_logs) > 50: global_logs.pop(0)
+                global_logs.append(log_msg)
+                break
+
+            part1 = text
+            part2 = ""
+            if "PHẦN 2" in text:
+                parts_split = text.split("PHẦN 2")
+                part1 = parts_split[0]
+                part2 = parts_split[1]
+
+            detected_objects = []
             main_actions = []
             
-            for line in lines:
+            for line in part1.split('\n'):
                 if "|" in line:
                     parts = line.split("|")
-                    try:
-                        coords = parts[1].strip().replace('[','').replace(']','').split(",")
-                        if len(coords) == 4:
+                    if len(parts) >= 2:
+                        try:
                             session_id = str(uuid.uuid4())[:6].upper()
-                            raw_action = parts[0].strip()
-                            detected_persons.append(f"[Phiên: {session_id}] {raw_action}")
+                            obj_type = parts[0].replace("[", "").replace("]", "").strip()
+                            main_act = parts[1].replace("[", "").replace("]", "").strip()
                             
-                            main_act = "Phát hiện người"
-                            if "[" in raw_action and "]" in raw_action:
-                                bracket_content = raw_action.split("]")[0].replace("[", "")
-                                if ":" in bracket_content:
-                                    main_act = bracket_content.split(":")[1].strip()
-                                else:
-                                    main_act = bracket_content.strip()
-                            elif "-" in raw_action:
-                                main_act = raw_action.split("-")[0].strip()
+                            desc = ""
+                            if len(parts) >= 3:
+                                desc = parts[2].replace("[", "").replace("]", "").strip()
                                 
-                            main_actions.append(main_act)
-                    except: pass
+                            detected_objects.append(f"[Phiên: {session_id}] [{obj_type}: {main_act} - {desc}]")
+                            if main_act:
+                                main_actions.append(main_act)
+                        except: pass
             
-            if detected_persons:
-                unique_actions = list(set(main_actions))
-                action_summary = ", ".join(unique_actions)
+            safety_level = "Theo dõi"
+            badge_color = "info"
+            prediction = "Chưa có dự đoán"
+
+            for line in part2.split('\n'):
+                line_clean = line.strip()
+                if "Mức độ an toàn:" in line_clean:
+                    safety_level = line_clean.split("Mức độ an toàn:")[1].strip().replace("[", "").replace("]", "")
+                    lvl_lower = safety_level.lower()
+                    if "nguy hiểm" in lvl_lower or "khẩn cấp" in lvl_lower: badge_color = "danger"
+                    elif "cảnh báo" in lvl_lower or "vi phạm" in lvl_lower or "đáng ngờ" in lvl_lower: badge_color = "warning"
+                    elif "bình thường" in lvl_lower: badge_color = "success"
                 
-                behavior_title = f"{action_summary}"
-                action_desc = "<br>".join([f"- {p}" for p in detected_persons])
+                elif "Dự đoán sự việc:" in line_clean:
+                    prediction = line_clean.split("Dự đoán sự việc:")[1].strip().replace("[", "").replace("]", "")
+
+            if detected_objects:
+                unique_actions = list(set(main_actions))
+                behavior_title = ", ".join(unique_actions) if unique_actions else "Phát hiện đối tượng"
+                
+                action_desc = "<b>Đối tượng:</b><br>" + "<br>".join([f"- {p}" for p in detected_objects])
+                action_desc += f"<br><br><b>Dự đoán:</b> <i>{prediction}</i>"
                 
                 threading.Thread(target=record_short_clip, args=(list(recent_frames), alert_id)).start()
                 
                 timestamp = datetime.now().strftime("%H:%M:%S")
-                log_msg = f"[{timestamp}] [{api_label}] PHÁT HIỆN: {behavior_title} (Tốc độ: {process_time}s)"
+                log_msg = f"[{timestamp}] [{api_label}] {safety_level.upper()}: {behavior_title} (Tốc độ: {process_time}s)"
                 
                 if len(global_logs) > 50: global_logs.pop(0)
                 global_logs.append(log_msg)
@@ -186,25 +225,18 @@ Nếu có người, hãy liệt kê MỖI NGƯỜI TRÊN MỘT DÒNG theo đúng
                     "time": timestamp,
                     "behavior": behavior_title,
                     "process_time": f"{process_time}s",
-                    "level": "Theo dõi",
-                    "badge": "info",
+                    "level": safety_level,
+                    "badge": badge_color,
                     "desc": action_desc,
-                    "api_info": f"OpenRouter: ...{api_key[-4:]}",
+                    "api_info": f"Model AI",
                     "temp_video_url": f"/static/temp/{alert_id}.webm" 
                 })
                 if len(global_alerts) > 20: global_alerts.pop()
-            else:
-                if "không" in text.lower() or text == "":
-                    timestamp = datetime.now().strftime("%H:%M:%S")
-                    log_msg = f"[{timestamp}] [{api_label}] Không phát hiện người (Tốc độ: {process_time}s)"
-                    if len(global_logs) > 50: global_logs.pop(0)
-                    global_logs.append(log_msg)
             
             break 
             
         except requests.exceptions.RequestException as e:
             is_429 = hasattr(e, 'response') and e.response is not None and e.response.status_code == 429
-            
             if attempt < max_retries - 1:
                 if is_429:
                     timestamp = datetime.now().strftime("%H:%M:%S")
@@ -221,7 +253,7 @@ Nếu có người, hãy liệt kê MỖI NGƯỜI TRÊN MỘT DÒNG theo đúng
         except Exception as e:
             if attempt < max_retries - 1:
                 timestamp = datetime.now().strftime("%H:%M:%S")
-                msg = f"[{timestamp}] [CẢNH BÁO] {api_label} lỗi phản hồi (JSON/Model), chuyển token..."
+                msg = f"[{timestamp}] [CẢNH BÁO] {api_label} lỗi phản hồi, chuyển token..."
                 if len(global_logs) > 50: global_logs.pop(0)
                 global_logs.append(msg)
                 
@@ -235,7 +267,10 @@ def generate_frames(rtsp_url):
     start_workers_if_needed() 
     
     with camera_lock:
-        if camera is not None: camera.release()
+        if camera is not None: 
+            camera.release()
+            time.sleep(0.5)
+        os.environ["OPENCV_FFMPEG_READ_ATTEMPTS"] = "100"
         camera = cv2.VideoCapture(rtsp_url)
     
     recent_frames = [] 
@@ -243,8 +278,12 @@ def generate_frames(rtsp_url):
 
     while True:
         with camera_lock:
+            if camera is None or not camera.isOpened():
+                break
             success, frame = camera.read()
-        if not success: break
+            
+        if not success: 
+            break
         
         frame_resized = cv2.resize(frame, (640, 360))
         recent_frames.append(frame_resized.copy())
@@ -262,11 +301,14 @@ def generate_frames(rtsp_url):
         status_text = f"Queue: {q_size}/100 - Cooldown: {countdown}s" if countdown > 0 else f"Queue: {q_size}/100 - Waiting..."
         cv2.putText(frame_resized, status_text, (350, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 165, 0) if q_size > 0 else (0, 255, 0), 2)
 
-        ret, buffer = cv2.imencode('.jpg', frame_resized, [int(cv2.IMWRITE_JPEG_QUALITY), 50])
-        time.sleep(0.066) 
-        yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+        try:
+            ret, buffer = cv2.imencode('.jpg', frame_resized, [int(cv2.IMWRITE_JPEG_QUALITY), 50])
+            if not ret: continue
+            time.sleep(0.066) 
+            yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+        except Exception:
+            break
 
-# --- CÁC ROUTE API ---
 @rtsp_bp.route('/rtsp')
 def rtsp_page(): return render_template('rtsp.html')
 
@@ -296,6 +338,15 @@ def clear_cache():
     global global_logs, global_alerts
     global_logs.clear()
     global_alerts.clear()
+    return jsonify({"success": True})
+
+@rtsp_bp.route('/api/rtsp/stop', methods=['POST'])
+def stop_rtsp():
+    global camera
+    with camera_lock:
+        if camera is not None:
+            camera.release()
+            camera = None
     return jsonify({"success": True})
 
 @rtsp_bp.route('/api/rtsp/config', methods=['GET', 'POST'])
@@ -338,13 +389,13 @@ def api_status_check():
         try:
             res = requests.get("https://openrouter.ai/api/v1/auth/key", headers={"Authorization": f"Bearer {token}"}, timeout=5)
             if res.status_code == 200:
-                status[key_name] = {"text": "Hoạt động (OpenRouter)", "color": "success"}
+                status[key_name] = {"text": "Hoạt động", "color": "success"}
             else:
                 status[key_name] = {"text": "Lỗi Token", "color": "danger"}
         except Exception:
             status[key_name] = {"text": "Lỗi Mạng", "color": "danger"}
             
     if not status:
-        status["Hệ thống"] = {"text": "Chưa có API Key nào được thiết lập", "color": "secondary"}
+        status["Hệ thống"] = {"text": "Chưa có API Key", "color": "secondary"}
         
     return jsonify(status)

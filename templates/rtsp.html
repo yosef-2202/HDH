@@ -2,95 +2,155 @@
 {% block title %}Quản lý Luồng RTSP - AI Vision{% endblock %}
 
 {% block content %}
-<div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3">
-    <div>
-        <h3 class="fw-bold mb-1 text-dark fs-4 fs-md-3">Kiểm soát Luồng RTSP</h3>
-        <div class="d-flex flex-wrap gap-2 mt-2 align-items-center" id="apiStatusContainer">
-            <!-- Badges status sẽ tải vào đây bằng AJAX -->
+<style>
+    /* Chuyển overflow-x thành auto để cho phép cuộn ngang nếu cần, thay vì cắt xén */
+    body { overflow-x: auto; }
+    .custom-card { border-radius: 12px; overflow: hidden; }
+    .glass-header { background: rgba(255,255,255,0.9); backdrop-filter: blur(10px); }
+    
+    .terminal-box {
+        background-color: #0d1117;
+        color: #00ff00;
+        font-family: 'Courier New', Courier, monospace;
+        font-size: 0.85rem;
+        border-radius: 8px;
+        box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+    }
+    
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
+
+    /* KHUNG VIDEO TỈ LỆ 16:9 CO GIÃN THEO THIẾT BỊ */
+    .video-wrapper {
+        position: relative;
+        width: 100%;
+        padding-bottom: 56.25%; /* Tỷ lệ vàng 16:9 chuẩn */
+        background: #000;
+        overflow: hidden;
+    }
+    
+    .video-wrapper img, .video-wrapper .placeholder-box {
+        position: absolute;
+        top: 0; left: 0; right: 0; bottom: 0;
+        width: 100%; height: 100%;
+        object-fit: contain;
+    }
+
+    .log-container { height: 300px; }
+    
+    @media (min-width: 992px) {
+        .log-container { height: 380px; }
+    }
+</style>
+
+<!-- Script ép thiết bị di động hiển thị theo tỷ lệ của máy tính (1200px) -->
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        let viewport = document.querySelector("meta[name=viewport]");
+        if (viewport) {
+            viewport.setAttribute("content", "width=1200");
+        } else {
+            document.head.insertAdjacentHTML('beforeend', '<meta name="viewport" content="width=1200">');
+        }
+    });
+</script>
+
+<!-- Cố định chiều rộng tối thiểu là 1200px để giao diện không bị vỡ -->
+<div class="container-fluid px-2 px-md-3" style="min-width: 1200px; overflow-x: auto;">
+    
+    <!-- Tiêu đề và trạng thái API (Trở lại nguyên bản để tận dụng layout PC) -->
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-3 gap-2">
+        <div class="w-100 w-md-auto">
+            <h3 class="fw-bold mb-1 text-dark fs-4 text-nowrap"><i class="fa-solid fa-camera-security text-primary me-2"></i>Kiểm soát RTSP</h3>
+            <div class="d-flex flex-wrap gap-1 mt-1 align-items-center" id="apiStatusContainer">
+                <span class="spinner-border spinner-border-sm text-primary" role="status"></span> <small class="text-muted">Đang tải...</small>
+            </div>
+        </div>
+        <div class="d-flex flex-row gap-2 align-items-center w-100 w-md-auto justify-content-between justify-content-md-end">
+            <button class="btn btn-outline-primary btn-sm px-3 shadow-sm text-nowrap" onclick="openConfigWithPin()">
+                <i class="fa-solid fa-gear me-1"></i> Token
+            </button>
+            <span class="badge bg-secondary px-3 py-2 rounded-pill shadow-sm fs-7 text-nowrap" id="streamStatus">
+                <i class="fa-solid fa-circle-pause me-1"></i> Chờ kết nối
+            </span>
         </div>
     </div>
-    <div class="d-flex gap-2 align-items-center">
-        <!-- Nút gọi hàm kiểm tra PIN bằng JS -->
-        <button class="btn btn-outline-primary shadow-sm" onclick="openConfigWithPin()">
-            <i class="fa-solid fa-gear me-1"></i> Cấu hình Token
-        </button>
-        <span class="badge bg-primary px-4 py-2 rounded-pill shadow-sm fs-6 d-flex align-items-center" id="streamStatus">Đang chờ kết nối</span>
-    </div>
-</div>
 
-<div class="row g-4">
-    <!-- KHU VỰC CAMERA VÀ CONTROL -->
-    <div class="col-12 col-lg-8">
-        <div class="card custom-card h-100 border-0 shadow-sm">
-            <div class="card-header bg-white border-bottom py-3 d-flex flex-wrap align-items-center gap-2">
-                <div class="input-group input-group-sm flex-grow-1 flex-nowrap" style="min-width: 250px;">
-                    <input type="text" id="rtspInput" class="form-control" placeholder="Nhập đường dẫn RTSP..." value="">
-                    <button class="btn btn-outline-secondary" type="button" onclick="pasteLink()" title="Dán link">
-                        <i class="fa-solid fa-paste"></i>
-                    </button>
-                    <button class="btn btn-outline-secondary" type="button" onclick="document.getElementById('rtspInput').value = ''" title="Xóa link">
-                        <i class="fa-solid fa-xmark"></i>
-                    </button>
+    <!-- Layout chính dạng Grid linh hoạt -->
+    <div class="row g-3">
+        <!-- KHU VỰC CAMERA & INPUT -->
+        <div class="col-12 col-lg-8">
+            <div class="card custom-card h-100 border-0 shadow-sm">
+                
+                <div class="card-header glass-header border-bottom py-2 px-3 d-flex flex-column gap-2">
+                    <div class="input-group input-group-sm w-100">
+                        <input type="text" id="rtspInput" class="form-control" placeholder="Nhập đường dẫn rtsp://...">
+                        <button class="btn btn-outline-secondary px-2" type="button" onclick="pasteLink()" title="Dán link"><i class="fa-solid fa-paste"></i></button>
+                        <button class="btn btn-outline-danger px-2" type="button" onclick="document.getElementById('rtspInput').value = ''" title="Xóa"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <div class="d-flex gap-2 w-100 justify-content-end">
+                        <button class="btn btn-primary btn-sm fw-bold px-4 flex-grow-1 flex-md-grow-0" onclick="startStream()">
+                            <i class="fa-solid fa-play me-1"></i> Phát
+                        </button>
+                        <button class="btn btn-outline-danger btn-sm fw-bold px-3 flex-grow-1 flex-md-grow-0" onclick="stopStream()">
+                            <i class="fa-solid fa-stop me-1"></i> Ngắt
+                        </button>
+                    </div>
                 </div>
-                <div class="d-flex gap-2 ms-auto">
-                    <button class="btn btn-primary btn-sm fw-bold px-3 px-md-4" onclick="startStream()" style="white-space: nowrap;">
-                        <i class="fa-solid fa-play me-1"></i> Phát
-                    </button>
-                    <button class="btn btn-outline-danger btn-sm fw-bold px-3" onclick="stopStream()" style="white-space: nowrap;">
-                        <i class="fa-solid fa-stop"></i>
-                    </button>
+                
+                <!-- VIDEO CONTAINER -->
+                <div class="video-wrapper">
+                    <div id="rtspPlaceholder" class="placeholder-box text-secondary d-flex flex-column justify-content-center align-items-center p-3">
+                        <i class="fa-solid fa-satellite-dish fa-3x mb-2 text-muted"></i>
+                        <span class="opacity-75 text-center small">[Chưa có tín hiệu luồng camera]</span>
+                    </div>
+                    <img id="videoStream" src="" style="display: none;">
                 </div>
-            </div>
-            
-            <div class="card-body p-0 bg-dark d-flex align-items-center justify-content-center" style="aspect-ratio: 16/9; max-height: 600px; overflow: hidden; position: relative;">
-                <div id="rtspPlaceholder" class="text-secondary text-center p-3 w-100">
-                    <i class="fa-solid fa-satellite-dish fa-3x mb-3 d-block text-center"></i>
-                    [Chưa có tín hiệu luồng]
-                </div>
-                <img id="videoStream" class="w-100 h-100 object-fit-contain" src="" style="display: none;">
+
             </div>
         </div>
-    </div>
 
-    <!-- KHU VỰC LIVE LOG TỪ AI -->
-    <div class="col-12 col-lg-4">
-        <div class="card custom-card h-100 bg-dark border-0 shadow-sm">
-            <div class="card-header bg-dark border-secondary text-white py-3 d-flex justify-content-between align-items-center">
-                <div class="fw-bold"><i class="fa-solid fa-terminal text-success me-2"></i> Hệ thống Log (Live)</div>
-                <button class="btn btn-sm btn-outline-danger" onclick="clearCache()">Xóa lịch sử</button>
-            </div>
-            <div class="card-body p-3">
-                <div id="logConsole" style="height: 380px; overflow-y: auto; font-family: monospace; font-size: 0.85rem; color: #00ff00; line-height: 1.5; word-wrap: break-word;">
-                    > Sẵn sàng...
+        <!-- KHU VỰC LIVE LOG TỪ AI -->
+        <div class="col-12 col-lg-4">
+            <div class="card custom-card h-100 border-0 shadow-sm terminal-box">
+                <div class="card-header border-secondary py-2 px-3 d-flex justify-content-between align-items-center" style="background: rgba(0,0,0,0.3);">
+                    <div class="fw-bold text-white small"><i class="fa-solid fa-terminal text-success me-1"></i> Log Hệ thống</div>
+                    <button class="btn btn-sm btn-outline-secondary text-light py-0 px-2" onclick="clearCache()"><i class="fa-solid fa-trash-can"></i></button>
+                </div>
+                <div class="card-body p-2">
+                    <div id="logConsole" class="log-container overflow-auto" style="line-height: 1.5; word-wrap: break-word;">
+                        > Hệ thống AI Vision đã sẵn sàng...<br>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
 
-    <!-- BẢNG THỐNG KÊ CHI TIẾT -->
-    <div class="col-12 mt-4">
-        <div class="card custom-card border-0 shadow-sm">
-            <div class="card-header bg-white border-bottom py-3">
-                <h6 class="fw-bold mb-0 text-primary"><i class="fa-solid fa-table-list me-2"></i> Lịch sử Nhận diện Hành vi (Thực tế)</h6>
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle mb-0 text-center" style="min-width: 800px;">
-                        <thead class="table-light text-muted small text-uppercase">
-                            <tr>
-                                <th style="width: 10%;">Thời gian</th>
-                                <th style="width: 15%;">Hành vi</th>
-                                <th style="width: 10%;">Mức độ</th>
-                                <th style="width: 25%; text-align: left;">Mô tả chi tiết</th>
-                                <th style="width: 10%;">Tốc độ AI</th>
-                                <th style="width: 15%;">API</th>
-                                <th style="width: 15%;">Thao tác</th>
-                            </tr>
-                        </thead>
-                        <tbody id="alertTableBody">
-                            <tr><td colspan="7" class="text-muted py-5">Chưa có dữ liệu phân tích</td></tr>
-                        </tbody>
-                    </table>
+        <!-- BẢNG THỐNG KÊ CHI TIẾT -->
+        <div class="col-12 mt-1">
+            <div class="card custom-card border-0 shadow-sm">
+                <div class="card-header bg-white border-bottom py-2 px-3">
+                    <h6 class="fw-bold mb-0 text-primary small text-uppercase"><i class="fa-solid fa-table-list me-1"></i> Lịch sử Nhận diện & Dự đoán</h6>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0 text-center" style="font-size: 0.9rem;">
+                            <thead class="table-light text-muted small text-uppercase">
+                                <tr>
+                                    <th class="text-nowrap">Thời gian</th>
+                                    <th class="text-nowrap">Hành vi</th>
+                                    <th class="text-nowrap">Mức độ</th>
+                                    <th style="text-align: left; min-width: 220px;">Mô tả & Dự đoán</th>
+                                    <th class="text-nowrap">Tốc độ</th>
+                                    <th class="text-nowrap">API</th>
+                                    <th class="text-nowrap">Thao tác</th>
+                                </tr>
+                            </thead>
+                            <tbody id="alertTableBody">
+                                <tr><td colspan="7" class="text-muted py-4 text-center">Chưa có dữ liệu phân tích</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
@@ -101,19 +161,19 @@
 <div class="modal fade" id="videoModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
   <div class="modal-dialog modal-lg modal-dialog-centered">
     <div class="modal-content bg-dark text-white border-secondary">
-      <div class="modal-header border-secondary">
-        <h5 class="modal-title fw-bold" id="modalTitle">Xem lại hành vi</h5>
+      <div class="modal-header border-secondary py-2">
+        <h5 class="modal-title fw-bold fs-6" id="modalTitle">Xem lại hành vi</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close" onclick="closeTempVideo()"></button>
       </div>
-      <div class="modal-body p-0 text-center" style="min-height: 400px; background: #000; position: relative;">
+      <div class="modal-body p-0 text-center" style="min-height: 300px; background: #000; position: relative;">
         <video id="replayVideo" controls autoplay class="w-100 object-fit-contain" style="display: none;" type="video/webm"></video>
-        <div id="dummyPlayer" class="d-flex flex-column align-items-center justify-content-center h-100 w-100 py-5">
-            <i class="fa-solid fa-circle-play fa-4x text-primary mb-3"></i>
-            <h5 id="tempVideoId" class="text-muted">Đang phát đoạn cắt...</h5>
+        <div id="dummyPlayer" class="d-flex flex-column align-items-center justify-content-center h-100 w-100 py-5 position-absolute top-0 left-0">
+            <i class="fa-solid fa-circle-play fa-3x text-primary mb-2"></i>
+            <h6 id="tempVideoId" class="text-muted">Đang phát đoạn cắt...</h6>
         </div>
       </div>
-      <div class="modal-footer border-secondary">
-        <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal" onclick="closeTempVideo()">Đóng</button>
+      <div class="modal-footer border-secondary py-2">
+        <button type="button" class="btn btn-outline-light btn-sm" data-bs-dismiss="modal" onclick="closeTempVideo()">Đóng</button>
       </div>
     </div>
   </div>
@@ -123,34 +183,32 @@
 <div class="modal fade" id="rtspConfigModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-xl modal-dialog-centered">
     <div class="modal-content border-0 shadow">
-      <div class="modal-header bg-light border-bottom">
-        <h5 class="modal-title fw-bold text-primary"><i class="fa-solid fa-microchip me-2"></i>Cấu hình API Token</h5>
+      <div class="modal-header bg-light border-bottom py-2 px-3">
+        <h5 class="modal-title fw-bold text-primary fs-6"><i class="fa-solid fa-microchip me-1"></i>Cấu hình API Token</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
-      <div class="modal-body p-4 bg-light">
+      <div class="modal-body p-3 bg-light">
           
-        <div class="d-flex flex-wrap justify-content-between align-items-center border-bottom pb-2 mb-3 gap-2">
-            <h6 class="fw-bold text-dark m-0">Danh sách API Key (OpenRouter)</h6>
-            <button type="button" class="btn btn-sm btn-success fw-bold px-3" onclick="addRtspApiRow()">
+        <div class="d-flex flex-wrap justify-content-between align-items-center border-bottom pb-2 mb-2 gap-2">
+            <h6 class="fw-bold text-dark m-0 small">Danh sách API Key (OpenRouter)</h6>
+            <button type="button" class="btn btn-sm btn-success fw-bold px-2 py-1" onclick="addRtspApiRow()">
                 <i class="fa-solid fa-plus me-1"></i>Thêm Token
             </button>
         </div>
         
-        <div id="rtspApiListContainer" class="mb-4">
-            <!-- Form API render bằng JS -->
-        </div>
+        <div id="rtspApiListContainer" class="mb-3"></div>
 
-        <h6 class="fw-bold mb-2 border-bottom pb-2 mt-4 text-dark">Hiệu suất Worker</h6>
-        <div class="bg-white p-3 rounded border mb-2 shadow-sm">
-            <label class="form-label fw-bold small text-dark">Số luồng Worker (Jobs)</label>
-            <input type="number" class="form-control mb-2" id="rtspConcurrentJobs" min="1" max="50" style="max-width: 150px;" value="10">
-            <small class="text-muted d-block">Hệ thống đẩy Job vào hàng chờ. Số worker quyết định khả năng xử lý đồng thời. Khuyến nghị: Bằng số lượng Token.</small>
+        <h6 class="fw-bold mb-2 border-bottom pb-1 mt-3 text-dark small">Hiệu suất Worker</h6>
+        <div class="bg-white p-3 rounded border shadow-sm">
+            <label class="form-label fw-bold small text-dark mb-1">Số luồng Worker (Jobs)</label>
+            <input type="number" class="form-control form-control-sm mb-1" id="rtspConcurrentJobs" min="1" max="50" style="max-width: 120px;" value="10">
+            <small class="text-muted d-block" style="font-size: 0.75rem;">Quyết định khả năng xử lý đồng thời của hệ thống hàng chờ.</small>
         </div>
 
       </div>
-      <div class="modal-footer bg-white border-top">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
-        <button type="button" class="btn btn-primary px-4 fw-bold" onclick="saveRtspConfig()">
+      <div class="modal-footer bg-white border-top py-2 px-3">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Đóng</button>
+        <button type="button" class="btn btn-primary btn-sm px-3 fw-bold" onclick="saveRtspConfig()">
             <i class="fa-solid fa-floppy-disk me-1"></i>Lưu cấu hình
         </button>
       </div>
@@ -163,7 +221,19 @@
     let currentTempId = null;
     let rtspApiList = [];
 
-    // --- YÊU CẦU MÃ PIN KHI CẤU HÌNH ---
+    window.addEventListener('DOMContentLoaded', () => {
+        fetch('/api/rtsp/stop', { method: 'POST' });
+        fetch('/api/rtsp/clear_cache', { method: 'POST' })
+            .then(() => {
+                const urlParams = new URLSearchParams(window.location.search);
+                const link = urlParams.get('link');
+                if (link) {
+                    document.getElementById('rtspInput').value = link;
+                    setTimeout(() => startStream(), 500);
+                }
+            });
+    });
+
     function openConfigWithPin() {
         let pin = prompt("Vui lòng nhập mã PIN hệ thống để cấu hình Token:");
         if (pin === null || pin.trim() === "") return; 
@@ -179,7 +249,7 @@
                 var configModal = new bootstrap.Modal(document.getElementById('rtspConfigModal'));
                 configModal.show();
             } else {
-                alert("Mã PIN không chính xác. Từ chối truy cập!");
+                alert("Mã PIN không chính xác!");
             }
         })
         .catch(err => {
@@ -188,32 +258,28 @@
         });
     }
 
-    // --- LOGIC CẤU HÌNH API DÀNH RIÊNG CHO RTSP ---
     function renderRtspApiRows() {
         const container = document.getElementById('rtspApiListContainer');
         container.innerHTML = '';
         
         if (rtspApiList.length === 0) {
-            container.innerHTML = `<div class="alert alert-secondary text-center mb-0">Chưa có API Key nào được thiết lập. Vui lòng bấm "Thêm Token".</div>`;
+            container.innerHTML = `<div class="alert alert-secondary text-center mb-0 py-2 small">Chưa có API Key nào. Vui lòng bấm "Thêm Token".</div>`;
             return;
         }
 
         rtspApiList.forEach((api, index) => {
             const html = `
-                <div class="row g-2 mb-3 align-items-end bg-white p-3 rounded border mx-0 position-relative shadow-sm">
-                    <button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0 m-2" style="width: 30px; height: 30px; padding: 0;" onclick="removeRtspApiRow(${index})" title="Xóa Token này">
+                <div class="row g-2 mb-2 align-items-end bg-white p-2 rounded border mx-0 position-relative shadow-sm">
+                    <button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0 m-1" style="width: 24px; height: 24px; padding: 0; font-size: 0.75rem;" onclick="removeRtspApiRow(${index})" title="Xóa">
                         <i class="fa-solid fa-xmark"></i>
                     </button>
                     <div class="col-12 col-md-6">
-                        <label class="form-label fw-bold text-dark small">API Key</label>
-                        <input type="text" class="form-control" placeholder="Nhập Token OpenRouter..." value="${api.key || ''}" onchange="updateRtspApiField(${index}, 'key', this.value)">
+                        <label class="form-label fw-bold text-dark small mb-1">API Key</label>
+                        <input type="text" class="form-control form-control-sm" placeholder="Nhập Token OpenRouter..." value="${api.key || ''}" onchange="updateRtspApiField(${index}, 'key', this.value)">
                     </div>
                     <div class="col-12 col-md-6">
-                        <label class="form-label fw-bold text-dark small">Tên Model</label>
-                        <input type="text" class="form-control text-muted" 
-                            placeholder="VD: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free" 
-                            value="${api.model || ''}" 
-                            onchange="updateRtspApiField(${index}, 'model', this.value)">
+                        <label class="form-label fw-bold text-dark small mb-1">Tên Model</label>
+                        <input type="text" class="form-control form-control-sm text-muted" placeholder="VD: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free" value="${api.model || ''}" onchange="updateRtspApiField(${index}, 'model', this.value)">
                     </div>
                 </div>
             `;
@@ -264,13 +330,13 @@
         });
     }
 
-    // --- LOGIC GIAO DIỆN PLAYER RTSP ---
     async function pasteLink() {
         try {
             const text = await navigator.clipboard.readText();
             document.getElementById('rtspInput').value = text;
+            startStream(); // Tự động phát khi dán
         } catch (err) {
-            alert('Trình duyệt chưa được cấp quyền dán từ Clipboard. Vui lòng bấm Ctrl+V (hoặc Cmd+V).');
+            alert('Trình duyệt chưa cấp quyền dán Clipboard. Hãy dùng Ctrl+V.');
         }
     }
 
@@ -281,7 +347,7 @@
                 let html = '';
                 for (const [key, info] of Object.entries(data)) {
                     const label = key.replace(/_/g, ' ');
-                    html += `<span class="badge bg-${info.color} py-2 px-3">${label}: ${info.text}</span>`;
+                    html += `<span class="badge bg-${info.color} py-1 px-2 text-wrap text-start text-break mb-1" style="font-size: 0.75rem;">${label}: ${info.text}</span> `;
                 }
                 document.getElementById('apiStatusContainer').innerHTML = html;
             });
@@ -294,13 +360,19 @@
         const rtspUrl = document.getElementById('rtspInput').value;
         if (rtspUrl.trim() === "") return alert("Vui lòng nhập đường dẫn RTSP!");
 
+        // Đẩy URL RTSP lên thanh địa chỉ của trình duyệt
+        const url = new URL(window.location);
+        url.searchParams.set('link', rtspUrl);
+        window.history.pushState({}, '', url);
+
         document.getElementById('rtspPlaceholder').style.display = 'none';
         document.getElementById('videoStream').style.display = 'block';
-        document.getElementById('videoStream').src = `/video_feed?url=${encodeURIComponent(rtspUrl)}`;
+        
+        document.getElementById('videoStream').src = `/video_feed?url=${encodeURIComponent(rtspUrl)}&t=${new Date().getTime()}`;
         
         const statusBadge = document.getElementById('streamStatus');
-        statusBadge.innerText = "Đang truyền phát & AI phân tích";
-        statusBadge.className = "badge bg-success px-4 py-2 rounded-pill shadow-sm fs-6 d-flex align-items-center";
+        statusBadge.innerHTML = `<i class="fa-solid fa-satellite-dish fa-fade me-1"></i> Đang truyền phát`;
+        statusBadge.className = "badge bg-success px-3 py-2 rounded-pill shadow-sm fs-7 text-nowrap";
 
         if(pollInterval) clearInterval(pollInterval);
         pollInterval = setInterval(fetchRtspData, 1500);
@@ -309,22 +381,33 @@
     function stopStream() {
         document.getElementById('videoStream').src = "";
         document.getElementById('videoStream').style.display = 'none';
-        document.getElementById('rtspPlaceholder').style.display = 'block';
+        document.getElementById('rtspPlaceholder').style.display = 'flex';
         
         const statusBadge = document.getElementById('streamStatus');
-        statusBadge.innerText = "Đã ngắt kết nối";
-        statusBadge.className = "badge bg-danger px-4 py-2 rounded-pill shadow-sm fs-6 d-flex align-items-center";
+        statusBadge.innerHTML = `<i class="fa-solid fa-circle-stop me-1"></i> Đã ngắt kết nối`;
+        statusBadge.className = "badge bg-danger px-3 py-2 rounded-pill shadow-sm fs-7 text-nowrap";
+        
         if(pollInterval) clearInterval(pollInterval);
+        fetch('/api/rtsp/stop', { method: 'POST' });
+        
+        // Tùy chọn: Bạn cũng có thể xóa param link khỏi URL khi ngắt kết nối
+        const url = new URL(window.location);
+        url.searchParams.delete('link');
+        window.history.pushState({}, '', url);
     }
 
     function fetchRtspData() {
         fetch('/api/rtsp/data')
-            .then(res => res.json())
+            .then(res => {
+                if(!res.ok) throw new Error("Mất kết nối server");
+                return res.json();
+            })
             .then(data => {
                 const logBox = document.getElementById('logConsole');
                 logBox.innerHTML = data.logs.map(log => {
-                    let isQueueWarning = log.includes("Đang chờ");
-                    return `<div style="${isQueueWarning ? 'color:#17a2b8;' : ''}">> ${log}</div>`;
+                    let isWarning = log.includes("CẢNH BÁO") || log.includes("LỖI");
+                    let color = isWarning ? 'color:#ff4444;' : (log.includes("PHÁT HIỆN") ? 'color:#ffc107;' : '');
+                    return `<div style="${color}">> ${log}</div>`;
                 }).join('');
                 logBox.scrollTop = logBox.scrollHeight; 
 
@@ -332,26 +415,27 @@
                 if (data.alerts.length > 0) {
                     tbody.innerHTML = data.alerts.map(a => `
                         <tr>
-                            <td class="fw-bold text-muted">${a.time}</td>
+                            <td class="fw-bold text-muted text-nowrap">${a.time}</td>
                             <td class="fw-bold text-primary">${a.behavior}</td>
                             <td><span class="badge bg-${a.badge}-subtle text-${a.badge} border border-${a.badge} px-2 py-1">${a.level}</span></td>
-                            <td style="text-align: left; line-height: 1.6; font-size: 0.9rem;">${a.desc}</td>
+                            <td style="text-align: left; line-height: 1.4; font-size: 0.85rem;">${a.desc}</td>
                             <td><span class="badge bg-info-subtle text-info border border-info px-2 py-1">${a.process_time}</span></td>
-                            <td><span class="badge bg-secondary-subtle text-secondary border border-secondary px-2 py-1">${a.api_info}</span></td>
+                            <td><span class="badge bg-secondary-subtle text-secondary border border-secondary px-2 py-1 text-nowrap">${a.api_info}</span></td>
                             <td>
-                                <button class="btn btn-sm btn-primary" onclick="openTempVideo('${a.id}', '${a.behavior}', '${a.temp_video_url}')">
-                                    <i class="fa-solid fa-eye me-1"></i> Xem lại
+                                <button class="btn btn-sm btn-primary text-nowrap py-1 px-2" onclick="openTempVideo('${a.id}', '${a.behavior}', '${a.temp_video_url}')">
+                                    <i class="fa-solid fa-eye me-1"></i> Xem
                                 </button>
                             </td>
                         </tr>
                     `).join('');
                 }
-            });
+            })
+            .catch(err => console.log("Lỗi nhẹ khi fetch data:", err));
     }
 
     function openTempVideo(clipId, behaviorName, videoUrl) {
         currentTempId = clipId;
-        document.getElementById('modalTitle').innerText = `Xem lại hành vi: ${behaviorName}`;
+        document.getElementById('modalTitle').innerText = `Xem lại: ${behaviorName}`;
         
         document.getElementById('dummyPlayer').style.display = 'none';
         document.getElementById('dummyPlayer').classList.remove('d-flex');
@@ -382,8 +466,8 @@
         if(confirm('Bạn có chắc chắn muốn xóa toàn bộ lịch sử không?')) {
             fetch('/api/rtsp/clear_cache', { method: 'POST' }).then(res => res.json()).then(data => {
                 if(data.success) {
-                    document.getElementById('logConsole').innerHTML = '> Đã xóa lịch sử...';
-                    document.getElementById('alertTableBody').innerHTML = '<tr><td colspan="7" class="text-muted py-5">Chưa có dữ liệu phân tích</td></tr>';
+                    document.getElementById('logConsole').innerHTML = '> Đã xóa lịch sử...<br>';
+                    document.getElementById('alertTableBody').innerHTML = '<tr><td colspan="7" class="text-muted py-4 text-center">Chưa có dữ liệu phân tích</td></tr>';
                 }
             });
         }
