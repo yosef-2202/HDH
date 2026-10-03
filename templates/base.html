@@ -12,7 +12,7 @@
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #f4f7f6; color: #2c3e50; overflow-x: hidden; }
         
-        #sidebar { background: #1a1c23; min-height: 100vh; color: #a0aec0; box-shadow: 4px 0 15px rgba(0,0,0,0.05); }
+        #sidebar { background: #1a1c23 !important; min-height: 100vh; color: #a0aec0; box-shadow: 4px 0 15px rgba(0,0,0,0.05); }
         .sidebar-brand { font-size: 1.25rem; font-weight: 700; color: #fff; padding: 25px 20px; text-align: center; border-bottom: 1px solid #2d3748; letter-spacing: 1px; }
         .user-profile { padding: 25px 20px; text-align: center; border-bottom: 1px solid #2d3748; }
         .user-profile img { width: 65px; height: 65px; border-radius: 50%; border: 3px solid #3182ce; padding: 2px; margin-bottom: 10px; }
@@ -28,54 +28,71 @@
         
         .otp-input { width: 50px; height: 60px; text-align: center; font-size: 26px; font-weight: 700; border-radius: 10px; border: 2px solid #e2e8f0; margin: 0 4px; color: #2d3748; transition: all 0.2s; }
         .otp-input:focus { border-color: #3182ce; outline: none; box-shadow: 0 0 0 4px rgba(49, 130, 206, 0.15); }
+        
+        @media (max-width: 768px) { #main-content { padding: 20px 15px; } }
     </style>
 </head>
 <body>
 
+    <!-- Header Mobile (Chỉ hiện trên màn hình nhỏ) -->
+    <div class="d-md-none d-flex justify-content-between align-items-center p-3 shadow-sm" style="background: #1a1c23;">
+        <div class="fw-bold text-white fs-5"><i class="fa-solid fa-microchip text-primary me-2"></i> AI PLATFORM</div>
+        <button class="btn btn-outline-light border-0 px-2 py-1" type="button" data-bs-toggle="offcanvas" data-bs-target="#sidebar">
+            <i class="fa-solid fa-bars fs-4"></i>
+        </button>
+    </div>
+
     <div class="d-flex">
-        <!-- SIDEBAR -->
-        <nav id="sidebar" class="col-md-3 col-lg-2 d-none d-md-block flex-shrink-0">
-            <div class="sidebar-brand">
-                <i class="fa-solid fa-microchip text-primary me-2"></i> AI PLATFORM
+        <!-- SIDEBAR (Tích hợp Offcanvas cho Mobile) -->
+        <nav id="sidebar" class="offcanvas-md offcanvas-start col-md-3 col-lg-2 flex-shrink-0" tabindex="-1" style="background-color: #1a1c23 !important;">
+            <div class="offcanvas-header d-md-none border-bottom" style="border-color: #2d3748 !important;">
+                <h5 class="offcanvas-title text-white fw-bold"><i class="fa-solid fa-microchip text-primary me-2"></i> MENU</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" data-bs-target="#sidebar"></button>
             </div>
             
-            <div class="user-profile">
-                <div class="avatar-circle mb-2 mx-auto" style="width: 65px; height: 65px; border-radius: 50%; background: #3182ce; color: white; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: bold; border: 3px solid #63b3ed;">AD</div>
-                <h6 class="mb-0 fw-bold text-white">Quản trị viên</h6>
-                <small style="color: #63b3ed;">System Admin</small>
-            </div>
-
-            <div class="nav-section-title mt-2">Chức năng chính</div>
-            <ul class="nav flex-column mb-3">
-                <li class="nav-item"><a class="nav-link" id="nav-index" href="{{ url_for('index') }}"><i class="fa-solid fa-chart-pie"></i> Tổng quan</a></li>
+            <div class="offcanvas-body d-flex flex-column p-0">
+                <div class="sidebar-brand d-none d-md-block">
+                    <i class="fa-solid fa-microchip text-primary me-2"></i> AI PLATFORM
+                </div>
                 
-                {% if config.enable_video %}
-                <li class="nav-item"><a class="nav-link" id="nav-video" href="{{ url_for('video') }}"><i class="fa-solid fa-file-video"></i> Xử lý Video (Tải file)</a></li>
-                {% endif %}
+                <div class="user-profile">
+                    <div class="avatar-circle mb-2 mx-auto" style="width: 65px; height: 65px; border-radius: 50%; background: #3182ce; color: white; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: bold; border: 3px solid #63b3ed;">AD</div>
+                    <h6 class="mb-0 fw-bold text-white">Quản trị viên</h6>
+                    <small style="color: #63b3ed;">System Admin</small>
+                </div>
 
-                {% if config.enable_rtsp %}
-                <li class="nav-item"><a class="nav-link" id="nav-rtsp" href="{{ url_for('rtsp') }}"><i class="fa-solid fa-satellite-dish"></i> Xử lý Luồng RTSP</a></li>
-                {% endif %}
+                <div class="nav-section-title mt-2">Chức năng chính</div>
+                <ul class="nav flex-column mb-3">
+                    <li class="nav-item"><a class="nav-link" id="nav-index" href="{{ url_for('index') }}"><i class="fa-solid fa-chart-pie"></i> Tổng quan</a></li>
+                    
+                    {% if config.enable_video %}
+                    <li class="nav-item"><a class="nav-link" id="nav-video" href="{{ url_for('video') }}"><i class="fa-solid fa-file-video"></i> Xử lý Video (Tải file)</a></li>
+                    {% endif %}
 
-                {% if config.enable_chatbot %}
-                <li class="nav-item"><a class="nav-link" id="nav-chatbot" href="{{ url_for('chatbot') }}"><i class="fa-solid fa-robot"></i> Chatbot AI</a></li>
-                {% endif %}
+                    {% if config.enable_rtsp %}
+                    <li class="nav-item"><a class="nav-link" id="nav-rtsp" href="{{ url_for('rtsp') }}"><i class="fa-solid fa-satellite-dish"></i> Xử lý Luồng RTSP</a></li>
+                    {% endif %}
 
-                {% if config.enable_image %}
-                <li class="nav-item"><a class="nav-link" id="nav-image" href="{{ url_for('image') }}"><i class="fa-solid fa-image"></i> Xử lý Ảnh</a></li>
-                {% endif %}
+                    {% if config.enable_chatbot %}
+                    <li class="nav-item"><a class="nav-link" id="nav-chatbot" href="{{ url_for('chatbot') }}"><i class="fa-solid fa-robot"></i> Chatbot AI</a></li>
+                    {% endif %}
 
-                {% if config.enable_realtime %}
-                <li class="nav-item"><a class="nav-link" id="nav-realtime" href="{{ url_for('realtime') }}"><i class="fa-solid fa-clock-rotate-left"></i> Phân tích Realtime</a></li>
-                {% endif %}
-            </ul>
+                    {% if config.enable_image %}
+                    <li class="nav-item"><a class="nav-link" id="nav-image" href="{{ url_for('image') }}"><i class="fa-solid fa-image"></i> Xử lý Ảnh</a></li>
+                    {% endif %}
 
-            <div class="nav-section-title">Hệ thống</div>
-            <ul class="nav flex-column">
-                <li class="nav-item">
-                    <a class="nav-link text-warning" href="#" data-bs-toggle="modal" data-bs-target="#pinModal"><i class="fa-solid fa-sliders"></i> Cài đặt hệ thống</a>
-                </li>
-            </ul>
+                    {% if config.enable_realtime %}
+                    <li class="nav-item"><a class="nav-link" id="nav-realtime" href="{{ url_for('realtime') }}"><i class="fa-solid fa-clock-rotate-left"></i> Phân tích Realtime</a></li>
+                    {% endif %}
+                </ul>
+
+                <div class="nav-section-title">Hệ thống</div>
+                <ul class="nav flex-column pb-4">
+                    <li class="nav-item">
+                        <a class="nav-link text-warning" href="#" data-bs-toggle="modal" data-bs-target="#pinModal"><i class="fa-solid fa-sliders"></i> Cài đặt hệ thống</a>
+                    </li>
+                </ul>
+            </div>
         </nav>
 
         <!-- MAIN CONTENT -->

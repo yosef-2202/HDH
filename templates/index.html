@@ -4,53 +4,54 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
-        <h3 class="fw-bold mb-0 text-dark">Bảng điều khiển</h3>
-        <p class="text-muted small mb-0">Hệ thống phân tích AI tập trung</p>
+        <h3 class="fw-bold mb-1 text-dark fs-4 fs-md-3">Bảng điều khiển</h3>
+        <p class="text-muted small mb-0">Giám sát tài nguyên máy chủ</p>
     </div>
-    <span class="badge bg-success-subtle text-success border border-success px-3 py-2 rounded-pill shadow-sm">
-        <i class="fa-solid fa-server me-1"></i> Server đang hoạt động
+    <span class="badge bg-success-subtle text-success border border-success px-3 py-2 rounded-pill shadow-sm d-flex align-items-center">
+        <span class="spinner-grow spinner-grow-sm me-2 text-success" role="status" aria-hidden="true" style="width: 0.8rem; height: 0.8rem;"></span> <span class="d-none d-sm-inline">Server hoạt động</span>
     </span>
 </div>
 
-<!-- STATS CARDS REALTIME -->
-<div class="row mb-5">
-    <div class="col-xl-4 col-md-6 mb-4">
-        <div class="card custom-card h-100 py-2" style="border-left: 5px solid #3182ce;">
-            <div class="card-body">
-                <div class="row align-items-center">
-                    <div class="col">
-                        <div class="text-xs fw-bold text-primary text-uppercase mb-1" style="font-size: 0.8rem;">Đang xử lý (Active Jobs)</div>
-                        <div class="h5 mb-0 fw-bold text-dark"><span id="stat-active-jobs">0</span> / <span id="stat-max-jobs">2</span> Job</div>
+<!-- STATS CARDS REALTIME (CPU & RAM) -->
+<div class="row mb-5 g-4">
+    <!-- CPU Usage -->
+    <div class="col-12 col-md-6">
+        <div class="card custom-card h-100 border-0 shadow-sm" style="border-radius: 1rem;">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="bg-primary-subtle p-3 rounded-4 text-primary">
+                            <i class="fa-solid fa-microchip fs-3"></i>
+                        </div>
+                        <h6 class="fw-bold mb-0 text-secondary text-uppercase fs-6">Tải CPU (Usage)</h6>
                     </div>
-                    <div class="col-auto"><i class="fa-solid fa-microchip fa-2x text-muted opacity-50"></i></div>
+                    <h3 class="fw-bold text-primary mb-0"><span id="stat-cpu-text">0</span>%</h3>
+                </div>
+                <div class="progress mt-4" style="height: 12px; border-radius: 10px; background-color: #f1f5f9;">
+                    <div id="stat-cpu-bar" class="progress-bar bg-primary progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%; transition: width 0.5s ease, background-color 0.3s ease;"></div>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="col-xl-4 col-md-6 mb-4">
-        <div class="card custom-card h-100 py-2" style="border-left: 5px solid #d69e2e;">
-            <div class="card-body">
-                <div class="row align-items-center">
-                    <div class="col">
-                        <div class="text-xs fw-bold text-warning text-uppercase mb-1" style="font-size: 0.8rem;">Hàng chờ (Queue)</div>
-                        <div class="h5 mb-0 fw-bold text-dark"><span id="stat-queue">0</span> Job đang đợi</div>
+    <!-- RAM Usage -->
+    <div class="col-12 col-md-6">
+        <div class="card custom-card h-100 border-0 shadow-sm" style="border-radius: 1rem;">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="bg-success-subtle p-3 rounded-4 text-success">
+                            <i class="fa-solid fa-memory fs-3"></i>
+                        </div>
+                        <h6 class="fw-bold mb-0 text-secondary text-uppercase fs-6">Bộ nhớ (RAM)</h6>
                     </div>
-                    <div class="col-auto"><i class="fa-solid fa-list-check fa-2x text-muted opacity-50"></i></div>
+                    <h3 class="fw-bold text-success mb-0"><span id="stat-ram-text">0</span>%</h3>
                 </div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-xl-4 col-md-6 mb-4">
-        <div class="card custom-card h-100 py-2" style="border-left: 5px solid #38a169;">
-            <div class="card-body">
-                <div class="row align-items-center">
-                    <div class="col">
-                        <div class="text-xs fw-bold text-success text-uppercase mb-1" style="font-size: 0.8rem;">Gemini Tokens</div>
-                        <div class="h5 mb-0 fw-bold text-dark">2 API Keys (Round-Robin)</div>
-                    </div>
-                    <div class="col-auto"><i class="fa-solid fa-key fa-2x text-muted opacity-50"></i></div>
+                <div class="progress mt-4" style="height: 12px; border-radius: 10px; background-color: #f1f5f9;">
+                    <div id="stat-ram-bar" class="progress-bar bg-success progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%; transition: width 0.5s ease, background-color 0.3s ease;"></div>
+                </div>
+                <div class="mt-3 text-end text-muted small fw-bold">
+                    Đang dùng: <span id="stat-ram-used">0</span> GB / Tổng: <span id="stat-ram-total">0</span> GB
                 </div>
             </div>
         </div>
@@ -58,29 +59,50 @@
 </div>
 
 <!-- THÀNH VIÊN -->
-<h4 class="fw-bold text-dark mb-4 border-bottom pb-2">Thành viên phát triển</h4>
-<div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-5 g-3 mb-4">
-    <div class="col"><div class="card custom-card text-center py-4 h-100"><div class="card-body px-2"><img src="https://ui-avatars.com/api/?name=TV1&background=3182ce&color=fff&size=70" class="rounded-circle mb-3 shadow-sm"><h6 class="fw-bold mb-1">Đỗ Cao Thúy Vi</h6><p class="text-muted small mb-3">49.01.103.093</p></div></div></div>
-    <div class="col"><div class="card custom-card text-center py-4 h-100"><div class="card-body px-2"><img src="https://ui-avatars.com/api/?name=TV2&background=38a169&color=fff&size=70" class="rounded-circle mb-3 shadow-sm"><h6 class="fw-bold mb-1">Đoàn Thị Thanh Diễm</h6><p class="text-muted small mb-3">50.01.103.012</p></div></div></div>
-    <div class="col"><div class="card custom-card text-center py-4 h-100"><div class="card-body px-2"><img src="https://ui-avatars.com/api/?name=TV3&background=d69e2e&color=fff&size=70" class="rounded-circle mb-3 shadow-sm"><h6 class="fw-bold mb-1">Thành Viên 3</h6><p class="text-muted small mb-3">Data Processing</p></div></div></div>
-    <div class="col"><div class="card custom-card text-center py-4 h-100"><div class="card-body px-2"><img src="https://ui-avatars.com/api/?name=TV4&background=e53e3e&color=fff&size=70" class="rounded-circle mb-3 shadow-sm"><h6 class="fw-bold mb-1">Thành Viên 4</h6><p class="text-muted small mb-3">Frontend Developer</p></div></div></div>
-    <div class="col"><div class="card custom-card text-center py-4 h-100"><div class="card-body px-2"><img src="https://ui-avatars.com/api/?name=TV5&background=805ad5&color=fff&size=70" class="rounded-circle mb-3 shadow-sm"><h6 class="fw-bold mb-1">Bùi Vạn Thiên</h6><p class="text-muted small mb-3">51.01.103.084</p></div></div></div>
+<h5 class="fw-bold text-dark mb-4 border-bottom pb-3"><i class="fa-solid fa-users text-primary me-2"></i>Thành viên phát triển</h5>
+<div class="row row-cols-2 row-cols-sm-3 row-cols-md-3 row-cols-lg-5 g-3 mb-4">
+    <div class="col"><div class="card custom-card text-center py-4 h-100 border-0 shadow-sm rounded-4"><div class="card-body px-2"><img src="https://ui-avatars.com/api/?name=Thuy+Vi&background=3182ce&color=fff&size=70" class="rounded-circle mb-3 shadow"><h6 class="fw-bold mb-1 fs-6">Đỗ Cao Thúy Vi</h6><p class="text-muted small mb-1">49.01.103.093</p><span class="badge bg-danger-subtle text-danger border border-danger px-2 py-1 rounded-pill" style="font-size: 0.7rem;">Nhóm Trưởng</span></div></div></div>
+    <div class="col"><div class="card custom-card text-center py-4 h-100 border-0 shadow-sm rounded-4"><div class="card-body px-2"><img src="https://ui-avatars.com/api/?name=Thanh+Diem&background=38a169&color=fff&size=70" class="rounded-circle mb-3 shadow"><h6 class="fw-bold mb-1 fs-6">Đoàn Thị Thanh Diễm</h6><p class="text-muted small mb-0">50.01.103.012</p></div></div></div>
+    <div class="col"><div class="card custom-card text-center py-4 h-100 border-0 shadow-sm rounded-4"><div class="card-body px-2"><img src="https://ui-avatars.com/api/?name=Thai+Duong&background=d69e2e&color=fff&size=70" class="rounded-circle mb-3 shadow"><h6 class="fw-bold mb-1 fs-6">Nguyễn Thái Dương</h6><p class="text-muted small mb-0">49.01.104.024</p></div></div></div>
+    <div class="col"><div class="card custom-card text-center py-4 h-100 border-0 shadow-sm rounded-4"><div class="card-body px-2"><img src="https://ui-avatars.com/api/?name=Trung+Luat&background=e53e3e&color=fff&size=70" class="rounded-circle mb-3 shadow"><h6 class="fw-bold mb-1 fs-6">Nguyễn Trung Luật</h6><p class="text-muted small mb-0">49.01.104.086</p></div></div></div>
+    <div class="col"><div class="card custom-card text-center py-4 h-100 border-0 shadow-sm rounded-4"><div class="card-body px-2"><img src="https://ui-avatars.com/api/?name=Van+Thien&background=805ad5&color=fff&size=70" class="rounded-circle mb-3 shadow"><h6 class="fw-bold mb-1 fs-6">Bùi Vạn Thiên</h6><p class="text-muted small mb-0">51.01.103.084</p></div></div></div>
 </div>
 
 <script>
-    // Cập nhật số Job theo thời gian thực (Mỗi 2 giây)
     function fetchSystemStats() {
         fetch('/api/stats')
             .then(res => res.json())
             .then(data => {
-                document.getElementById('stat-active-jobs').innerText = data.active_jobs;
-                document.getElementById('stat-max-jobs').innerText = data.concurrent_jobs;
-                document.getElementById('stat-queue').innerText = data.queue_size;
+                let cpu = parseFloat(data.cpu_percent) || 0;
+                let ram = parseFloat(data.ram_percent) || 0;
+                
+                // --- Cập nhật CPU ---
+                document.getElementById('stat-cpu-text').innerText = cpu.toFixed(1);
+                let cpuBar = document.getElementById('stat-cpu-bar');
+                cpuBar.style.width = cpu + '%';
+                
+                let cpuColor = cpu >= 85 ? 'bg-danger' : (cpu >= 60 ? 'bg-warning' : 'bg-primary');
+                let cpuText = cpu >= 85 ? 'text-danger' : (cpu >= 60 ? 'text-warning' : 'text-primary');
+                cpuBar.className = `progress-bar progress-bar-striped progress-bar-animated ${cpuColor}`;
+                document.getElementById('stat-cpu-text').parentElement.className = `fw-bold mb-0 ${cpuText}`;
+
+                // --- Cập nhật RAM ---
+                document.getElementById('stat-ram-text').innerText = ram.toFixed(1);
+                let ramBar = document.getElementById('stat-ram-bar');
+                ramBar.style.width = ram + '%';
+                
+                let ramColor = ram >= 85 ? 'bg-danger' : (ram >= 60 ? 'bg-warning' : 'bg-success');
+                let ramText = ram >= 85 ? 'text-danger' : (ram >= 60 ? 'text-warning' : 'text-success');
+                ramBar.className = `progress-bar progress-bar-striped progress-bar-animated ${ramColor}`;
+                document.getElementById('stat-ram-text').parentElement.className = `fw-bold mb-0 ${ramText}`;
+
+                document.getElementById('stat-ram-used').innerText = data.ram_used;
+                document.getElementById('stat-ram-total').innerText = data.ram_total;
             })
             .catch(err => console.error("Lỗi lấy dữ liệu:", err));
     }
     
-    fetchSystemStats(); // Gọi ngay lần đầu
-    setInterval(fetchSystemStats, 2000); // Lặp lại mỗi 2 giây
+    fetchSystemStats();
+    setInterval(fetchSystemStats, 2000); // Tự động reload sau mỗi 2 giây
 </script>
 {% endblock %}

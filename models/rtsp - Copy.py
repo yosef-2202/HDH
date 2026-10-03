@@ -47,6 +47,7 @@ def get_api_credentials():
         selected_api = valid_apis[api_index]
         token_turn += 1
         
+    # Cố định tên hiển thị là API_1, API_2... thay vì cộng dồn vô hạn
     api_label = f"API_{api_index + 1}"
     api_key = selected_api['key'].strip()
     
@@ -108,6 +109,7 @@ Nếu có người, hãy liệt kê MỖI NGƯỜI TRÊN MỘT DÒNG theo đúng
     
     for attempt in range(max_retries):
         try:
+            # Báo hiệu Worker đang bắt đầu xử lý bằng API nào
             timestamp_start = datetime.now().strftime("%H:%M:%S")
             start_msg = f"[{timestamp_start}] [TIẾN TRÌNH] Đang phân tích bằng {api_label}..."
             if len(global_logs) > 50: global_logs.pop(0)
@@ -130,13 +132,7 @@ Nếu có người, hãy liệt kê MỖI NGƯỜI TRÊN MỘT DÒNG theo đúng
             
             response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload, timeout=30)
             response.raise_for_status() 
-            
-            # Kiểm tra an toàn cấu trúc JSON trả về
-            res_json = response.json()
-            if not res_json or 'choices' not in res_json or len(res_json['choices']) == 0:
-                raise ValueError("API trả về dữ liệu không hợp lệ (thiếu trường 'choices')")
-                
-            text = res_json['choices'][0]['message']['content'].strip()
+            text = response.json()['choices'][0]['message']['content'].strip()
             
             process_time = round(time.time() - start_time, 2)
             lines = text.split('\n')
@@ -194,6 +190,7 @@ Nếu có người, hãy liệt kê MỖI NGƯỜI TRÊN MỘT DÒNG theo đúng
                 })
                 if len(global_alerts) > 20: global_alerts.pop()
             else:
+                # Ghi Log thành công nhưng không có người để dễ theo dõi tiến độ
                 if "không" in text.lower() or text == "":
                     timestamp = datetime.now().strftime("%H:%M:%S")
                     log_msg = f"[{timestamp}] [{api_label}] Không phát hiện người (Tốc độ: {process_time}s)"
@@ -211,20 +208,17 @@ Nếu có người, hãy liệt kê MỖI NGƯỜI TRÊN MỘT DÒNG theo đúng
                     msg = f"[{timestamp}] [CẢNH BÁO] {api_label} dính Rate Limit, nghỉ 5s rồi đổi..."
                     if len(global_logs) > 50: global_logs.pop(0)
                     global_logs.append(msg)
+                    
                     time.sleep(5) 
                 else:
                     time.sleep(1)
+                    
                 api_label, api_key, valid_apis, model_name = get_api_credentials() 
             else:
                 pass 
                 
         except Exception as e:
             if attempt < max_retries - 1:
-                timestamp = datetime.now().strftime("%H:%M:%S")
-                msg = f"[{timestamp}] [CẢNH BÁO] {api_label} lỗi phản hồi (JSON/Model), chuyển token..."
-                if len(global_logs) > 50: global_logs.pop(0)
-                global_logs.append(msg)
-                
                 api_label, api_key, valid_apis, model_name = get_api_credentials() 
                 time.sleep(1)
             else:

@@ -3,6 +3,8 @@ from flask_sqlalchemy import SQLAlchemy
 from urllib.parse import quote_plus
 from werkzeug.middleware.proxy_fix import ProxyFix
 import json
+import psutil
+import os
 
 # Import module RTSP
 from models.rtsp import rtsp_bp
@@ -29,11 +31,10 @@ class SystemSettings(db.Model):
     __tablename__ = 'system_settings'
     id = db.Column(db.Integer, primary_key=True)
     setting_key = db.Column(db.String(50), unique=True, nullable=False)
-    setting_value = db.Column(db.Text, nullable=True) # Dùng Text để lưu JSON không giới hạn
+    setting_value = db.Column(db.Text, nullable=True)
 
 with app.app_context():
     db.create_all()
-    # Khai báo cấu hình mặc định, bao gồm cả biến cho module RTSP
     default_settings = {
         'system_pin': '123456',
         'rtsp_api_list': '[]',
@@ -73,6 +74,37 @@ def inject_config():
 
 app.register_blueprint(rtsp_bp)
 
+# --- HÀM LẤY RAM CỦA CONTAINER ---
+def get_container_ram_info():
+    try:
+        # Cgroup v2 (Các bản Linux mới)
+        if os.path.exists('/sys/fs/cgroup/memory.max'):
+            with open('/sys/fs/cgroup/memory.current', 'r') as f:
+                usage = int(f.read().strip())
+            with open('/sys/fs/cgroup/memory.max', 'r') as f:
+                limit_str = f.read().strip()
+                limit = int(limit_str) if limit_str != 'max' else psutil.virtual_memory().total
+        # Cgroup v1 (Các hệ thống cũ hơn, phổ biến trên Pterodactyl/Docker cũ)
+        elif os.path.exists('/sys/fs/cgroup/memory/memory.limit_in_bytes'):
+            with open('/sys/fs/cgroup/memory/memory.usage_in_bytes', 'r') as f:
+                usage = int(f.read().strip())
+            with open('/sys/fs/cgroup/memory/memory.limit_in_bytes', 'r') as f:
+                limit = int(f.read().strip())
+                # Giới hạn quá lớn (không limit) -> Lấy RAM của máy host
+                if limit > psutil.virtual_memory().total:
+                    limit = psutil.virtual_memory().total
+        else:
+            # Không chạy trong container hoặc không quyền truy cập cgroup -> Dự phòng dùng psutil
+            vm = psutil.virtual_memory()
+            return vm.percent, vm.used, vm.total
+
+        percent = (usage / limit) * 100 if limit > 0 else 0
+        return percent, usage, limit
+    except Exception:
+        # Xảy ra lỗi phát sinh -> Dự phòng dùng psutil
+        vm = psutil.virtual_memory()
+        return vm.percent, vm.used, vm.total
+
 @app.route('/verify-pin', methods=['POST'])
 def verify_pin():
     data = request.get_json()
@@ -108,13 +140,21 @@ def settings_page():
 
 @app.route('/api/stats')
 def api_stats():
+    cpu = psutil.cpu_percent(interval=0.1)
+    
+    # Lấy thông số RAM dựa trên Container
+    ram_percent, ram_used_bytes, ram_total_bytes = get_container_ram_info()
+    
     return jsonify({
         "active_jobs": 0, 
         "concurrent_jobs": int(get_setting('rtsp_concurrent_jobs', 2)), 
-        "queue_size": 0
+        "queue_size": 0,
+        "cpu_percent": round(cpu, 1),
+        "ram_percent": round(ram_percent, 1),
+        "ram_used": round(ram_used_bytes / (1024**3), 2),  # Đổi Byte sang GB
+        "ram_total": round(ram_total_bytes / (1024**3), 2) # Đổi Byte sang GB
     })
 
-# API Quản lý Bật/Tắt Module chính
 @app.route('/api/config', methods=['GET', 'POST'])
 def api_config():
     if request.method == 'POST':
