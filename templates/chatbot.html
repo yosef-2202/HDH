@@ -1,481 +1,848 @@
 {% extends 'base.html' %}
-{% block title %}Quản lý Luồng RTSP - AI Vision{% endblock %}
+
+{% block title %}Chatbot AI Giám Sát - AI PLATFORM{% endblock %}
 
 {% block content %}
-<style>
-    /* Chuyển overflow-x thành auto để cho phép cuộn ngang nếu cần, thay vì cắt xén */
-    body { overflow-x: auto; }
-    .custom-card { border-radius: 12px; overflow: hidden; }
-    .glass-header { background: rgba(255,255,255,0.9); backdrop-filter: blur(10px); }
-    
-    ::-webkit-scrollbar { width: 5px; height: 5px; }
-    ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
-    ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
+<div class="container-fluid p-0">
+    <!-- TIÊU ĐỀ & THANH ĐIỀU KHIỂN TRÊN -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="fw-bold text-dark mb-1">
+                <i class="fa-solid fa-robot text-primary me-2"></i>Trợ Lý AI An Ninh & Giám Sát
+            </h3>
+            <p class="text-muted small mb-0">Hỗ trợ tra cứu kỹ thuật, phân tích dữ liệu camera, giải đáp câu hỏi và hướng dẫn vận hành hệ thống</p>
+        </div>
+        <div class="d-flex flex-wrap align-items-center gap-2 mt-2 mt-md-0">
+            <span id="apiKeyStatusLabel" class="badge bg-secondary-subtle text-secondary-emphasis">Đang kiểm tra cấu hình API…</span>
+            <button class="btn btn-outline-primary btn-sm shadow-sm" type="button" onclick="openChatbotConfig()">
+                <i class="fa-solid fa-key me-1"></i> Cấu hình Token
+            </button>
+            <span class="badge bg-light text-secondary border shadow-sm py-2 px-2" title="Tin nhắn chỉ lưu tạm trong phiên và tự động xóa sạch khi đóng tab hoặc thoát trình duyệt">
+                <i class="fa-solid fa-shield-halved text-success me-1"></i> Tự xóa khi thoát web
+            </span>
+            <!-- Nút Xoá lịch sử chat -->
+            <button class="btn btn-outline-danger btn-sm shadow-sm" onclick="clearChatHistory()" title="Xoá toàn bộ lịch sử trò chuyện">
+                <i class="fa-solid fa-trash-can me-1"></i> Xoá lịch sử
+            </button>
+        </div>
+    </div>
 
-    /* KHUNG VIDEO TỈ LỆ 16:9 CO GIÃN THEO THIẾT BỊ */
-    .video-wrapper {
-        position: relative;
-        width: 100%;
-        padding-bottom: 56.25%; /* Tỷ lệ vàng 16:9 chuẩn */
-        background: #000;
-        overflow: hidden;
+    <!-- KHUNG CHAT CHÍNH -->
+    <div class="card custom-card border-0 shadow-sm" style="height: calc(100vh - 180px); min-height: 580px; display: flex; flex-direction: column; overflow: hidden; border-radius: 16px;">
+        <!-- Card Header -->
+        <div class="card-header bg-white border-bottom py-3 px-4 d-flex flex-wrap justify-content-between align-items-center gap-3">
+            <div class="d-flex align-items-center gap-3">
+                <div class="position-relative">
+                    <div class="avatar-circle" style="width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(135deg, #3182ce, #63b3ed); color: white; display: flex; align-items: center; justify-content: center; font-size: 20px; box-shadow: 0 4px 10px rgba(49, 130, 206, 0.3);">
+                        <i class="fa-solid fa-microchip"></i>
+                    </div>
+                    <span class="position-absolute bottom-0 end-0 p-1 bg-success border border-white rounded-circle" style="width: 12px; height: 12px;"></span>
+                </div>
+                <div>
+                    <h6 class="mb-0 fw-bold text-dark">Security Assistant</h6>
+                    <small class="text-success d-flex align-items-center gap-1">
+                        <span class="spinner-grow spinner-grow-sm text-success" style="width: 8px; height: 8px;" role="status"></span>
+                        <span id="activeModelLabel">Chưa cấu hình model</span>
+                    </small>
+                </div>
+            </div>
+
+            <!-- Bộ chọn Model -->
+            <div class="d-flex align-items-center gap-2">
+                <label for="modelSelect" class="small text-muted d-none d-sm-block fw-semibold mb-0">Mô hình AI:</label>
+                <select id="modelSelect" class="form-select form-select-sm border-secondary-subtle" style="width: auto; max-width: min(260px, 45vw); font-size: 0.85rem; border-radius: 8px;">
+                    <option value="">Đang tải model…</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Cửa sổ tin nhắn -->
+        <div id="chatMessages" class="card-body p-4 flex-grow-1" style="overflow-y: auto; background-color: #f8fafc;">
+            <!-- Tin nhắn chào mặc định -->
+            <div class="chat-item bot-message d-flex gap-3 mb-4">
+                <div class="avatar-circle flex-shrink-0" style="width: 38px; height: 38px; border-radius: 50%; background: #3182ce; color: white; display: flex; align-items: center; justify-content: center; font-size: 16px;">
+                    <i class="fa-solid fa-robot"></i>
+                </div>
+                <div class="message-content" style="max-width: 80%;">
+                    <div class="p-3 rounded-4 shadow-sm bg-white border border-light text-dark" style="border-top-left-radius: 4px !important;">
+                        <p class="mb-2 fw-semibold text-primary"><i class="fa-solid fa-sparkles me-1"></i> Xin chào! Tôi là Trợ lý AI An ninh của hệ thống.</p>
+                        <p class="mb-2 text-secondary" style="font-size: 0.93rem;">Chọn model đã cấu hình để hỏi đáp hoặc phân tích ảnh/video về hành vi an toàn và nguy hiểm.</p>
+                        
+                        <!-- Gợi ý câu hỏi nhanh -->
+                        <div class="mt-3">
+                            <span class="badge bg-light text-secondary border fw-normal mb-2"><i class="fa-regular fa-lightbulb text-warning me-1"></i> Gợi ý câu hỏi nhanh:</span>
+                            <div class="d-flex flex-wrap gap-2">
+                                <button class="btn btn-sm btn-outline-primary rounded-pill prompt-chip" onclick="usePrompt('Hệ thống giám sát này có những tính năng chính nào?')">
+                                    🔍 Các tính năng chính
+                                </button>
+                                <button class="btn btn-sm btn-outline-primary rounded-pill prompt-chip" onclick="usePrompt('Làm sao để cấu hình và phát luồng Camera RTSP?')">
+                                    📹 Cách kết nối RTSP Camera
+                                </button>
+                                <button class="btn btn-sm btn-outline-primary rounded-pill prompt-chip" onclick="usePrompt('Thuật toán nhận diện và bám đối tượng hoạt động ra sao?')">
+                                    🧠 Cơ chế nhận diện AI
+                                </button>
+                                <button class="btn btn-sm btn-outline-primary rounded-pill prompt-chip" onclick="openChatbotConfig()">
+                                    🔑 Cấu hình API Token
+                                </button>
+                                <button class="btn btn-sm btn-outline-primary rounded-pill prompt-chip" onclick="document.getElementById('mediaInput').click()">
+                                    🖼️ Phân tích ảnh hoặc video
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <span class="text-muted small px-2 mt-1 d-block" style="font-size: 0.75rem;">Hệ thống AI • Sẵn sàng</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Thanh gõ tin nhắn -->
+        <div class="card-footer bg-white border-top p-3">
+            <form id="chatForm" onsubmit="event.preventDefault(); handleSendMessage();" class="d-flex gap-2 align-items-end">
+                <input id="mediaInput" type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/x-msvideo,video/quicktime,video/x-matroska,video/webm" class="d-none">
+                <button type="button" class="btn btn-outline-primary px-3 py-2" onclick="document.getElementById('mediaInput').click()" title="Gửi ảnh hoặc video để phân tích" style="border-radius: 12px; height: 44px;">
+                    <i class="fa-solid fa-paperclip"></i>
+                </button>
+                <div class="flex-grow-1 position-relative">
+                    <textarea 
+                        id="chatInput" 
+                        class="form-control border-secondary-subtle px-3 py-2" 
+                        rows="1" 
+                        placeholder="Nhập câu hỏi của bạn tại đây... (Nhấn Enter để gửi, Shift+Enter để xuống dòng)"
+                        style="resize: none; max-height: 120px; border-radius: 12px; font-size: 0.95rem; line-height: 1.5;"></textarea>
+                </div>
+                <button type="submit" id="btnSend" class="btn btn-primary px-4 py-2 d-flex align-items-center justify-content-center" style="border-radius: 12px; height: 44px; min-width: 90px; font-weight: 500;">
+                    <span id="btnSendText"><i class="fa-solid fa-paper-plane me-1"></i> Gửi</span>
+                    <span id="btnSendSpinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+                </button>
+            </form>
+            <div class="d-flex justify-content-between align-items-center mt-2 px-1">
+                <span class="text-muted small d-flex align-items-center flex-wrap gap-1" style="font-size: 0.78rem;">
+                    <span id="mediaFileLabel"><i class="fa-solid fa-paperclip me-1"></i> Gửi ảnh JPG/PNG/WEBP hoặc video MP4, tối đa 50 MB</span>
+                    <button type="button" id="btnRemoveMedia" class="btn btn-outline-danger btn-sm py-0 px-2 d-none" onclick="clearMediaSelection()" title="Hủy tệp đính kèm" style="font-size: 0.72rem; border-radius: 6px;">
+                        <i class="fa-solid fa-xmark me-1"></i>Hủy tệp
+                    </button>
+                </span>
+                <span id="latencyBadge" class="badge bg-light text-muted border fw-normal" style="font-size: 0.75rem;">
+                    Độ trễ: --
+                </span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL CẤU HÌNH TOKEN -->
+<div class="modal fade" id="chatbotConfigModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content" style="border-radius: 16px;">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold"><i class="fa-solid fa-key text-primary me-2"></i>Cấu hình Token cho Chatbot</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+            </div>
+            <div class="modal-body">
+                <!-- VÙNG NHẬP PIN -->
+                <div id="chatbotPinSection">
+                    <p class="text-muted">Nhập mã PIN quản trị để truy cập cấu hình Token.</p>
+                    <form id="chatbotPinForm" class="d-flex gap-2" onsubmit="event.preventDefault(); verifyChatbotPin();">
+                        <input id="chatbotPinInput" class="form-control" type="password" autocomplete="current-password" placeholder="Mã PIN quản trị" required style="max-width: 280px;">
+                        <button class="btn btn-primary" type="submit">Mở cấu hình</button>
+                    </form>
+                    <div id="chatbotPinError" class="text-danger small mt-2" role="alert"></div>
+                </div>
+
+                <!-- VÙNG CHỈNH SỬA TOKEN -->
+                <div id="chatbotTokenEditor" class="d-none">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <h6 class="fw-bold mb-1">Danh sách API Key</h6>
+                            <small class="text-muted">Mỗi dòng gắn một token với một model. Cấu hình này dùng riêng cho Chatbot.</small>
+                        </div>
+                        <button class="btn btn-success btn-sm" type="button" onclick="addChatbotTokenRow()"><i class="fa-solid fa-plus me-1"></i>Thêm Token</button>
+                    </div>
+                    <div id="chatbotTokenRows"></div>
+                    <div id="chatbotTokenEmpty" class="text-muted small d-none">Chưa có token. Thêm token để chọn model trong chatbox.</div>
+                    <div id="chatbotConfigMessage" class="small mt-2" role="status"></div>
+                </div>
+            </div>
+            <div id="chatbotConfigFooter" class="modal-footer d-none">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Đóng</button>
+                <button type="button" class="btn btn-primary" onclick="saveChatbotTokens()"><i class="fa-solid fa-floppy-disk me-1"></i>Lưu cấu hình</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .prompt-chip {
+        font-size: 0.82rem;
+        padding: 5px 12px;
+        transition: all 0.2s ease;
+        background-color: #ffffff;
     }
-    
-    .video-wrapper img, .video-wrapper .placeholder-box {
-        position: absolute;
-        top: 0; left: 0; right: 0; bottom: 0;
-        width: 100%; height: 100%;
+    .prompt-chip:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(49, 130, 206, 0.2);
+    }
+    .chat-bubble-user {
+        background: linear-gradient(135deg, #3182ce, #2b6cb0);
+        color: white;
+        border-top-right-radius: 4px !important;
+    }
+    .chat-media-preview {
+        display: block;
+        width: min(100%, 360px);
+        max-height: 280px;
         object-fit: contain;
+        margin: 0 0 0.65rem auto;
+        border-radius: 10px;
+        background: rgba(15, 23, 42, 0.22);
+    }
+    .chat-bubble-user .chat-media-preview {
+        border: 1px solid rgba(255, 255, 255, 0.35);
+    }
+    @media (max-width: 576px) {
+        .chat-media-preview {
+            width: min(100%, 240px);
+            max-height: 220px;
+        }
+        .message-content {
+            max-width: 88% !important;
+        }
+    }
+    .chat-bubble-bot {
+        background: #ffffff;
+        color: #2d3748;
+        border: 1px solid #e2e8f0;
+        border-top-left-radius: 4px !important;
+    }
+    .typing-dot {
+        width: 8px;
+        height: 8px;
+        background: #3182ce;
+        border-radius: 50%;
+        display: inline-block;
+        animation: typingAnimation 1.4s infinite ease-in-out both;
+    }
+    .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+    .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+    @keyframes typingAnimation {
+        0%, 80%, 100% { transform: scale(0); opacity: 0.4; }
+        40% { transform: scale(1); opacity: 1; }
+    }
+    .chat-bubble-bot {
+        font-family: "Segoe UI", "Noto Sans", Arial, sans-serif;
+    }
+    .assistant-response {
+        color: #1f2937;
+        font-size: 0.96rem;
+        line-height: 1.75;
+        letter-spacing: 0.005em;
+        overflow-wrap: anywhere;
+    }
+    .assistant-response p {
+        margin: 0 0 0.85rem;
+    }
+    .assistant-response p:last-child {
+        margin-bottom: 0;
+    }
+    .assistant-response h3,
+    .assistant-response h4,
+    .assistant-response h5 {
+        color: #1d4ed8;
+        font-weight: 700;
+        line-height: 1.4;
+        margin: 1rem 0 0.45rem;
+    }
+    .assistant-response h3 { font-size: 1.08rem; }
+    .assistant-response h4 { font-size: 1rem; }
+    .assistant-response h5 { font-size: 0.96rem; }
+    .assistant-response h3:first-child,
+    .assistant-response h4:first-child,
+    .assistant-response h5:first-child {
+        margin-top: 0;
+    }
+    .assistant-response ul,
+    .assistant-response ol {
+        margin: 0.35rem 0 0.9rem;
+        padding-left: 1.35rem;
+    }
+    .assistant-response li {
+        margin: 0.3rem 0;
+        padding-left: 0.15rem;
+    }
+    .assistant-response blockquote {
+        margin: 0.75rem 0;
+        padding: 0.6rem 0.85rem;
+        border-left: 3px solid #60a5fa;
+        background: #eff6ff;
+        color: #334155;
+        border-radius: 0 8px 8px 0;
+    }
+    .assistant-response hr {
+        margin: 0.9rem 0;
+        border: 0;
+        border-top: 1px solid #e2e8f0;
+    }
+    .assistant-response code {
+        color: #b42318;
+        background: #fff1f2;
+        padding: 0.1rem 0.3rem;
+        border-radius: 4px;
+        font-family: Consolas, "Courier New", monospace;
+        font-size: 0.88em;
+    }
+    .assistant-response pre {
+        margin: 0.85rem 0;
+        white-space: pre-wrap;
+    }
+    .assistant-response pre code {
+        background-color: #1a202c;
+        color: #63b3ed;
+        padding: 8px 12px;
+        border-radius: 8px;
+        display: block;
+        font-size: 0.85rem;
+        overflow-x: auto;
+    }
+    .assistant-response a {
+        color: #2563eb;
+        font-weight: 600;
+        text-decoration: underline;
     }
 </style>
 
-<!-- Link tới file style.css chứa code Terminal -->
-<link rel="stylesheet" href="/static/css/style.css">
-
-<!-- Script ép thiết bị di động hiển thị theo tỷ lệ của máy tính (1200px) -->
 <script>
+    const CHAT_HISTORY_KEY = 'security_chatbot_history_v1';
+    const CHAT_MODEL_KEY = 'security_chatbot_model_id_v1';
+    let chatHistory = [];
+    let chatbotModels = [];
+    let chatbotTokenRows = [];
+    let mediaPreviewUrls = [];
+    let previousNonVisionModelId = null;
+
+    // Xóa sạch mọi storage cũ ngay khi khởi động
+    try {
+        localStorage.removeItem(CHAT_HISTORY_KEY);
+        sessionStorage.removeItem(CHAT_HISTORY_KEY);
+    } catch(e) {}
+
+    // Xóa khi rời trang
+    window.addEventListener('beforeunload', function() {
+        try {
+            sessionStorage.removeItem(CHAT_HISTORY_KEY);
+            localStorage.removeItem(CHAT_HISTORY_KEY);
+        } catch(e) {}
+    });
+
     document.addEventListener("DOMContentLoaded", function() {
-        let viewport = document.querySelector("meta[name=viewport]");
-        if (viewport) {
-            viewport.setAttribute("content", "width=1200");
-        } else {
-            document.head.insertAdjacentHTML('beforeend', '<meta name="viewport" content="width=1200">');
-        }
-    });
-</script>
-
-<!-- Cố định chiều rộng tối thiểu là 1200px để giao diện không bị vỡ -->
-<div class="container-fluid px-2 px-md-3" style="min-width: 1200px; overflow-x: auto;">
-    
-    <!-- Tiêu đề và trạng thái API (Trở lại nguyên bản để tận dụng layout PC) -->
-    <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-3 gap-2">
-        <div class="w-100 w-md-auto">
-            <h3 class="fw-bold mb-1 text-dark fs-4 text-nowrap"><i class="fa-solid fa-camera-security text-primary me-2"></i>Kiểm soát RTSP</h3>
-            <div class="d-flex flex-wrap gap-1 mt-1 align-items-center" id="apiStatusContainer">
-                <span class="spinner-border spinner-border-sm text-primary" role="status"></span> <small class="text-muted">Đang tải...</small>
-            </div>
-        </div>
-        <div class="d-flex flex-row gap-2 align-items-center w-100 w-md-auto justify-content-between justify-content-md-end">
-            <button class="btn btn-outline-primary btn-sm px-3 shadow-sm text-nowrap" onclick="openConfigWithPin()">
-                <i class="fa-solid fa-gear me-1"></i> Token
-            </button>
-            <span class="badge bg-secondary px-3 py-2 rounded-pill shadow-sm fs-7 text-nowrap" id="streamStatus">
-                <i class="fa-solid fa-circle-pause me-1"></i> Chờ kết nối
-            </span>
-        </div>
-    </div>
-
-    <!-- Layout chính dạng Grid linh hoạt -->
-    <div class="row g-3">
-        <!-- KHU VỰC CAMERA & INPUT -->
-        <div class="col-12 col-lg-8">
-            <div class="card custom-card h-100 border-0 shadow-sm">
-                
-                <div class="card-header glass-header border-bottom py-2 px-3 d-flex flex-column gap-2">
-                    <div class="input-group input-group-sm w-100">
-                        <input type="text" id="rtspInput" class="form-control" placeholder="Nhập đường dẫn rtsp://...">
-                        <button class="btn btn-outline-secondary px-2" type="button" onclick="pasteLink()" title="Dán link"><i class="fa-solid fa-paste"></i></button>
-                        <button class="btn btn-outline-danger px-2" type="button" onclick="document.getElementById('rtspInput').value = ''" title="Xóa"><i class="fa-solid fa-xmark"></i></button>
-                    </div>
-                    <div class="d-flex gap-2 w-100 justify-content-end">
-                        <button class="btn btn-primary btn-sm fw-bold px-4 flex-grow-1 flex-md-grow-0" onclick="startStream()">
-                            <i class="fa-solid fa-play me-1"></i> Phát
-                        </button>
-                        <button class="btn btn-outline-danger btn-sm fw-bold px-3 flex-grow-1 flex-md-grow-0" onclick="stopStream()">
-                            <i class="fa-solid fa-stop me-1"></i> Ngắt
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- VIDEO CONTAINER -->
-                <div class="video-wrapper">
-                    <div id="rtspPlaceholder" class="placeholder-box text-secondary d-flex flex-column justify-content-center align-items-center p-3">
-                        <i class="fa-solid fa-satellite-dish fa-3x mb-2 text-muted"></i>
-                        <span class="opacity-75 text-center small">[Chưa có tín hiệu luồng camera]</span>
-                    </div>
-                    <img id="videoStream" src="" style="display: none;">
-                </div>
-
-            </div>
-        </div>
-
-        <!-- KHU VỰC LIVE LOG TỪ AI (Cập nhật Terminal CSS) -->
-        <div class="col-12 col-lg-4">
-            <div class="terminal-container">
-                <div class="terminal-header">
-                    <div class="mac-btns">
-                        <div class="mac-btn mac-close"></div>
-                        <div class="mac-btn mac-min"></div>
-                        <div class="mac-btn mac-max"></div>
-                    </div>
-                    <div class="term-title"><i class="fa-solid fa-terminal text-success me-2"></i>Log Hệ thống</div>
-                    <button class="btn btn-sm text-light py-0 px-2" onclick="clearCache()" title="Xóa Log" style="background: transparent; border: none;"><i class="fa-solid fa-trash-can"></i></button>
-                </div>
-                <div id="logConsole" class="log-content">
-                    <div class="log-line">
-                        <span class="log-info">> Hệ thống AI Vision đã sẵn sàng...</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- BẢNG THỐNG KÊ CHI TIẾT -->
-        <div class="col-12 mt-1">
-            <div class="card custom-card border-0 shadow-sm">
-                <div class="card-header bg-white border-bottom py-2 px-3">
-                    <h6 class="fw-bold mb-0 text-primary small text-uppercase"><i class="fa-solid fa-table-list me-1"></i> Lịch sử Nhận diện & Dự đoán</h6>
-                </div>
-                <div class="card-body p-0">
-                    <div class="table-responsive">
-                        <table class="table table-hover align-middle mb-0 text-center" style="font-size: 0.9rem;">
-                            <thead class="table-light text-muted small text-uppercase">
-                                <tr>
-                                    <th class="text-nowrap">Thời gian</th>
-                                    <th class="text-nowrap">Hành vi</th>
-                                    <th class="text-nowrap">Mức độ</th>
-                                    <th style="text-align: left; min-width: 220px;">Mô tả & Dự đoán</th>
-                                    <th class="text-nowrap">Tốc độ</th>
-                                    <th class="text-nowrap">API</th>
-                                    <th class="text-nowrap">Thao tác</th>
-                                </tr>
-                            </thead>
-                            <tbody id="alertTableBody">
-                                <tr><td colspan="7" class="text-muted py-4 text-center">Chưa có dữ liệu phân tích</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- MODAL XEM LẠI ĐOẠN CẮT -->
-<div class="modal fade" id="videoModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
-  <div class="modal-dialog modal-lg modal-dialog-centered">
-    <div class="modal-content bg-dark text-white border-secondary">
-      <div class="modal-header border-secondary py-2">
-        <h5 class="modal-title fw-bold fs-6" id="modalTitle">Xem lại hành vi</h5>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close" onclick="closeTempVideo()"></button>
-      </div>
-      <div class="modal-body p-0 text-center" style="min-height: 300px; background: #000; position: relative;">
-        <video id="replayVideo" controls autoplay class="w-100 object-fit-contain" style="display: none;" type="video/webm"></video>
-        <div id="dummyPlayer" class="d-flex flex-column align-items-center justify-content-center h-100 w-100 py-5 position-absolute top-0 left-0">
-            <i class="fa-solid fa-circle-play fa-3x text-primary mb-2"></i>
-            <h6 id="tempVideoId" class="text-muted">Đang phát đoạn cắt...</h6>
-        </div>
-      </div>
-      <div class="modal-footer border-secondary py-2">
-        <button type="button" class="btn btn-outline-light btn-sm" data-bs-dismiss="modal" onclick="closeTempVideo()">Đóng</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL CẤU HÌNH API -->
-<div class="modal fade" id="rtspConfigModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-xl modal-dialog-centered">
-    <div class="modal-content border-0 shadow">
-      <div class="modal-header bg-light border-bottom py-2 px-3">
-        <h5 class="modal-title fw-bold text-primary fs-6"><i class="fa-solid fa-microchip me-1"></i>Cấu hình API Token</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body p-3 bg-light">
-          
-        <div class="d-flex flex-wrap justify-content-between align-items-center border-bottom pb-2 mb-2 gap-2">
-            <h6 class="fw-bold text-dark m-0 small">Danh sách API Key (OpenRouter)</h6>
-            <button type="button" class="btn btn-sm btn-success fw-bold px-2 py-1" onclick="addRtspApiRow()">
-                <i class="fa-solid fa-plus me-1"></i>Thêm Token
-            </button>
-        </div>
+        loadChatbotModels();
+        loadStoredChatHistory();
+        initAutoResizeTextarea();
+        document.getElementById('mediaInput').addEventListener('change', updateMediaFileLabel);
         
-        <div id="rtspApiListContainer" class="mb-3"></div>
-
-        <h6 class="fw-bold mb-2 border-bottom pb-1 mt-3 text-dark small">Hiệu suất Worker</h6>
-        <div class="bg-white p-3 rounded border shadow-sm">
-            <label class="form-label fw-bold small text-dark mb-1">Số luồng Worker (Jobs)</label>
-            <input type="number" class="form-control form-control-sm mb-1" id="rtspConcurrentJobs" min="1" max="50" style="max-width: 120px;" value="10">
-            <small class="text-muted d-block" style="font-size: 0.75rem;">Quyết định khả năng xử lý đồng thời của hệ thống hàng chờ.</small>
-        </div>
-
-      </div>
-      <div class="modal-footer bg-white border-top py-2 px-3">
-        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Đóng</button>
-        <button type="button" class="btn btn-primary btn-sm px-3 fw-bold" onclick="saveRtspConfig()">
-            <i class="fa-solid fa-floppy-disk me-1"></i>Lưu cấu hình
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<script>
-    let pollInterval = null;
-    let currentTempId = null;
-    let rtspApiList = [];
-
-    window.addEventListener('DOMContentLoaded', () => {
-        fetch('/api/rtsp/stop', { method: 'POST' });
-        fetch('/api/rtsp/clear_cache', { method: 'POST' })
-            .then(() => {
-                const urlParams = new URLSearchParams(window.location.search);
-                const link = urlParams.get('link');
-                if (link) {
-                    document.getElementById('rtspInput').value = link;
-                    setTimeout(() => startStream(), 500);
-                }
-            });
-    });
-
-    function openConfigWithPin() {
-        let pin = prompt("Vui lòng nhập mã PIN hệ thống để cấu hình Token:");
-        if (pin === null || pin.trim() === "") return; 
-        
-        fetch('/verify-pin', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ pin: pin })
-        })
-        .then(res => res.json())
-        .then(data => {
-            if (data.success) {
-                var configModal = new bootstrap.Modal(document.getElementById('rtspConfigModal'));
-                configModal.show();
-            } else {
-                alert("Mã PIN không chính xác!");
+        document.getElementById('modelSelect').addEventListener('change', function(e) {
+            localStorage.setItem(CHAT_MODEL_KEY, e.target.value);
+            if (!document.getElementById('mediaInput').files[0]) {
+                previousNonVisionModelId = null;
             }
-        })
-        .catch(err => {
-            console.error(err);
-            alert("Lỗi kết nối đến máy chủ!");
+            updateActiveModelLabel();
         });
+    });
+
+    async function loadChatbotModels() {
+        const statusLabel = document.getElementById('apiKeyStatusLabel');
+        const select = document.getElementById('modelSelect');
+        try {
+            const response = await fetch('/api/chatbot/models');
+            const data = await response.json();
+            if (!response.ok || !data.success) throw new Error(data.response || 'Không tải được model');
+            chatbotModels = data.models || [];
+            const savedModel = localStorage.getItem(CHAT_MODEL_KEY);
+            select.innerHTML = chatbotModels.length
+                ? chatbotModels.map(model => `<option value="${escapeHtml(model.id)}">${escapeHtml(model.name)}</option>`).join('')
+                : '<option value="">Chưa có model được cấu hình</option>';
+            if (savedModel && chatbotModels.some(model => model.id === savedModel)) select.value = savedModel;
+            updateActiveModelLabel();
+            if (chatbotModels.length) {
+                statusLabel.className = 'badge bg-success-subtle text-success-emphasis';
+                statusLabel.textContent = `${chatbotModels.length} model đã cấu hình`;
+            } else {
+                statusLabel.className = 'badge bg-warning-subtle text-warning-emphasis';
+                statusLabel.textContent = 'Chưa có token cho chatbox';
+            }
+        } catch (error) {
+            statusLabel.className = 'badge bg-secondary-subtle text-secondary-emphasis';
+            statusLabel.textContent = 'Không tải được cấu hình API';
+        }
     }
 
-    function renderRtspApiRows() {
-        const container = document.getElementById('rtspApiListContainer');
-        container.innerHTML = '';
-        
-        if (rtspApiList.length === 0) {
-            container.innerHTML = `<div class="alert alert-secondary text-center mb-0 py-2 small">Chưa có API Key nào. Vui lòng bấm "Thêm Token".</div>`;
+    function updateActiveModelLabel() {
+        const selected = document.getElementById('modelSelect').selectedOptions[0];
+        document.getElementById('activeModelLabel').innerText = selected && selected.value ? selected.textContent : 'Chưa cấu hình model';
+    }
+
+    // Luôn bắt buộc mở khung PIN mỗi lần click nút Cấu hình
+    function openChatbotConfig() {
+        document.getElementById('chatbotPinError').textContent = '';
+        document.getElementById('chatbotPinInput').value = '';
+        document.getElementById('chatbotPinSection').classList.remove('d-none');
+        document.getElementById('chatbotTokenEditor').classList.add('d-none');
+        document.getElementById('chatbotConfigFooter').classList.add('d-none');
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('chatbotConfigModal')).show();
+    }
+
+    async function verifyChatbotPin() {
+        const errorLabel = document.getElementById('chatbotPinError');
+        errorLabel.textContent = '';
+        const pinVal = document.getElementById('chatbotPinInput').value.trim();
+        if (!pinVal) {
+            errorLabel.textContent = 'Vui lòng nhập mã PIN.';
             return;
         }
+        try {
+            const response = await fetch('/api/chatbot/verify-pin', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pin: pinVal })
+            });
+            const data = await response.json();
+            if (!response.ok || !data.success) throw new Error(data.message || 'Mã PIN không đúng.');
+            await loadChatbotConfig();
+        } catch (error) {
+            errorLabel.textContent = error.message || 'Không xác thực được mã PIN.';
+        }
+    }
 
-        rtspApiList.forEach((api, index) => {
-            const html = `
-                <div class="row g-2 mb-2 align-items-end bg-white p-2 rounded border mx-0 position-relative shadow-sm">
-                    <button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0 m-1" style="width: 24px; height: 24px; padding: 0; font-size: 0.75rem;" onclick="removeRtspApiRow(${index})" title="Xóa">
-                        <i class="fa-solid fa-xmark"></i>
-                    </button>
-                    <div class="col-12 col-md-6">
-                        <label class="form-label fw-bold text-dark small mb-1">API Key</label>
-                        <input type="text" class="form-control form-control-sm" placeholder="Nhập Token OpenRouter..." value="${api.key || ''}" onchange="updateRtspApiField(${index}, 'key', this.value)">
+    async function loadChatbotConfig() {
+        try {
+            const response = await fetch('/api/chatbot/config');
+            const data = await response.json();
+            if (!response.ok || !data.success) throw new Error(data.response || 'Cần xác thực PIN');
+            chatbotTokenRows = data.api_tokens || [];
+            renderChatbotTokenRows();
+            document.getElementById('chatbotPinSection').classList.add('d-none');
+            document.getElementById('chatbotTokenEditor').classList.remove('d-none');
+            document.getElementById('chatbotConfigFooter').classList.remove('d-none');
+        } catch (error) {
+            document.getElementById('chatbotPinError').textContent = error.message;
+            document.getElementById('chatbotPinSection').classList.remove('d-none');
+            document.getElementById('chatbotTokenEditor').classList.add('d-none');
+            document.getElementById('chatbotConfigFooter').classList.add('d-none');
+        }
+    }
+
+    function renderChatbotTokenRows() {
+        const container = document.getElementById('chatbotTokenRows');
+        const empty = document.getElementById('chatbotTokenEmpty');
+        empty.classList.toggle('d-none', chatbotTokenRows.length > 0);
+        container.innerHTML = chatbotTokenRows.map((token, index) => `
+            <div class="border rounded-3 p-3 mb-3 bg-light" data-chat-token="${index}">
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label small fw-semibold">Nhà cung cấp</label>
+                        <select class="form-select" data-field="provider">
+                            <option value="openrouter" ${token.provider === 'openrouter' ? 'selected' : ''}>OpenRouter</option>
+                            <option value="google_gemini" ${token.provider === 'google_gemini' ? 'selected' : ''}>Google Gemini</option>
+                            <option value="groq" ${token.provider === 'groq' ? 'selected' : ''}>Groq (gsk_...)</option>
+                            <option value="xai" ${token.provider === 'xai' ? 'selected' : ''}>xAI Grok (Vision)</option>
+                        </select>
                     </div>
-                    <div class="col-12 col-md-6">
-                        <label class="form-label fw-bold text-dark small mb-1">Tên Model</label>
-                        <input type="text" class="form-control form-control-sm text-muted" placeholder="VD: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free" value="${api.model || ''}" onchange="updateRtspApiField(${index}, 'model', this.value)">
+                    <div class="col-md-4">
+                        <label class="form-label small fw-semibold">API Key</label>
+                        <input class="form-control" data-field="api_key" type="password" autocomplete="new-password" value="${escapeHtml(token.api_key || '')}" placeholder="Nhập API Key">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-semibold">Tên Model</label>
+                        <input class="form-control" data-field="model_name" value="${escapeHtml(token.model_name || '')}" placeholder="VD: google/gemini-2.5-flash">
+                    </div>
+                    <div class="col-md-1 d-grid">
+                        <button class="btn btn-outline-danger" type="button" onclick="removeChatbotTokenRow(${index})" title="Xóa token"><i class="fa-solid fa-trash"></i></button>
                     </div>
                 </div>
-            `;
-            container.insertAdjacentHTML('beforeend', html);
-        });
+            </div>`).join('');
     }
 
-    function addRtspApiRow() {
-        rtspApiList.push({ key: '', model: '' });
-        renderRtspApiRows();
+    function addChatbotTokenRow() {
+        chatbotTokenRows.push({ id: crypto.randomUUID(), provider: 'openrouter', api_key: '', model_name: '' });
+        renderChatbotTokenRows();
     }
 
-    function removeRtspApiRow(index) {
-        rtspApiList.splice(index, 1);
-        renderRtspApiRows();
+    function removeChatbotTokenRow(index) {
+        chatbotTokenRows.splice(index, 1);
+        renderChatbotTokenRows();
     }
 
-    function updateRtspApiField(index, field, value) {
-        rtspApiList[index][field] = value;
+    async function saveChatbotTokens() {
+        const message = document.getElementById('chatbotConfigMessage');
+        const rows = [...document.querySelectorAll('#chatbotTokenRows [data-chat-token]')];
+        const apiTokens = rows.map(row => ({
+            id: chatbotTokenRows[Number(row.dataset.chatToken)]?.id || crypto.randomUUID(),
+            provider: row.querySelector('[data-field="provider"]').value,
+            api_key: row.querySelector('[data-field="api_key"]').value.trim(),
+            model_name: row.querySelector('[data-field="model_name"]').value.trim()
+        }));
+        message.className = 'small mt-2 text-muted';
+        message.textContent = 'Đang lưu…';
+        try {
+            const response = await fetch('/api/chatbot/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ api_tokens: apiTokens })
+            });
+            const data = await response.json();
+            if (!response.ok || !data.success) throw new Error(data.response || 'Không lưu được cấu hình.');
+            message.className = 'small mt-2 text-success';
+            message.textContent = 'Đã lưu cấu hình token thành công!';
+            await loadChatbotModels();
+            setTimeout(() => {
+                bootstrap.Modal.getInstance(document.getElementById('chatbotConfigModal')).hide();
+            }, 800);
+        } catch (error) {
+            message.className = 'small mt-2 text-danger';
+            message.textContent = error.message;
+        }
     }
 
-    fetch('/api/rtsp/config')
-        .then(res => res.json())
-        .then(data => {
-            rtspApiList = data.api_list || [];
-            document.getElementById('rtspConcurrentJobs').value = data.concurrent_jobs || 10;
-            renderRtspApiRows();
-        });
+    function loadStoredChatHistory() {
+        chatHistory = [];
+    }
 
-    function saveRtspConfig() {
-        const validApiList = rtspApiList.filter(api => (api.key || '').trim() !== '');
-        const payload = {
-            api_list: validApiList,
-            concurrent_jobs: document.getElementById('rtspConcurrentJobs').value
-        };
+    function clearChatHistory() {
+        if (confirm("Bạn có chắc chắn muốn xoá toàn bộ lịch sử trò chuyện trong phiên này?")) {
+            chatHistory = [];
+            const container = document.getElementById('chatMessages');
+            const firstWelcome = container.querySelector('.bot-message');
+            container.innerHTML = '';
+            if (firstWelcome) container.appendChild(firstWelcome);
+            appendBotMessage("🧹 Lịch sử trò chuyện đã được làm sạch. Bạn muốn hỏi điều gì tiếp theo?");
+        }
+    }
 
-        fetch('/api/rtsp/config', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        }).then(res => res.json()).then(data => {
-            if(data.success) {
-                alert('Đã lưu cấu hình AI thành công!');
-                var modal = bootstrap.Modal.getInstance(document.getElementById('rtspConfigModal'));
-                modal.hide();
-                checkApiStatus();
+    function usePrompt(text) {
+        document.getElementById('chatInput').value = text;
+        handleSendMessage();
+    }
+
+    function initAutoResizeTextarea() {
+        const textarea = document.getElementById('chatInput');
+        textarea.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSendMessage();
             }
         });
+        textarea.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+        });
     }
 
-    async function pasteLink() {
-        try {
-            const text = await navigator.clipboard.readText();
-            document.getElementById('rtspInput').value = text;
-            startStream(); // Tự động phát khi dán
-        } catch (err) {
-            alert('Trình duyệt chưa cấp quyền dán Clipboard. Hãy dùng Ctrl+V.');
+    function scrollToBottom() {
+        const container = document.getElementById('chatMessages');
+        container.scrollTop = container.scrollHeight;
+    }
+
+    function isVisionModel(model) {
+        if (!model) return false;
+        if (model.is_vision === true) return true;
+        const name = (model.model_name || model.name || '').toLowerCase();
+        const hints = ['vision', 'omni', 'gemini', 'qwen', 'llava', 'gpt-4o', 'pixtral', '-vl'];
+        return hints.some(hint => name.includes(hint));
+    }
+
+    function updateMediaFileLabel() {
+        const file = document.getElementById('mediaInput').files[0];
+        const label = document.getElementById('mediaFileLabel');
+        const removeBtn = document.getElementById('btnRemoveMedia');
+
+        if (file) {
+            if (removeBtn) removeBtn.classList.remove('d-none');
+            const mediaLabel = file.type.startsWith('image/') ? 'Ảnh đã chọn' : 'Video đã chọn';
+            label.innerHTML = `<i class="fa-solid fa-file-arrow-up text-primary me-1"></i><strong>${mediaLabel}:${escapeHtml(file.name)}</strong>`;
+        } else {
+            if (removeBtn) removeBtn.classList.add('d-none');
+            label.innerHTML = '<i class="fa-solid fa-paperclip me-1"></i> Gửi ảnh JPG/PNG/WEBP hoặc video MP4, tối đa 50 MB';
         }
     }
 
-    function checkApiStatus() {
-        fetch('/api/rtsp/gemini_status')
-            .then(res => res.json())
-            .then(data => {
-                let html = '';
-                for (const [key, info] of Object.entries(data)) {
-                    const label = key.replace(/_/g, ' ');
-                    html += `<span class="badge bg-${info.color} py-1 px-2 text-wrap text-start text-break mb-1" style="font-size: 0.75rem;">${label}: ${info.text}</span> `;
-                }
-                document.getElementById('apiStatusContainer').innerHTML = html;
+    function clearMediaSelection() {
+        document.getElementById('mediaInput').value = '';
+        updateMediaFileLabel();
+    }
+
+    function handleSendMessage() {
+        const input = document.getElementById('chatInput');
+        const text = input.value.trim();
+        const mediaFile = document.getElementById('mediaInput').files[0];
+        if (!text && !mediaFile) return;
+
+        const modelId = document.getElementById('modelSelect').value;
+        const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const question = text || 'Hãy phân tích hành vi trong tệp này.';
+        
+        const mediaPreview = mediaFile ? {
+            url: URL.createObjectURL(mediaFile),
+            type: mediaFile.type.startsWith('image/') ? 'image' : 'video',
+            name: mediaFile.name
+        } : null;
+
+        renderUserBubble(text, now, true, mediaPreview);
+        chatHistory.push({ role: 'user', content: text, time: now });
+
+        input.value = '';
+        input.style.height = 'auto';
+        clearMediaSelection();
+
+        const typingId = showTypingIndicator();
+        setSendingState(true);
+
+        const requestOptions = mediaFile
+            ? (() => {
+                const formData = new FormData();
+                formData.append('media', mediaFile);
+                formData.append('question', question);
+                formData.append('model_id', modelId);
+                return { method: 'POST', body: formData };
+            })()
+            : {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message: question,
+                    history: chatHistory.slice(0, -1).map(h => ({ role: h.role, content: h.content })),
+                    model_id: modelId
+                })
+            };
+
+        fetch(mediaFile ? '/api/chatbot/analyze-media' : '/api/chatbot/chat', requestOptions)
+        .then(res => res.json())
+        .then(data => {
+            removeTypingIndicator(typingId);
+            setSendingState(false);
+
+            const botTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const botResponse = data.response || "Không nhận được phản hồi.";
+            if (!data.success) {
+                renderBotBubble(botResponse, botTime, null, null, true);
+                return;
+            }
+            const latency = data.latency ? `${data.latency}s` : null;
+
+            if (data.latency) {
+                document.getElementById('latencyBadge').innerText = `Độ trễ: ${data.latency}s`;
+            }
+
+            renderBotBubble(botResponse, botTime, latency, data.model || modelId, true);
+            chatHistory.push({ 
+                role: 'assistant', 
+                content: botResponse, 
+                time: botTime
             });
+        })
+        .catch(err => {
+            removeTypingIndicator(typingId);
+            setSendingState(false);
+            renderBotBubble(`❌ **Lỗi mạng hoặc máy chủ:** ${err.message}. Vui lòng thử lại.`, now, null, null, true);
+        });
     }
 
-    checkApiStatus();
-    setInterval(checkApiStatus, 15000);
-
-    function startStream() {
-        const rtspUrl = document.getElementById('rtspInput').value;
-        if (rtspUrl.trim() === "") return alert("Vui lòng nhập đường dẫn RTSP!");
-
-        // Đẩy URL RTSP lên thanh địa chỉ của trình duyệt
-        const url = new URL(window.location);
-        url.searchParams.set('link', rtspUrl);
-        window.history.pushState({}, '', url);
-
-        document.getElementById('rtspPlaceholder').style.display = 'none';
-        document.getElementById('videoStream').style.display = 'block';
-        
-        document.getElementById('videoStream').src = `/video_feed?url=${encodeURIComponent(rtspUrl)}&t=${new Date().getTime()}`;
-        
-        const statusBadge = document.getElementById('streamStatus');
-        statusBadge.innerHTML = `<i class="fa-solid fa-satellite-dish fa-fade me-1"></i> Đang truyền phát`;
-        statusBadge.className = "badge bg-success px-3 py-2 rounded-pill shadow-sm fs-7 text-nowrap";
-
-        if(pollInterval) clearInterval(pollInterval);
-        pollInterval = setInterval(fetchRtspData, 1500);
-    }
-
-    function stopStream() {
-        document.getElementById('videoStream').src = "";
-        document.getElementById('videoStream').style.display = 'none';
-        document.getElementById('rtspPlaceholder').style.display = 'flex';
-        
-        const statusBadge = document.getElementById('streamStatus');
-        statusBadge.innerHTML = `<i class="fa-solid fa-circle-stop me-1"></i> Đã ngắt kết nối`;
-        statusBadge.className = "badge bg-danger px-3 py-2 rounded-pill shadow-sm fs-7 text-nowrap";
-        
-        if(pollInterval) clearInterval(pollInterval);
-        fetch('/api/rtsp/stop', { method: 'POST' });
-        
-        const url = new URL(window.location);
-        url.searchParams.delete('link');
-        window.history.pushState({}, '', url);
-    }
-
-    function fetchRtspData() {
-        fetch('/api/rtsp/data')
-            .then(res => {
-                if(!res.ok) throw new Error("Mất kết nối server");
-                return res.json();
-            })
-            .then(data => {
-                const logBox = document.getElementById('logConsole');
-                
-                // Tích hợp Terminal CSS vào Log
-                logBox.innerHTML = data.logs.map(log => {
-                    let isError = log.includes("LỖI");
-                    let isWarning = log.includes("CẢNH BÁO");
-                    let isSuccess = log.includes("PHÁT HIỆN") || log.includes("BÌNH THƯỜNG");
-                    
-                    let textClass = 'log-info';
-                    if (isError) textClass = 'log-error';
-                    else if (isWarning) textClass = 'log-warning';
-                    else if (isSuccess) textClass = 'log-success';
-
-                    let timeMatch = log.match(/^\[(.*?)\]/);
-                    let timeHtml = timeMatch ? `<span class="log-time">[${timeMatch[1]}]</span>` : '';
-                    let contentText = timeMatch ? log.substring(timeMatch[0].length).trim() : log;
-
-                    return `<div class="log-line">${timeHtml}<span class="${textClass}">${contentText}</span></div>`;
-                }).join('');
-                logBox.scrollTop = logBox.scrollHeight; 
-
-                const tbody = document.getElementById('alertTableBody');
-                if (data.alerts.length > 0) {
-                    tbody.innerHTML = data.alerts.map(a => `
-                        <tr>
-                            <td class="fw-bold text-muted text-nowrap">${a.time}</td>
-                            <td class="fw-bold text-primary">${a.behavior}</td>
-                            <td><span class="badge bg-${a.badge}-subtle text-${a.badge} border border-${a.badge} px-2 py-1">${a.level}</span></td>
-                            <td style="text-align: left; line-height: 1.4; font-size: 0.85rem;">${a.desc}</td>
-                            <td><span class="badge bg-info-subtle text-info border border-info px-2 py-1">${a.process_time}</span></td>
-                            <td><span class="badge bg-secondary-subtle text-secondary border border-secondary px-2 py-1 text-nowrap">${a.api_info}</span></td>
-                            <td>
-                                <button class="btn btn-sm btn-primary text-nowrap py-1 px-2" onclick="openTempVideo('${a.id}', '${a.behavior}', '${a.temp_video_url}')">
-                                    <i class="fa-solid fa-eye me-1"></i> Xem
-                                </button>
-                            </td>
-                        </tr>
-                    `).join('');
-                }
-            })
-            .catch(err => console.log("Lỗi nhẹ khi fetch data:", err));
-    }
-
-    function openTempVideo(clipId, behaviorName, videoUrl) {
-        currentTempId = clipId;
-        document.getElementById('modalTitle').innerText = `Xem lại: ${behaviorName}`;
-        
-        document.getElementById('dummyPlayer').style.display = 'none';
-        document.getElementById('dummyPlayer').classList.remove('d-flex');
-        
-        const vid = document.getElementById('replayVideo');
-        vid.style.display = 'block';
-        vid.src = videoUrl;
-        
-        var myModal = new bootstrap.Modal(document.getElementById('videoModal'));
-        myModal.show();
-    }
-
-    function closeTempVideo() {
-        const vid = document.getElementById('replayVideo');
-        vid.pause();
-        vid.src = "";
-        vid.style.display = 'none';
-        
-        document.getElementById('dummyPlayer').style.display = '';
-        document.getElementById('dummyPlayer').classList.add('d-flex');
-        
-        if(currentTempId) {
-            fetch(`/api/rtsp/delete_temp/${currentTempId}`, { method: 'POST' }).then(() => currentTempId = null);
+    function setSendingState(isSending) {
+        const btnText = document.getElementById('btnSendText');
+        const spinner = document.getElementById('btnSendSpinner');
+        const btn = document.getElementById('btnSend');
+        if (isSending) {
+            btnText.classList.add('d-none');
+            spinner.classList.remove('d-none');
+            btn.disabled = true;
+        } else {
+            btnText.classList.remove('d-none');
+            spinner.classList.add('d-none');
+            btn.disabled = false;
         }
     }
-    
-    function clearCache() {
-        if(confirm('Bạn có chắc chắn muốn xóa toàn bộ lịch sử không?')) {
-            fetch('/api/rtsp/clear_cache', { method: 'POST' }).then(res => res.json()).then(data => {
-                if(data.success) {
-                    document.getElementById('logConsole').innerHTML = '<div class="log-line"><span class="log-info">> Đã xóa lịch sử...</span></div>';
-                    document.getElementById('alertTableBody').innerHTML = '<tr><td colspan="7" class="text-muted py-4 text-center">Chưa có dữ liệu phân tích</td></tr>';
+
+    function escapeHtml(value) {
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    function formatInline(text) {
+        const codeParts = [];
+        let output = escapeHtml(text).replace(/`([^`\n]+)`/g, (_, code) => {
+            const token = `@@CODE${codeParts.length}@@`;
+            codeParts.push(`<code>${code}</code>`);
+            return token;
+        });
+
+        output = output.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
+            '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+        output = output.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+        output = output.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>');
+
+        return output.replace(/@@CODE(\d+)@@/g, (_, index) => codeParts[Number(index)]);
+    }
+
+    function formatMarkdown(content) {
+        if (!content) return '';
+
+        const lines = String(content).replace(/\r\n?/g, '\n').split('\n');
+        const blocks = [];
+        let paragraph = [];
+        let list = null;
+        let inCodeBlock = false;
+        let codeLines = [];
+
+        const flushParagraph = () => {
+            if (paragraph.length) {
+                blocks.push(`<p>${paragraph.map(formatInline).join('<br>')}</p>`);
+                paragraph = [];
+            }
+        };
+        const flushList = () => {
+            if (list) {
+                blocks.push(`<${list.type} class="assistant-list">${list.items.map(item => `<li>${formatInline(item)}</li>`).join('')}</${list.type}>`);
+                list = null;
+            }
+        };
+
+        for (const line of lines) {
+            if (line.trim().startsWith('```')) {
+                if (inCodeBlock) {
+                    blocks.push(`<pre><code>${escapeHtml(codeLines.join('\n'))}</code></pre>`);
+                    codeLines = [];
+                    inCodeBlock = false;
+                } else {
+                    flushParagraph();
+                    flushList();
+                    inCodeBlock = true;
                 }
-            });
+                continue;
+            }
+            if (inCodeBlock) {
+                codeLines.push(line);
+                continue;
+            }
+
+            const heading = line.match(/^(#{1,3})\s+(.+)$/);
+            const unordered = line.match(/^\s*[-*+]\s+(.+)$/);
+            const ordered = line.match(/^\s*\d+[.)]\s+(.+)$/);
+            const quote = line.match(/^>\s?(.+)$/);
+
+            if (!line.trim()) {
+                flushParagraph();
+                flushList();
+            } else if (heading) {
+                flushParagraph();
+                flushList();
+                const level = Math.min(heading[1].length + 2, 5);
+                blocks.push(`<h${level}>${formatInline(heading[2])}</h${level}>`);
+            } else if (/^\s*([-*_])\1\1+\s*$/.test(line)) {
+                flushParagraph();
+                flushList();
+                blocks.push('<hr>');
+            } else if (unordered || ordered) {
+                flushParagraph();
+                const nextType = unordered ? 'ul' : 'ol';
+                if (!list || list.type !== nextType) {
+                    flushList();
+                    list = { type: nextType, items: [] };
+                }
+                list.items.push((unordered || ordered)[1]);
+            } else if (quote) {
+                flushParagraph();
+                flushList();
+                blocks.push(`<blockquote>${formatInline(quote[1])}</blockquote>`);
+            } else {
+                flushList();
+                paragraph.push(line);
+            }
         }
+
+        if (inCodeBlock) {
+            blocks.push(`<pre><code>${escapeHtml(codeLines.join('\n'))}</code></pre>`);
+        }
+        flushParagraph();
+        flushList();
+        return blocks.join('');
+    }
+
+    function renderUserBubble(text, time, shouldScroll, mediaPreview = null) {
+        const container = document.getElementById('chatMessages');
+        const previewHtml = mediaPreview
+            ? mediaPreview.type === 'image'
+                ? `<img class="chat-media-preview" src="${escapeHtml(mediaPreview.url)}" alt="${escapeHtml(mediaPreview.name)}">`
+                : `<video class="chat-media-preview" controls preload="metadata"><source src="${escapeHtml(mediaPreview.url)}"></video>`
+            : '';
+        const html = `
+            <div class="chat-item user-message d-flex justify-content-end gap-3 mb-4">
+                <div class="message-content text-end" style="max-width: 75%;">
+                    <div class="p-3 rounded-4 shadow-sm chat-bubble-user text-start" style="display: inline-block;">
+                        ${previewHtml}${text ? `<div style="font-size: 0.94rem; white-space: pre-wrap;">${formatMarkdown(text)}</div>` : ''}
+                    </div>
+                    <span class="text-muted small px-2 mt-1 d-block" style="font-size: 0.73rem;">Bạn • ${time}</span>
+                </div>
+                <div class="avatar-circle flex-shrink-0" style="width: 38px; height: 38px; border-radius: 50%; background: #2d3748; color: white; display: flex; align-items: center; justify-content: center; font-size: 15px;">
+                    <i class="fa-solid fa-user"></i>
+                </div>
+            </div>
+        `;
+        container.insertAdjacentHTML('beforeend', html);
+        if (shouldScroll) scrollToBottom();
+    }
+
+    function showTypingIndicator() {
+        const container = document.getElementById('chatMessages');
+        const typingId = 'typing_' + Date.now();
+        const html = `
+            <div id="${typingId}" class="chat-item bot-message d-flex gap-3 mb-4">
+                <div class="avatar-circle flex-shrink-0" style="width: 38px; height: 38px; border-radius: 50%; background: #3182ce; color: white; display: flex; align-items: center; justify-content: center; font-size: 16px;">
+                    <i class="fa-solid fa-robot"></i>
+                </div>
+                <div class="message-content">
+                    <div class="p-3 rounded-4 shadow-sm chat-bubble-bot bg-white border d-flex align-items-center gap-1">
+                        <span class="typing-dot"></span>
+                        <span class="typing-dot"></span>
+                        <span class="typing-dot"></span>
+                    </div>
+                </div>
+            </div>
+        `;
+        container.insertAdjacentHTML('beforeend', html);
+        scrollToBottom();
+        return typingId;
+    }
+
+    function removeTypingIndicator(id) {
+        const elem = document.getElementById(id);
+        if (elem) elem.remove();
+    }
+
+    function appendBotMessage(text) {
+        const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        renderBotBubble(text, time, null, null, true);
+    }
+
+    function renderBotBubble(text, time, latency, model, shouldScroll) {
+        const container = document.getElementById('chatMessages');
+        const latencyHtml = latency ? `<span class="badge bg-light text-secondary border ms-1" style="font-size: 0.68rem;"><i class="fa-solid fa-bolt text-warning me-1"></i>${latency}</span>` : '';
+        const html = `
+            <div class="chat-item bot-message d-flex gap-3 mb-4">
+                <div class="avatar-circle flex-shrink-0" style="width: 38px; height: 38px; border-radius: 50%; background: #3182ce; color: white; display: flex; align-items: center; justify-content: center; font-size: 16px;">
+                    <i class="fa-solid fa-robot"></i>
+                </div>
+                <div class="message-content" style="max-width: 80%;">
+                    <div class="p-3 rounded-4 shadow-sm chat-bubble-bot bg-white border text-dark">
+                        <div class="assistant-response">${formatMarkdown(text)}</div>
+                    </div>
+                    <span class="text-muted small px-2 mt-1 d-block" style="font-size: 0.75rem;">Hệ thống AI • ${time} ${latencyHtml}</span>
+                </div>
+            </div>
+        `;
+        container.insertAdjacentHTML('beforeend', html);
+        if (shouldScroll) scrollToBottom();
     }
 </script>
 {% endblock %}

@@ -1,12 +1,14 @@
-/* Giao diện Terminal Log */
+/* =========================================
+   GIAO DIỆN TERMINAL LOG (Dành cho rtsp.html)
+   ========================================= */
 .terminal-container {
     background: #1e1e1e;
-    margin: 0; /* Đã reset margin để fit với grid Bootstrap */
+    margin: 0;
     border-radius: 8px;
     box-shadow: 0 10px 20px rgba(0,0,0,0.2);
     display: flex;
     flex-direction: column;
-    height: 100%; /* Sửa thành 100% để đồng bộ chiều cao với khung Camera */
+    height: 100%;
     min-height: 380px;
     border: 1px solid #333;
     font-family: 'Consolas', 'Courier New', monospace;
@@ -18,7 +20,7 @@
     background: #2d2d2d;
     padding: 10px 15px;
     border-radius: 8px 8px 0 0;
-    border-bottom: 2px solid #00c853; /* Thanh tiến trình giả lập */
+    border-bottom: 2px solid #00c853;
 }
 
 .mac-btns { display: flex; gap: 8px; margin-right: 20px; }
@@ -44,3 +46,141 @@
 .log-success { color: #27c93f; }
 .log-warning { color: #ffbd2e; }
 .log-error { color: #ff5f56; }
+
+/* =========================================
+   GIAO DIỆN CHATBOT AI (Dành cho chatbot.html)
+   ========================================= */
+.prompt-chip {
+    font-size: 0.82rem;
+    padding: 5px 12px;
+    transition: all 0.2s ease;
+    background-color: #ffffff;
+}
+.prompt-chip:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(49, 130, 206, 0.2);
+}
+.chat-bubble-user {
+    background: linear-gradient(135deg, #3182ce, #2b6cb0);
+    color: white;
+    border-top-right-radius: 4px !important;
+}
+.chat-media-preview {
+    display: block;
+    width: min(100%, 360px);
+    max-height: 280px;
+    object-fit: contain;
+    margin: 0 0 0.65rem auto;
+    border-radius: 10px;
+    background: rgba(15, 23, 42, 0.22);
+}
+.chat-bubble-user .chat-media-preview {
+    border: 1px solid rgba(255, 255, 255, 0.35);
+}
+@media (max-width: 576px) {
+    .chat-media-preview {
+        width: min(100%, 240px);
+        max-height: 220px;
+    }
+    .message-content {
+        max-width: 88% !important;
+    }
+}
+.chat-bubble-bot {
+    background: #ffffff;
+    color: #2d3748;
+    border: 1px solid #e2e8f0;
+    border-top-left-radius: 4px !important;
+    font-family: "Segoe UI", "Noto Sans", Arial, sans-serif;
+}
+.typing-dot {
+    width: 8px;
+    height: 8px;
+    background: #3182ce;
+    border-radius: 50%;
+    display: inline-block;
+    animation: typingAnimation 1.4s infinite ease-in-out both;
+}
+.typing-dot:nth-child(1) { animation-delay: -0.32s; }
+.typing-dot:nth-child(2) { animation-delay: -0.16s; }
+@keyframes typingAnimation {
+    0%, 80%, 100% { transform: scale(0); opacity: 0.4; }
+    40% { transform: scale(1); opacity: 1; }
+}
+.assistant-response {
+    color: #1f2937;
+    font-size: 0.96rem;
+    line-height: 1.75;
+    letter-spacing: 0.005em;
+    overflow-wrap: anywhere;
+}
+.assistant-response p {
+    margin: 0 0 0.85rem;
+}
+.assistant-response p:last-child {
+    margin-bottom: 0;
+}
+.assistant-response h3,
+.assistant-response h4,
+.assistant-response h5 {
+    color: #1d4ed8;
+    font-weight: 700;
+    line-height: 1.4;
+    margin: 1rem 0 0.45rem;
+}
+.assistant-response h3 { font-size: 1.08rem; }
+.assistant-response h4 { font-size: 1rem; }
+.assistant-response h5 { font-size: 0.96rem; }
+.assistant-response h3:first-child,
+.assistant-response h4:first-child,
+.assistant-response h5:first-child {
+    margin-top: 0;
+}
+.assistant-response ul,
+.assistant-response ol {
+    margin: 0.35rem 0 0.9rem;
+    padding-left: 1.35rem;
+}
+.assistant-response li {
+    margin: 0.3rem 0;
+    padding-left: 0.15rem;
+}
+.assistant-response blockquote {
+    margin: 0.75rem 0;
+    padding: 0.6rem 0.85rem;
+    border-left: 3px solid #60a5fa;
+    background: #eff6ff;
+    color: #334155;
+    border-radius: 0 8px 8px 0;
+}
+.assistant-response hr {
+    margin: 0.9rem 0;
+    border: 0;
+    border-top: 1px solid #e2e8f0;
+}
+.assistant-response code {
+    color: #b42318;
+    background: #fff1f2;
+    padding: 0.1rem 0.3rem;
+    border-radius: 4px;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 0.88em;
+}
+.assistant-response pre {
+    margin: 0.85rem 0;
+    white-space: pre-wrap;
+}
+.assistant-response pre code {
+    background-color: #1a202c;
+    color: #63b3ed;
+    padding: 8px 12px;
+    border-radius: 8px;
+    display: block;
+    font-size: 0.85rem;
+    overflow-x: auto;
+}
+.assistant-response a {
+    color: #2563eb;
+    font-weight: 600;
+    text-decoration: underline;
+}
