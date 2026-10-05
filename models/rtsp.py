@@ -97,37 +97,77 @@ def analyze_frame_with_ai(frame, recent_frames, alert_id):
     if not api_key:
         return
 
-    prompt = """Bạn là hệ thống AI giám sát an ninh, giao thông và cảnh quan qua camera thông minh.
-NHIỆM VỤ: Phân tích ảnh, PHÁT HIỆN CON NGƯỜI, PHƯƠNG TIỆN VÀ ĐỘNG VẬT (chó, bò, v.v.), mô tả mọi hành vi của chúng và DỰ ĐOÁN tình huống. HOÀN TOÀN BẰNG TIẾNG VIỆT.
-
-QUY TẮC CỐT LÕI:
-1. TUYỆT ĐỐI KHÔNG dùng tiếng Anh.
-2. Bỏ qua mô tả ngoại hình rườm rà. Tập trung tối đa vào tư thế, hành động, quỹ đạo di chuyển.
-3. Nếu không có bất kỳ Người, Xe cộ hay Động vật nào trong ảnh, trả lời chính xác chữ: 'Không'.
-
-ĐỊNH DẠNG TRẢ LỜI (Tuân thủ nghiêm ngặt):
-
-PHẦN 1: DANH SÁCH ĐỐI TƯỢNG (Mỗi đối tượng liệt kê trên một dòng)
-[Loại đối tượng] | [Hành vi chính] | [Mô tả chi tiết]
-VD: [Người] | [Đi bộ] | [Đang đi qua đường]
-VD: [Ô tô] | [Đứng yên] | [Đang đậu ở giữa lô]
-
-PHẦN 2: KẾT LUẬN & DỰ ĐOÁN TÌNH HUỐNG
-- Mức độ an toàn: [Bình thường / Đáng ngờ / Vi phạm / Cảnh báo / Nguy hiểm khẩn cấp]
-- Dự đoán sự việc: [Suy luận tình huống]"""
-    
     max_retries = max(1, len(valid_apis)) 
     
     for attempt in range(max_retries):
         try:
             timestamp_start = datetime.now().strftime("%H:%M:%S")
-            start_msg = f"[{timestamp_start}] [TIẾN TRÌNH] Đang phân tích bằng {api_label}..."
+            start_msg = f"[{timestamp_start}] [TIẾN TRÌNH] Quét chuyển động và gọi AI ({api_label})..."
             if len(global_logs) > 50: global_logs.pop(0)
             global_logs.append(start_msg)
 
             start_time = time.time()
             
-            ret, buffer = cv2.imencode('.jpg', frame)
+            # =========================================================================
+            # LỚP 1: ĐO TỌA ĐỘ PIXEL BẰNG OPENCV & LOẠI BỎ NHIỄU TIMESTAMP
+            # =========================================================================
+            motion_detected = False
+            frame_for_ai = frame.copy()
+            
+            if len(recent_frames) >= 15:
+                # Lấy frame trong quá khứ (~1.5s - 3s trước) để đo sự xê dịch rõ rệt
+                past_frame = recent_frames[0]
+                
+                gray_past = cv2.cvtColor(past_frame, cv2.COLOR_BGR2GRAY)
+                gray_current = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                
+                gray_past = cv2.GaussianBlur(gray_past, (21, 21), 0)
+                gray_current = cv2.GaussianBlur(gray_current, (21, 21), 0)
+                
+                delta = cv2.absdiff(gray_past, gray_current)
+                thresh = cv2.threshold(delta, 30, 255, cv2.THRESH_BINARY)[1]
+                thresh = cv2.dilate(thresh, None, iterations=2)
+                
+                # KHỬ NHIỄU: Bôi đen vùng trên cùng (8%) và dưới cùng (8%) để không quét trúng ngày giờ nhấp nháy của Camera
+                H, W = thresh.shape
+                cv2.rectangle(thresh, (0, 0), (W, int(H * 0.08)), (0, 0, 0), -1) 
+                cv2.rectangle(thresh, (0, int(H * 0.92)), (W, H), (0, 0, 0), -1) 
+                
+                contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                
+                for c in contours:
+                    if cv2.contourArea(c) > 800: # Ngưỡng đủ lớn để loại bỏ lá rơi, ruồi muỗi
+                        motion_detected = True
+                        (x, y, w, h) = cv2.boundingRect(c)
+                        cv2.rectangle(frame_for_ai, (x, y), (x+w, y+h), (0, 0, 255), 3)
+                        cv2.putText(frame_for_ai, "MOVING", (x, y - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+
+            # =========================================================================
+            # LỚP 2: TIÊM LỆNH TRỰC TIẾP VÀO PROMPT
+            # =========================================================================
+            if motion_detected:
+                motion_directive = "=> BÁO CÁO TỪ RADAR (BẮT BUỘC TUÂN THỦ): Đã phát hiện xe/người ĐANG DI CHUYỂN (có khoanh viền ĐỎ chữ MOVING). BẠN BẮT BUỘC kết luận hành vi là 'Đang di chuyển' hoặc 'Đang lưu thông'."
+            else:
+                motion_directive = "=> BÁO CÁO TỪ RADAR (BẮT BUỘC TUÂN THỦ): KHÔNG có bất kỳ sự di chuyển nào. BẠN BẮT BUỘC kết luận hành vi là 'Đứng yên' hoặc 'Đang đậu'."
+
+            prompt = f"""Bạn là hệ thống AI giám sát an ninh và giao thông.
+{motion_directive}
+
+NHIỆM VỤ:
+1. Phân tích ảnh và TUÂN THỦ TUYỆT ĐỐI Báo cáo từ Radar.
+2. Chỉ trả lời bằng Tiếng Việt.
+3. Nếu không có Người/Xe cộ/Động vật, trả lời chính xác chữ: 'Không'.
+
+ĐỊNH DẠNG TRẢ LỜI (Tuân thủ nghiêm ngặt):
+
+PHẦN 1: DANH SÁCH ĐỐI TƯỢNG (Mỗi đối tượng liệt kê trên một dòng)
+[Loại đối tượng] | [Hành vi chính] | [Mô tả chi tiết]
+
+PHẦN 2: KẾT LUẬN & DỰ ĐOÁN TÌNH HUỐNG
+- Mức độ an toàn: [Bình thường / Đáng ngờ / Vi phạm / Cảnh báo / Nguy hiểm khẩn cấp]
+- Dự đoán sự việc: [Suy luận tình huống]"""
+
+            ret, buffer = cv2.imencode('.jpg', frame_for_ai)
             img_b64 = base64.b64encode(buffer).decode('utf-8')
             image_data_url = f"data:image/jpeg;base64,{img_b64}"
             
@@ -180,6 +220,17 @@ PHẦN 2: KẾT LUẬN & DỰ ĐOÁN TÌNH HUỐNG
                             obj_type = parts[0].replace("[", "").replace("]", "").strip()
                             main_act = parts[1].replace("[", "").replace("]", "").strip()
                             
+                            # =========================================================================
+                            # LỚP 3: CƯỠNG CHẾ ÉP KẾT QUẢ ĐẦU RA THEO RADAR CỦA OPENCV 
+                            # (Nếu AI vẫn ngoan cố xuất sai, code sẽ đè lại giá trị)
+                            # =========================================================================
+                            if motion_detected and any(w in main_act.lower() for w in ["đứng yên", "đang đậu", "tĩnh"]):
+                                main_act = "Đang di chuyển"
+                                
+                            elif not motion_detected and any(w in main_act.lower() for w in ["chạy", "di chuyển", "đi bộ"]):
+                                main_act = "Đứng yên"
+                            # =========================================================================
+
                             desc = ""
                             if len(parts) >= 3:
                                 desc = parts[2].replace("[", "").replace("]", "").strip()
