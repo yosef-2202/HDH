@@ -1,33 +1,679 @@
 {% extends 'base.html' %}
-{% block title %}Phân tích Realtime - Hệ Thống AI{% endblock %}
+{% block title %}Giám Sát Camera Realtime Trực Tiếp - Đồ Án Hệ Điều Hành{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h3 class="fw-bold mb-0 text-dark">Phân tích Realtime</h3>
-</div>
+<style>
+    /* CSS Tùy biến cho Hệ Thống Camera Thật Realtime */
+    .os-stat-card {
+        background: #ffffff;
+        border-radius: 12px;
+        border: 1px solid #e2e8f0;
+        padding: 14px 18px;
+        transition: all 0.25s ease;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+    }
+    .os-stat-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 12px rgba(0,0,0,0.06);
+    }
+    .webcam-main-card {
+        background: #1e222d;
+        border-radius: 14px;
+        overflow: hidden;
+        border: 2px solid #2d3748;
+        box-shadow: 0 6px 18px rgba(0,0,0,0.2);
+        transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    }
+    .webcam-main-card.alert-danger-active {
+        border-color: #e53e3e;
+        box-shadow: 0 0 20px rgba(229, 62, 62, 0.4);
+    }
+    .webcam-main-card.alert-warning-active {
+        border-color: #dd6b20;
+        box-shadow: 0 0 20px rgba(221, 107, 32, 0.3);
+    }
+    .video-viewport {
+        position: relative;
+        width: 100%;
+        padding-bottom: 56.25%; /* Tỉ lệ 16:9 */
+        background: #0d1117;
+        overflow: hidden;
+    }
+    .video-viewport img {
+        position: absolute;
+        top: 0; left: 0; width: 100%; height: 100%;
+        object-fit: contain;
+    }
+    .camera-overlay-badge {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        background: rgba(0, 0, 0, 0.75);
+        color: #fff;
+        font-size: 0.8rem;
+        padding: 4px 10px;
+        border-radius: 6px;
+        -webkit-backdrop-filter: blur(4px);
+        backdrop-filter: blur(4px);
+        z-index: 2;
+    }
+    .camera-fps-badge {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: rgba(0, 0, 0, 0.75);
+        color: #48bb78;
+        font-size: 0.8rem;
+        font-weight: 700;
+        padding: 4px 10px;
+        border-radius: 6px;
+        -webkit-backdrop-filter: blur(4px);
+        backdrop-filter: blur(4px);
+        z-index: 2;
+    }
+    .ai-ribbon {
+        background: #14171f;
+        padding: 10px 14px;
+        border-top: 1px solid #2d3748;
+        font-size: 0.85rem;
+    }
+    .terminal-log-box {
+        background-color: #0d1117;
+        color: #e6edf3;
+        font-family: 'Consolas', 'Courier New', monospace;
+        font-size: 0.85rem;
+        border-radius: 10px;
+        height: 250px;
+        overflow-y: auto;
+        border: 1px solid #30363d;
+        padding: 12px;
+    }
+    .empty-state-icon {
+        font-size: 4rem;
+    }
+    .ai-desc-col {
+        max-width: 75%;
+    }
+    .badge-log {
+        font-size: 0.75rem;
+    }
+    .log-time { color: #8b949e; }
+    .log-cam { color: #58a6ff; font-weight: bold; }
+    .badge-normal { background-color: #238636; color: white; }
+    .badge-warning { background-color: #d29922; color: black; }
+    .badge-danger { background-color: #da3633; color: white; }
+    
+    .grid-1 { grid-template-columns: 1fr; }
+    .grid-2 { grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); }
+    .grid-multi { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+</style>
 
-<div class="d-flex justify-content-center align-items-center" style="min-height: 60vh;">
-    <div class="text-center custom-card p-5 bg-white shadow-sm rounded-4" style="max-width: 550px; border-top: 5px solid #d69e2e;">
-        <div class="mb-4">
-            <i class="fa-solid fa-person-digging text-warning" style="font-size: 5rem;"></i>
-        </div>
-        <h3 class="fw-bold text-dark mb-3">Tính năng đang phát triển</h3>
-        <p class="text-muted mb-4" style="line-height: 1.6;">
-            Mô-đun <strong>Phân tích luồng Realtime trực tiếp</strong> hiện đang trong quá trình xây dựng hệ thống Core AI. 
-            Vui lòng chờ bản cập nhật trong tương lai nhé!
-        </p>
-        
-        <div class="d-flex justify-content-center align-items-center gap-3 mb-5">
-            <div class="spinner-grow text-primary" role="status" style="width: 1rem; height: 1rem;"></div>
-            <div class="spinner-grow text-primary" role="status" style="width: 1.5rem; height: 1.5rem; animation-delay: 0.2s;"></div>
-            <div class="spinner-grow text-primary" role="status" style="width: 1rem; height: 1rem; animation-delay: 0.4s;"></div>
+<div class="container-fluid px-3 py-2">
+    <!-- TIÊU ĐỀ & KHU VỰC ĐIỀU KHIỂN CHÍNH -->
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-3 pb-2 border-bottom">
+        <div>
+            <h4 class="fw-bold text-dark mb-1">
+                <i class="fa-solid fa-camera-web text-primary me-2"></i>
+                Phân Tích Camera Realtime Trực Tiếp
+            </h4>
+            <div class="text-muted small">
+                <span class="badge bg-success me-2"><i class="fa-solid fa-video me-1"></i>Webcam / Camera Thật</span>
+                <span class="badge bg-primary me-2"><i class="fa-solid fa-microchip me-1"></i>Đa Luồng (Tối đa 10 Camera Song Song)</span>
+                <span class="badge bg-dark"><i class="fa-solid fa-brain me-1"></i>OpenRouter AI (Rate Limit Safe)</span>
+            </div>
         </div>
         
-        <div class="mt-2">
-            <a href="{{ url_for('index') }}" class="btn btn-primary px-4 py-2 rounded-pill fw-bold shadow-sm">
-                <i class="fa-solid fa-arrow-left me-2"></i> Quay lại Tổng quan
-            </a>
+        <!-- NÚT BẬT/TẮT WEBCAM TO & NỔI BẬT -->
+        <div class="d-flex gap-2 mt-2 mt-md-0 align-items-center">
+            <button class="btn btn-success btn-md fw-bold px-4 shadow-sm" id="btnToggleWebcam" onclick="toggleMainWebcam()">
+                <i class="fa-solid fa-video me-1"></i> Bật Camera Máy Tính
+            </button>
+            <button class="btn btn-outline-primary btn-md fw-bold px-3 shadow-sm" data-bs-toggle="modal" data-bs-target="#addRealCameraModal">
+                <i class="fa-solid fa-plus me-1"></i> Thêm Camera Thật
+            </button>
+            <button class="btn btn-outline-secondary btn-md" data-bs-toggle="modal" data-bs-target="#configAiModal" title="Cấu hình AI OpenRouter" aria-label="Cấu hình AI OpenRouter">
+                <i class="fa-solid fa-gear"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- METRICS PANEL (ĐỒ ÁN HỆ ĐIỀU HÀNH) -->
+    <div class="row g-3 mb-3">
+        <div class="col-6 col-md-3">
+            <div class="os-stat-card d-flex align-items-center">
+                <div class="rounded-circle bg-primary bg-opacity-10 p-3 me-3 text-primary fs-4">
+                    <i class="fa-solid fa-video"></i>
+                </div>
+                <div>
+                    <div class="text-muted small fw-semibold">Luồng Camera Thật</div>
+                    <div class="fs-4 fw-bold text-dark" id="statCamCount">0 / 10</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="os-stat-card d-flex align-items-center">
+                <div class="rounded-circle bg-success bg-opacity-10 p-3 me-3 text-success fs-4">
+                    <i class="fa-solid fa-arrows-split-up-and-left"></i>
+                </div>
+                <div>
+                    <div class="text-muted small fw-semibold">Tổng Luồng (Threads)</div>
+                    <div class="fs-4 fw-bold text-dark" id="statActiveThreads">--</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="os-stat-card d-flex align-items-center">
+                <div class="rounded-circle bg-warning bg-opacity-10 p-3 me-3 text-warning fs-4">
+                    <i class="fa-solid fa-layer-group"></i>
+                </div>
+                <div>
+                    <div class="text-muted small fw-semibold">Hàng Đợi AI (Queue)</div>
+                    <div class="fs-4 fw-bold text-dark" id="statQueueSize">0 tasks</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="os-stat-card d-flex align-items-center">
+                <div class="rounded-circle bg-info bg-opacity-10 p-3 me-3 text-info fs-4">
+                    <i class="fa-solid fa-shield-halved"></i>
+                </div>
+                <div>
+                    <div class="text-muted small fw-semibold">OpenRouter Rate-Limit</div>
+                    <div class="fs-6 fw-bold text-success" id="statRateLimit"><i class="fa-solid fa-check-circle me-1"></i>≤ 20 req/phút (Safe)</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- KHU VỰC HIỂN THỊ CAMERA REALTIME -->
+    <div class="card border-0 shadow-sm mb-3 rounded-4">
+        <div class="card-header bg-white py-2 px-3 d-flex justify-content-between align-items-center border-bottom">
+            <div class="fw-bold text-dark">
+                <i class="fa-solid fa-display text-primary me-2"></i>Màn Hình Giám Sát Trực Tiếp (Live Camera Feeds)
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <span class="small text-muted d-none d-md-inline">Chu kỳ quét AI: <strong>1 frame / 10s</strong></span>
+                <button class="btn btn-sm btn-outline-danger" onclick="stopAllCameras()" title="Dừng toàn bộ camera" aria-label="Dừng toàn bộ camera">
+                    <i class="fa-solid fa-power-off me-1"></i> Tắt Tất Cả Camera
+                </button>
+            </div>
+        </div>
+        <div class="card-body p-3 bg-light rounded-bottom-4">
+            <div id="cameraGrid" class="d-grid gap-3 grid-1">
+                <!-- Trạng thái khi chưa bật camera -->
+                <div class="col-12 text-center py-5" id="emptyState">
+                    <i class="fa-solid fa-camera-web text-muted empty-state-icon"></i>
+                    <h5 class="fw-bold text-secondary mt-3">Camera chưa được kích hoạt</h5>
+                    <p class="text-muted small mb-3">Nhấn nút bên dưới để mở trực tiếp Webcam máy tính của bạn và bắt đầu nhận diện hành vi bằng AI!</p>
+                    <button class="btn btn-success px-4 py-2 rounded-pill fw-bold shadow-sm" onclick="toggleMainWebcam()">
+                        <i class="fa-solid fa-power-off me-1"></i> Bật Camera Máy Tính Ngay
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TERMINAL NHẬT KÝ PHÂN TÍCH HÀNH VI AI REALTIME -->
+    <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-header bg-dark text-white py-2 px-3 d-flex justify-content-between align-items-center">
+            <div class="fw-bold small">
+                <i class="fa-solid fa-terminal text-success me-2"></i>Nhật Ký Nhận Diện Hành Vi AI (Realtime AI Event Logs)
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-light py-0 px-2 small" onclick="clearLogs()" title="Xóa lịch sử log" aria-label="Xóa lịch sử log">
+                    <i class="fa-solid fa-trash me-1"></i> Xóa Log
+                </button>
+            </div>
+        </div>
+        <div class="card-body p-2 bg-dark">
+            <div id="terminalLogBox" class="terminal-log-box">
+                <div class="text-muted small"><span class="log-time">[SYSTEM]</span> Hệ thống sẵn sàng. Vui lòng bật camera để bắt đầu phân tích hành vi...</div>
+            </div>
         </div>
     </div>
 </div>
+
+<!-- MODAL THÊM CAMERA THẬT (WEBCAM PHỤ HOẶC IP CAMERA) -->
+<div class="modal fade" id="addRealCameraModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header border-bottom pb-2">
+                <h5 class="modal-title fw-bold text-dark"><i class="fa-solid fa-video text-primary me-2"></i>Thêm Luồng Camera Thật</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng" title="Đóng"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="modalCamName" class="form-label fw-semibold small text-muted">Tên Camera</label>
+                    <input type="text" id="modalCamName" class="form-control" placeholder="Ví dụ: Camera Cổng, Webcam Phụ 1..." title="Tên Camera" aria-label="Tên Camera">
+                </div>
+                <div class="mb-3">
+                    <label for="modalCamSourcePreset" class="form-label fw-semibold small text-muted">Chọn Thiết Bị Camera Thật</label>
+                    <select id="modalCamSourcePreset" class="form-select mb-2" onchange="onSourcePresetChange()" title="Chọn Thiết Bị Camera Thật" aria-label="Chọn Thiết Bị Camera Thật">
+                        <option value="0">Webcam Máy Tính Mặc Định (Index 0)</option>
+                        <option value="1">Webcam Phụ Gắn Ngoài (Index 1)</option>
+                        <option value="2">Webcam Thiết Bị Thứ 3 (Index 2)</option>
+                        <option value="custom">Nhập luồng Camera IP / RTSP / HTTP URL...</option>
+                    </select>
+                    <input type="text" id="modalCamSourceCustom" class="form-control d-none" placeholder="Nhập rtsp://... hoặc http://..." title="Đường dẫn luồng IP Camera" aria-label="Đường dẫn luồng IP Camera">
+                </div>
+                <div class="alert alert-info py-2 small mb-0">
+                    <i class="fa-solid fa-circle-info me-1"></i>
+                    Mỗi camera được thêm sẽ chạy trên một <strong>Thread độc lập</strong> riêng biệt (Hệ thống hỗ trợ song song tới 10 camera thật).
+                </div>
+            </div>
+            <div class="modal-footer border-top pt-2">
+                <button type="button" class="btn btn-light btn-sm" data-bs-dismiss="modal">Hủy</button>
+                <button type="button" class="btn btn-primary btn-sm fw-bold px-3" onclick="submitAddRealCamera()">
+                    <i class="fa-solid fa-check me-1"></i> Khởi chạy Luồng Camera
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL CẤU HÌNH AI OPENROUTER -->
+<div class="modal fade" id="configAiModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header border-bottom pb-2">
+                <h5 class="modal-title fw-bold text-dark"><i class="fa-solid fa-brain text-primary me-2"></i>Cấu Hình AI OpenRouter</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng" title="Đóng"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="modalApiKey" class="form-label fw-semibold small text-muted">OpenRouter API Key</label>
+                    <input type="password" id="modalApiKey" class="form-control font-monospace" placeholder="sk-or-v1-..." title="OpenRouter API Key" aria-label="OpenRouter API Key">
+                </div>
+                <div class="mb-3">
+                    <label for="modalModelName" class="form-label fw-semibold small text-muted">AI Model</label>
+                    <input type="text" id="modalModelName" class="form-control font-monospace" value="deepseek/deepseek-v4-flash:free" placeholder="Nhập tên Model (ví dụ: deepseek/deepseek-v4-flash:free)" title="Tên AI Model" aria-label="Tên AI Model">
+                    <small class="text-muted d-block mt-1">Mặc định: <code>deepseek/deepseek-v4-flash:free</code> (tự động fallback nếu cần)</small>
+                </div>
+                <div class="p-3 bg-light rounded-3 small">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>Chu kỳ lấy mẫu camera:</span>
+                        <strong>10 giây / lần</strong>
+                    </div>
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>Khoảng cách tối thiểu giữa 2 request:</span>
+                        <strong>≥ 3.2 giây</strong>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <span>Giới hạn Free Tier:</span>
+                        <strong class="text-success">20 requests / phút (Không bị Rate Limit)</strong>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-top pt-2">
+                <button type="button" class="btn btn-light btn-sm" data-bs-dismiss="modal">Đóng</button>
+                <button type="button" class="btn btn-primary btn-sm fw-bold px-3" onclick="saveAiConfig()">
+                    <i class="fa-solid fa-floppy-disk me-1"></i> Lưu Cấu Hình
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // =========================================================================
+    // JAVASCRIPT ĐIỀU KHIỂN & ĐỒNG BỘ CAMERA THẬT REALTIME
+    // =========================================================================
+
+    let currentCameras = {};
+    let isWebcamRunning = false;
+    let pollingTimer = null;
+
+    function onSourcePresetChange() {
+        const preset = document.getElementById('modalCamSourcePreset').value;
+        const customInput = document.getElementById('modalCamSourceCustom');
+        if (preset === 'custom') {
+            customInput.classList.remove('d-none');
+            customInput.focus();
+        } else {
+            customInput.classList.add('d-none');
+        }
+    }
+
+    // Bật hoặc Tắt nhanh Webcam máy tính chính (Device 0)
+    async function toggleMainWebcam() {
+        try {
+            const btn = document.getElementById('btnToggleWebcam');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Đang xử lý...';
+
+            const res = await fetch('/api/realtime/webcam_toggle', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ device: 0 })
+            });
+            const data = await res.json();
+            
+            btn.disabled = false;
+            if (data.is_running) {
+                btn.className = 'btn btn-danger btn-md fw-bold px-4 shadow-sm';
+                btn.innerHTML = '<i class="fa-solid fa-video-slash me-1"></i> Tắt Camera Máy Tính';
+            } else {
+                btn.className = 'btn btn-success btn-md fw-bold px-4 shadow-sm';
+                btn.innerHTML = '<i class="fa-solid fa-video me-1"></i> Bật Camera Máy Tính';
+            }
+
+            fetchCameras();
+            fetchLogs();
+        } catch (e) {
+            alert('Lỗi thao tác Webcam: ' + e);
+            document.getElementById('btnToggleWebcam').disabled = false;
+        }
+    }
+
+    // Tải danh sách camera và trạng thái đa luồng từ backend
+    async function fetchCameras() {
+        try {
+            const res = await fetch('/api/realtime/cameras');
+            const data = await res.json();
+            if (!data.success) return;
+
+            document.getElementById('statCamCount').innerText = `${data.total} / ${data.max}`;
+            document.getElementById('statActiveThreads').innerText = data.active_threads;
+            document.getElementById('statQueueSize').innerText = `${data.queue_size} tasks`;
+
+            // Cập nhật trạng thái nút bấm Webcam máy tính
+            const hasWebcam0 = data.cameras.some(c => c.cam_id === 'webcam_0');
+            const btn = document.getElementById('btnToggleWebcam');
+            if (btn) {
+                if (hasWebcam0) {
+                    btn.className = 'btn btn-danger btn-md fw-bold px-4 shadow-sm';
+                    btn.innerHTML = '<i class="fa-solid fa-video-slash me-1"></i> Tắt Camera Máy Tính';
+                } else {
+                    btn.className = 'btn btn-success btn-md fw-bold px-4 shadow-sm';
+                    btn.innerHTML = '<i class="fa-solid fa-video me-1"></i> Bật Camera Máy Tính';
+                }
+            }
+
+            renderCameraGrid(data.cameras);
+        } catch (e) {
+            console.error("Lỗi fetch cameras:", e);
+        }
+    }
+
+    // Hiển thị lưới Camera thật
+    function renderCameraGrid(cameras) {
+        const grid = document.getElementById('cameraGrid');
+        const emptyState = document.getElementById('emptyState');
+
+        if (!cameras || cameras.length === 0) {
+            grid.innerHTML = '';
+            if (emptyState) grid.appendChild(emptyState);
+            emptyState.style.display = 'block';
+            currentCameras = {};
+            return;
+        }
+
+        if (emptyState) emptyState.style.display = 'none';
+
+        // Tự động phân bố kích thước: 1 camera thì to đẹp, nhiều camera thì dạng lưới
+        if (cameras.length === 1) {
+            grid.className = 'd-grid gap-3 grid-1';
+        } else if (cameras.length === 2) {
+            grid.className = 'd-grid gap-3 grid-2';
+        } else {
+            grid.className = 'd-grid gap-3 grid-multi';
+        }
+
+        const newCamIds = new Set(cameras.map(c => c.cam_id));
+
+        // Xóa các camera đã tắt
+        Object.keys(currentCameras).forEach(id => {
+            if (!newCamIds.has(id)) {
+                const el = document.getElementById(`cam-card-${id}`);
+                if (el) el.remove();
+                delete currentCameras[id];
+            }
+        });
+
+        // Tạo hoặc cập nhật camera
+        cameras.forEach(cam => {
+            let card = document.getElementById(`cam-card-${cam.cam_id}`);
+            const aiStatus = (cam.ai_result && cam.ai_result.status) || 'CHỜ';
+            const aiDesc = (cam.ai_result && cam.ai_result.description) || 'Đang chờ khung hình...';
+
+            let statusBadgeClass = 'badge-normal';
+            let cardAlertClass = '';
+            if (aiStatus === 'CẢNH BÁO') {
+                statusBadgeClass = 'badge-warning';
+                cardAlertClass = 'alert-warning-active';
+            } else if (aiStatus === 'NGUY HIỂM') {
+                statusBadgeClass = 'badge-danger';
+                cardAlertClass = 'alert-danger-active';
+            } else if (aiStatus === 'TÍCH CỰC' || aiDesc.toLowerCase().includes('cười') || aiDesc.toLowerCase().includes('nháy mắt')) {
+                statusBadgeClass = 'badge bg-info text-white';
+            }
+
+            if (!card) {
+                card = document.createElement('div');
+                card.id = `cam-card-${cam.cam_id}`;
+                card.className = `webcam-main-card ${cardAlertClass}`;
+                card.innerHTML = `
+                    <div class="video-viewport">
+                        <div class="camera-overlay-badge"><i class="fa-solid fa-video me-1"></i>${cam.name}</div>
+                        <div class="camera-fps-badge" id="fps-${cam.cam_id}">${cam.fps} FPS</div>
+                        <img src="/realtime/feed/${cam.cam_id}" alt="${cam.name}" loading="lazy" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'640\\' height=\\'360\\'><rect width=\\'100%\\' height=\\'100%\\' fill=\\'%23111\\'/><text x=\\'50%\\' y=\\'50%\\' fill=\\'%23888\\' font-size=\\'16\\' text-anchor=\\'middle\\' dominant-baseline=\\'middle\\'>Đang mở camera...</text></svg>'">
+                    </div>
+                    <div class="ai-ribbon d-flex justify-content-between align-items-center text-white">
+                        <div class="text-truncate me-2 ai-desc-col">
+                            <span class="badge ${statusBadgeClass} me-1" id="badge-${cam.cam_id}">${aiStatus}</span>
+                            <span class="text-light small" id="desc-${cam.cam_id}" title="${aiDesc}">${aiDesc}</span>
+                        </div>
+                        <div class="d-flex gap-1">
+                            <button class="btn btn-outline-info btn-sm py-0 px-2" onclick="toggleCameraFlip('${cam.cam_id}')" title="Lật ngược camera (Gương)" aria-label="Lật ngược camera">
+                                <i class="fa-solid fa-arrows-rotate"></i>
+                            </button>
+                            <button class="btn btn-outline-warning btn-sm py-0 px-2" onclick="triggerAiNow('${cam.cam_id}')" title="Quét biểu cảm (Cười, Nháy mắt,...) ngay lập tức" aria-label="Quét biểu cảm ngay">
+                                <i class="fa-solid fa-bolt"></i>
+                            </button>
+                            <button class="btn btn-outline-light btn-sm py-0 px-2" onclick="toggleCameraAi('${cam.cam_id}', ${!cam.ai_enabled})" title="Bật/Tắt AI cho camera này" aria-label="Bật/Tắt AI cho camera này">
+                                <i class="fa-solid ${cam.ai_enabled ? 'fa-brain text-success' : 'fa-brain text-muted'}"></i>
+                            </button>
+                            <button class="btn btn-outline-danger btn-sm py-0 px-2" onclick="removeCamera('${cam.cam_id}')" title="Tắt Camera" aria-label="Tắt Camera">
+                                <i class="fa-solid fa-power-off"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+                grid.appendChild(card);
+            } else {
+                card.className = `webcam-main-card ${cardAlertClass}`;
+                const fpsEl = document.getElementById(`fps-${cam.cam_id}`);
+                if (fpsEl) fpsEl.innerText = `${cam.fps} FPS`;
+
+                const badgeEl = document.getElementById(`badge-${cam.cam_id}`);
+                if (badgeEl) {
+                    badgeEl.className = `badge ${statusBadgeClass} me-1`;
+                    badgeEl.innerText = aiStatus;
+                }
+
+                const descEl = document.getElementById(`desc-${cam.cam_id}`);
+                if (descEl) {
+                    descEl.innerText = aiDesc;
+                    descEl.title = aiDesc;
+                }
+            }
+            currentCameras[cam.cam_id] = cam;
+        });
+    }
+
+    // Tải logs nhận diện AI
+    async function fetchLogs() {
+        try {
+            const res = await fetch('/api/realtime/logs');
+            const data = await res.json();
+            if (!data.success) return;
+
+            const box = document.getElementById('terminalLogBox');
+            if (data.logs.length === 0) {
+                box.innerHTML = '<div class="text-muted small"><span class="log-time">[SYSTEM]</span> Hệ thống sẵn sàng. Chưa có bản ghi nhận diện mới.</div>';
+                return;
+            }
+
+            let html = '';
+            data.logs.forEach(log => {
+                let badgeClass = 'badge-normal';
+                if (log.status === 'CẢNH BÁO') badgeClass = 'badge-warning';
+                if (log.status === 'NGUY HIỂM') badgeClass = 'badge-danger';
+
+                html += `
+                    <div class="mb-1 border-bottom border-secondary border-opacity-25 pb-1">
+                        <span class="log-time">[${log.timestamp}]</span>
+                        <span class="log-cam">[${log.cam_name}]</span>
+                        <span class="badge ${badgeClass} badge-log py-0 px-1">${log.status}</span>
+                        <span class="text-light ms-1">${log.description}</span>
+                    </div>
+                `;
+            });
+            box.innerHTML = html;
+
+            // Đồng bộ Terminal log theo HUONG_DAN_NHOM.md
+            if (data.logs.length > 0 && window.lastLogId !== data.logs[0].id) {
+                window.lastLogId = data.logs[0].id;
+                const topLog = data.logs[0];
+                if (window.SystemLog && typeof window.SystemLog.add === 'function') {
+                    window.SystemLog.add(`[Camera Realtime] ${topLog.cam_name}: ${topLog.description}`, topLog.status === 'NGUY HIỂM' ? 'error' : 'info');
+                }
+            }
+        } catch (e) {
+            console.error("Lỗi fetch logs:", e);
+        }
+    }
+
+    // Thêm camera thật mới
+    async function submitAddRealCamera() {
+        const name = document.getElementById('modalCamName').value.trim() || 'Camera Thật';
+        const preset = document.getElementById('modalCamSourcePreset').value;
+        const custom = document.getElementById('modalCamSourceCustom').value.trim();
+        const source = (preset === 'custom') ? custom : preset;
+
+        if (!source) {
+            alert('Vui lòng chọn hoặc nhập nguồn camera thật!');
+            return;
+        }
+
+        const modalEl = bootstrap.Modal.getInstance(document.getElementById('addRealCameraModal'));
+        if (modalEl) modalEl.hide();
+
+        try {
+            const res = await fetch('/api/realtime/add', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ name: name, source: source })
+            });
+            const data = await res.json();
+            alert(data.message);
+            fetchCameras();
+        } catch (e) {
+            alert('Lỗi: ' + e);
+        }
+    }
+
+    // Xóa/Tắt một camera
+    async function removeCamera(camId) {
+        if (!confirm(`Bạn có chắc muốn tắt luồng camera '${camId}'?`)) return;
+        try {
+            await fetch(`/api/realtime/remove/${camId}`, { method: 'POST' });
+            fetchCameras();
+        } catch (e) {
+            console.error(e);
+        }
+    }
+
+    // Dừng tất cả camera
+    async function stopAllCameras() {
+        if (!confirm('Dừng toàn bộ các luồng camera đang chạy?')) return;
+        try {
+            await fetch('/api/realtime/stop_all', { method: 'POST' });
+            fetchCameras();
+        } catch (e) {
+            console.error(e);
+        }
+    }
+
+    // Lật ngược camera (Mirror Flip)
+    async function toggleCameraFlip(camId) {
+        try {
+            const res = await fetch('/api/realtime/toggle_flip', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ cam_id: camId })
+            });
+            const data = await res.json();
+            const img = document.querySelector(`#cam-card-${camId} img`);
+            if (img) img.src = `/realtime/feed/${camId}?t=${new Date().getTime()}`;
+        } catch (e) {
+            console.error("Lỗi toggle flip:", e);
+        }
+    }
+
+    // Gửi ngay 1 khung hình lên AI để quét biểu cảm (Cười, Nháy mắt,...) tức thì
+    async function triggerAiNow(camId) {
+        try {
+            const res = await fetch('/api/realtime/trigger_ai', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ cam_id: camId })
+            });
+            const data = await res.json();
+            
+            // Đồng bộ log ra Terminal chung theo HUONG_DAN_NHOM.md
+            if (window.SystemLog && typeof window.SystemLog.add === 'function') {
+                window.SystemLog.add(`[Camera Realtime] Đang quét phân tích biểu cảm...`, 'info');
+            }
+            
+            setTimeout(() => {
+                fetchCameras();
+                fetchLogs();
+            }, 1500);
+        } catch (e) {
+            console.error("Lỗi trigger AI:", e);
+        }
+    }
+
+    // Bật/Tắt AI cho camera
+    async function toggleCameraAi(camId, enable) {
+        await fetch('/api/realtime/toggle_ai', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ cam_id: camId, enable: enable })
+        });
+        fetchCameras();
+    }
+
+    // Xóa Log
+    async function clearLogs() {
+        await fetch('/api/realtime/clear_logs', { method: 'POST' });
+        document.getElementById('terminalLogBox').innerHTML = '<div class="text-muted small">[SYSTEM] Đã xóa toàn bộ nhật ký.</div>';
+    }
+
+    // Lưu Cấu hình AI
+    async function saveAiConfig() {
+        const apiKey = document.getElementById('modalApiKey').value.trim();
+        const model = document.getElementById('modalModelName').value.trim();
+        const res = await fetch('/api/realtime/config', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ api_key: apiKey, model: model })
+        });
+        const data = await res.json();
+        alert(data.message);
+        const modalEl = bootstrap.Modal.getInstance(document.getElementById('configAiModal'));
+        if (modalEl) modalEl.hide();
+    }
+
+    // Vòng lặp cập nhật
+    document.addEventListener('DOMContentLoaded', function() {
+        fetchCameras();
+        fetchLogs();
+        pollingTimer = setInterval(() => {
+            fetchCameras();
+            fetchLogs();
+        }, 1500);
+    });
+</script>
 {% endblock %}
