@@ -1,8 +1,0 @@
-__pycache__/
-*.py[cod]
-*$py.class
-.vscode/
-.idea/
-*.log
-config_local.json
-.env

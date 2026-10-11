@@ -8,13 +8,13 @@
 
 <div class="row justify-content-center">
     <div class="col-12 col-lg-8 mx-auto"> 
-        <div class="card custom-card p-4 border-0 shadow-sm">
+        
+        <!-- CARD 1: Cấu hình tính năng -->
+        <div class="card custom-card p-4 border-0 shadow-sm mb-4">
             <form id="configForm">
                 <h5 class="fw-bold mb-4 border-bottom pb-2 text-primary">
                     <i class="fa-solid fa-power-off me-2"></i>Quản lý Tính năng Hệ thống
                 </h5>
-                <p class="text-muted small mb-4">Bật hoặc tắt các module tại đây. (Cấu hình Token và Model AI sẽ được thiết lập riêng bên trong giao diện của từng tính năng).</p>
-                
                 <div class="row g-4 mb-4">
                     <div class="col-12 col-sm-6">
                         <div class="form-check form-switch p-3 bg-light rounded border d-flex justify-content-between align-items-center m-0">
@@ -47,18 +47,48 @@
                         </div>
                     </div>
                 </div>
-
-                <div class="d-grid d-md-flex justify-content-md-end mt-4">
-                    <button type="submit" class="btn btn-primary btn-lg px-5 fw-bold shadow-sm">
-                        <i class="fa-solid fa-floppy-disk me-2"></i>Lưu trạng thái
-                    </button>
+                <div class="d-grid d-md-flex justify-content-md-end">
+                    <button type="submit" class="btn btn-primary btn-md px-4 fw-bold shadow-sm"><i class="fa-solid fa-floppy-disk me-2"></i>Lưu trạng thái tính năng</button>
                 </div>
             </form>
+        </div>
+
+        <!-- CARD 2: Chỉnh sửa ảnh thành viên (Cố định 5 người) -->
+        <div class="card custom-card p-4 border-0 shadow-sm">
+            <h5 class="fw-bold mb-4 border-bottom pb-2 text-primary">
+                <i class="fa-solid fa-image-portrait me-2"></i>Cập nhật Ảnh đại diện Thành viên
+            </h5>
+            
+            <div class="table-responsive mb-3">
+                <table class="table table-bordered align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 60px;">Ảnh</th>
+                            <th style="width: 25%;">Họ tên</th>
+                            <th style="width: 15%;">Mã SV</th>
+                            <th>Link URL Ảnh (Bỏ trống = Avatar màu tự động)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="memberTableBody">
+                        <!-- Render bằng JS -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="d-grid d-md-flex justify-content-md-end mt-2">
+                <button type="button" class="btn btn-primary btn-md px-4 fw-bold shadow-sm" onclick="saveMembers()">
+                    <i class="fa-solid fa-floppy-disk me-2"></i>Lưu thay đổi Ảnh
+                </button>
+            </div>
         </div>
     </div>
 </div>
 
 <script>
+    let members = [];
+    const bgColors = ["3182ce", "38a169", "d69e2e", "e53e3e", "805ad5"];
+
+    // 1. Nạp Cấu hình bật/tắt tính năng
     fetch('/api/config')
         .then(res => res.json())
         .then(data => {
@@ -69,6 +99,73 @@
             document.getElementById('enableRealtime').checked = data.enable_realtime;
         });
 
+    // 2. Nạp danh sách thành viên và khôi phục nếu rỗng
+    fetch('/api/members')
+        .then(res => res.json())
+        .then(data => {
+            if (data.success && data.members) {
+                members = data.members;
+            }
+            
+            // Tự động khôi phục 5 thành viên nếu Database trống
+            if (members.length === 0) {
+                members = [
+                    {name: "Đỗ Cao Thúy Vi", id: "49.01.103.093", role: "Nhóm Trưởng", avatar: ""},
+                    {name: "Đoàn Thị Thanh Diễm", id: "50.01.103.012", role: "", avatar: ""},
+                    {name: "Nguyễn Thái Dương", id: "49.01.104.024", role: "", avatar: ""},
+                    {name: "Nguyễn Trung Luật", id: "49.01.104.086", role: "", avatar: ""},
+                    {name: "Bùi Vạn Thiên", id: "51.01.103.084", role: "", avatar: ""}
+                ];
+            }
+            
+            renderMembers();
+        });
+
+    // 3. Render danh sách thành viên ra bảng
+    function renderMembers() {
+        const tbody = document.getElementById('memberTableBody');
+        tbody.innerHTML = '';
+        members.forEach((mem, index) => {
+            let avatarUrl = mem.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(mem.name)}&background=${bgColors[index % bgColors.length]}&color=fff&size=50`;
+            
+            tbody.innerHTML += `
+                <tr>
+                    <td><img src="${avatarUrl}" id="img-preview-${index}" width="45" height="45" class="rounded-circle object-fit-cover shadow-sm"></td>
+                    <td class="fw-bold">${mem.name}</td>
+                    <td>${mem.id}</td>
+                    <td>
+                        <input type="text" class="form-control form-control-sm" id="avatar-input-${index}" value="${mem.avatar}" placeholder="Nhập link ảnh (VD: https://...)" onchange="updatePreview(${index})">
+                    </td>
+                </tr>
+            `;
+        });
+    }
+
+    // 4. Hàm cập nhật xem trước (preview) ảnh khi người dùng vừa dán link
+    function updatePreview(index) {
+        const inputVal = document.getElementById(`avatar-input-${index}`).value.trim();
+        const imgEl = document.getElementById(`img-preview-${index}`);
+        if (inputVal) {
+            imgEl.src = inputVal;
+        } else {
+            imgEl.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(members[index].name)}&background=${bgColors[index % bgColors.length]}&color=fff&size=50`;
+        }
+    }
+
+    // 5. Hàm lưu thay đổi ảnh vào Server
+    function saveMembers() {
+        members.forEach((mem, index) => {
+            mem.avatar = document.getElementById(`avatar-input-${index}`).value.trim();
+        });
+
+        fetch('/api/members', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ members: members })
+        }).then(() => alert("Đã lưu Ảnh đại diện thành công!"));
+    }
+
+    // 6. Xử lý khi ấn nút Lưu trạng thái tính năng
     document.getElementById('configForm').addEventListener('submit', function(e) {
         e.preventDefault();
         const payload = {
@@ -78,18 +175,13 @@
             enable_image: document.getElementById('enableImage').checked,
             enable_realtime: document.getElementById('enableRealtime').checked
         };
-
         fetch('/api/config', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
-        })
-        .then(res => res.json())
-        .then(data => {
-            if(data.success) {
-                alert('Đã lưu trạng thái Bật/Tắt module thành công!');
-                window.location.reload();
-            }
+        }).then(() => { 
+            alert('Đã lưu trạng thái tính năng!'); 
+            window.location.reload(); 
         });
     });
 </script>

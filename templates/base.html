@@ -41,20 +41,25 @@
 </head>
 <body>
 
-    <!-- Header Mobile (Chỉ hiện trên màn hình nhỏ) -->
+    <!-- Header Mobile: Thêm nút Cài đặt ra ngoài cùng để dễ bấm -->
     <div class="d-md-none d-flex justify-content-between align-items-center p-3 shadow-sm mobile-header">
         <div class="fw-bold text-white fs-5"><i class="fa-solid fa-microchip text-primary me-2"></i> AI PLATFORM</div>
-        <button class="btn btn-outline-light border-0 px-2 py-1" type="button" data-bs-toggle="offcanvas" data-bs-target="#sidebar" aria-label="Mở menu điều hướng" title="Mở menu điều hướng">
-            <i class="fa-solid fa-bars fs-4"></i>
-        </button>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-warning border-0 px-2 py-1" type="button" data-bs-toggle="modal" data-bs-target="#pinModal" title="Cài đặt hệ thống">
+                <i class="fa-solid fa-sliders fs-4"></i>
+            </button>
+            <button class="btn btn-outline-light border-0 px-2 py-1" type="button" data-bs-toggle="offcanvas" data-bs-target="#sidebar" aria-label="Mở menu điều hướng">
+                <i class="fa-solid fa-bars fs-4"></i>
+            </button>
+        </div>
     </div>
 
     <div class="d-flex">
-        <!-- SIDEBAR (Tích hợp Offcanvas cho Mobile) -->
+        <!-- SIDEBAR -->
         <nav id="sidebar" class="offcanvas-md offcanvas-start col-md-3 col-lg-2 flex-shrink-0" tabindex="-1">
             <div class="offcanvas-header d-md-none border-bottom sidebar-mobile-header">
                 <h5 class="offcanvas-title text-white fw-bold"><i class="fa-solid fa-microchip text-primary me-2"></i> MENU</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" data-bs-target="#sidebar" aria-label="Đóng menu" title="Đóng menu"></button>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" data-bs-target="#sidebar" aria-label="Đóng menu"></button>
             </div>
             
             <div class="offcanvas-body d-flex flex-column p-0">
@@ -71,7 +76,7 @@
                 <div class="nav-section-title mt-2">Chức năng chính</div>
                 <ul class="nav flex-column mb-3">
                     <li class="nav-item"><a class="nav-link" id="nav-index" href="{{ url_for('index') }}"><i class="fa-solid fa-chart-pie"></i> Tổng quan</a></li>
-                    <li class="nav-item {% if not config.enable_video %}d-none{% endif %}"><a class="nav-link" id="nav-video" href="{{ url_for('video') }}"><i class="fa-solid fa-file-video"></i> Xử lý Video (Tải file)</a></li>
+                    <li class="nav-item {% if not config.enable_video %}d-none{% endif %}"><a class="nav-link" id="nav-video" href="{{ url_for('video') }}"><i class="fa-solid fa-file-video"></i> Xử lý Video</a></li>
                     <li class="nav-item {% if not config.enable_rtsp %}d-none{% endif %}"><a class="nav-link" id="nav-rtsp" href="{{ url_for('rtsp') }}"><i class="fa-solid fa-satellite-dish"></i> Xử lý Luồng RTSP</a></li>
                     <li class="nav-item {% if not config.enable_chatbot %}d-none{% endif %}"><a class="nav-link" id="nav-chatbot" href="{{ url_for('chatbot') }}"><i class="fa-solid fa-robot"></i> Chatbot AI</a></li>
                     <li class="nav-item {% if not config.enable_image %}d-none{% endif %}"><a class="nav-link" id="nav-image" href="{{ url_for('image') }}"><i class="fa-solid fa-image"></i> Xử lý Ảnh</a></li>
@@ -81,7 +86,7 @@
                 <div class="nav-section-title">Hệ thống</div>
                 <ul class="nav flex-column pb-4">
                     <li class="nav-item">
-                        <a class="nav-link text-warning" href="#" data-bs-toggle="modal" data-bs-target="#pinModal"><i class="fa-solid fa-sliders"></i> Cài đặt hệ thống</a>
+                        <a class="nav-link text-warning" href="#" data-bs-toggle="modal" data-bs-target="#pinModal" data-bs-dismiss="offcanvas"><i class="fa-solid fa-sliders"></i> Cài đặt hệ thống</a>
                     </li>
                 </ul>
             </div>
@@ -93,7 +98,7 @@
         </main>
     </div>
 
-    <!-- MODAL OTP -->
+    <!-- MODAL OTP CHUNG CHO SETTINGS -->
     <div class="modal fade" id="pinModal" tabindex="-1" aria-hidden="true">
       <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content pin-modal-content">

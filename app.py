@@ -36,6 +36,16 @@ class SystemSettings(db.Model):
 
 with app.app_context():
     db.create_all()
+    
+    # 5 thành viên cố định của nhóm
+    default_team = [
+        {"name": "Đỗ Cao Thúy Vi", "id": "49.01.103.093", "role": "Nhóm Trưởng", "avatar": ""},
+        {"name": "Đoàn Thị Thanh Diễm", "id": "50.01.103.012", "role": "", "avatar": ""},
+        {"name": "Nguyễn Thái Dương", "id": "49.01.104.024", "role": "", "avatar": ""},
+        {"name": "Nguyễn Trung Luật", "id": "49.01.104.086", "role": "", "avatar": ""},
+        {"name": "Bùi Vạn Thiên", "id": "51.01.103.084", "role": "", "avatar": ""}
+    ]
+
     default_settings = {
         'system_pin': '123456',
         'rtsp_api_list': '[]',
@@ -45,7 +55,8 @@ with app.app_context():
         'enable_chatbot': 'true',
         'enable_image': 'true',
         'enable_realtime': 'true',
-        'chatbot_api_tokens': '[]'  # Thêm field cấu hình Token Chatbot
+        'chatbot_api_tokens': '[]',
+        'team_members': json.dumps(default_team)
     }
     for key, value in default_settings.items():
         if not SystemSettings.query.filter_by(setting_key=key).first():
@@ -103,7 +114,7 @@ def get_container_ram_info():
         vm = psutil.virtual_memory()
         return vm.percent, vm.used, vm.total
 
-# --- API XÁC THỰC MÃ PIN HỆ THỐNG CŨ (Giữ nguyên tương thích ngược) ---
+# --- API XÁC THỰC MÃ PIN HỆ THỐNG CŨ ---
 @app.route('/verify-pin', methods=['POST'])
 def verify_pin():
     data = request.get_json()
@@ -170,9 +181,22 @@ def api_config():
         "enable_realtime": get_setting('enable_realtime') == 'true',
     })
 
-# --- API QUẢN LÝ CHATBOT (Mới & Độc lập) ---
+# --- API LƯU ẢNH THÀNH VIÊN ĐỘNG ---
+@app.route('/api/members', methods=['GET', 'POST'])
+def api_members():
+    if request.method == 'POST':
+        data = request.get_json()
+        update_setting('team_members', json.dumps(data.get('members', [])))
+        return jsonify({"success": True})
+    
+    members_str = get_setting('team_members', '[]')
+    try:
+        members = json.loads(members_str)
+    except:
+        members = []
+    return jsonify({"success": True, "members": members})
 
-# API verify riêng cho Chatbot
+# --- API QUẢN LÝ CHATBOT ---
 @app.route('/api/chatbot/verify-pin', methods=['POST'])
 def chatbot_verify_pin():
     data = request.get_json()
@@ -183,7 +207,6 @@ def chatbot_verify_pin():
 
 @app.route('/api/chatbot/config', methods=['GET', 'POST'])
 def api_chatbot_config():
-    # Chỉ kiểm tra session riêng của Chatbot
     if not session.get('chatbot_unlocked'):
         return jsonify({"success": False, "response": "Cần xác thực mã PIN"}), 401
     
@@ -191,8 +214,6 @@ def api_chatbot_config():
         data = request.get_json()
         tokens = data.get('api_tokens', [])
         update_setting('chatbot_api_tokens', json.dumps(tokens))
-        
-        # Xóa trạng thái mở khóa sau khi lưu thành công để bắt buộc nhập lại PIN lần sau
         session.pop('chatbot_unlocked', None) 
         return jsonify({"success": True})
         
@@ -202,50 +223,19 @@ def api_chatbot_config():
     except:
         tokens = []
         
-    # Xóa trạng thái mở khóa sau khi lấy dữ liệu cấu hình để bắt buộc nhập lại PIN lần sau
     session.pop('chatbot_unlocked', None)
     return jsonify({"success": True, "api_tokens": tokens})
 
-@app.route('/api/chatbot/models', methods=['GET'])
-def api_chatbot_models():
-    tokens_str = get_setting('chatbot_api_tokens', '[]')
-    try:
-        tokens = json.loads(tokens_str)
-    except:
-        tokens = []
-    
-    models = []
-    for token in tokens:
-        if token.get('api_key'):
-            model_id = token.get('id') or f"{token.get('provider')}_{token.get('model_name')}"
-            is_vision = True if token.get('provider') in ['google_gemini', 'xai'] or 'vision' in token.get('model_name', '').lower() else False
-            models.append({
-                "id": model_id,
-                "name": token.get('model_name') or token.get('provider'),
-                "provider": token.get('provider'),
-                "is_vision": is_vision
-            })
-    return jsonify({"success": True, "models": models})
 
-@app.route('/api/chatbot/chat', methods=['POST'])
-def api_chatbot_chat():
+# --- API XÁC THỰC MÃ PIN CHO REALTIME ---
+@app.route('/api/realtime/verify-pin', methods=['POST'])
+def realtime_verify_pin():
     data = request.get_json()
-    message = data.get('message', '')
-    return jsonify({
-        "success": True,
-        "response": f"Tôi đã nhận được: '{message}'. Xin hãy tích hợp backend xử lý AI.",
-        "latency": "0.1"
-    })
+    if data and data.get('pin') == get_setting('system_pin'):
+        session['realtime_unlocked'] = True
+        return jsonify({"success": True})
+    return jsonify({"success": False, "message": "Mã PIN không đúng."}), 401
 
-@app.route('/api/chatbot/analyze-media', methods=['POST'])
-def api_chatbot_analyze_media():
-    question = request.form.get('question', '')
-    media_file = request.files.get('media')
-    return jsonify({
-        "success": True,
-        "response": f"Đã tải lên tệp `{media_file.filename if media_file else 'Không rõ'}` và nhận câu hỏi: '{question}'",
-        "latency": "0.5"
-    })
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=24706, threaded=True)

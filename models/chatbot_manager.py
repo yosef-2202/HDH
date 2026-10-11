@@ -100,6 +100,13 @@ def _read_chat_tokens():
     return [token for token in tokens if isinstance(token, dict)] if isinstance(tokens, list) else []
 
 
+def _mask_api_key(value):
+    value = str(value or '')
+    if len(value) <= 8:
+        return '••••••••'
+    return f'{value[:4]}••••{value[-4:]}'
+
+
 def _active_chat_tokens():
     return [
         token for token in _read_chat_tokens()
@@ -508,6 +515,17 @@ def extract_video_frames(upload, suffix):
             os.remove(temp_path)
 
 
+@chatbot_bp.route('/api/chatbot/verify-pin', methods=['POST'])
+def verify_chatbot_pin():
+    """Xác thực PIN riêng cho khu vực cấu hình token của Chatbox."""
+    data = request.get_json(silent=True) or {}
+    pin = str(data.get('pin', '')).strip()
+    if pin and pin == str(_get_setting('system_pin', '123456')).strip():
+        session['is_admin'] = True
+        return jsonify({'success': True})
+    return jsonify({'success': False, 'response': 'Mã PIN không đúng.'}), 401
+
+
 @chatbot_bp.route('/api/chatbot/config', methods=['GET', 'POST'])
 def chatbot_config():
     if not session.get('is_admin'):
@@ -520,6 +538,7 @@ def chatbot_config():
             tokens = []
         if not isinstance(tokens, list):
             tokens = []
+        # Chỉ trả key sau khi phiên đã xác thực PIN ở endpoint này.
         response = jsonify({'success': True, 'api_tokens': tokens})
         response.headers['Cache-Control'] = 'no-store'
         return response
@@ -528,6 +547,7 @@ def chatbot_config():
     tokens = data.get('api_tokens', [])
     if not isinstance(tokens, list):
         return jsonify({'success': False, 'response': 'Danh sách token không hợp lệ.'}), 400
+    existing_by_id = {str(t.get('id')): t for t in _read_chat_tokens() if t.get('id')}
     cleaned = []
     for item in tokens[:30]:
         if not isinstance(item, dict):
@@ -538,6 +558,9 @@ def chatbot_config():
         if provider not in SUPPORTED_PROVIDERS or not isinstance(api_key, str) or not isinstance(model_name, str):
             continue
         api_key = api_key.strip()
+        if not api_key:
+            previous = existing_by_id.get(str(item.get('id')))
+            api_key = str(previous.get('api_key', '')).strip() if previous else ''
         model_name = model_name.strip()[:200]
         if not api_key:
             continue
