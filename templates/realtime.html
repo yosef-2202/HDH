@@ -244,14 +244,14 @@
                 </div>
                 <div class="col-4">
                     <div class="os-stat-mini text-center">
-                        <div class="text-muted" style="font-size: 0.72rem;">Chu kỳ AI</div>
-                        <div class="fw-bold text-success mt-1" style="font-size: 0.95rem;">10 Giây</div>
+                        <div class="text-muted" style="font-size: 0.72rem;">Đa Phiên</div>
+                        <div class="fw-bold text-success mt-1" id="statActiveSessions" style="font-size: 0.95rem;">Đa Luồng</div>
                     </div>
                 </div>
                 <div class="col-4">
                     <div class="os-stat-mini text-center">
-                        <div class="text-muted" style="font-size: 0.72rem;">Rate-Limit</div>
-                        <div class="fw-bold text-info mt-1" style="font-size: 0.85rem;">≤ 20 req/p</div>
+                        <div class="text-muted" style="font-size: 0.72rem;">Cân Bằng Tải</div>
+                        <div class="fw-bold text-info mt-1" id="statKeyRotation" style="font-size: 0.82rem;">Round-Robin</div>
                     </div>
                 </div>
             </div>
@@ -284,13 +284,14 @@
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content rounded-4 border-0 shadow">
             <div class="modal-header border-bottom pb-2">
-                <h6 class="modal-title fw-bold text-dark"><i class="fa-solid fa-brain text-primary me-2"></i>Cấu Hình AI OpenRouter</h6>
+                <h6 class="modal-title fw-bold text-dark"><i class="fa-solid fa-brain text-primary me-2"></i>Cấu Hình AI & Xoay Vòng API Keys</h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
             </div>
             <div class="modal-body">
                 <div class="mb-3">
-                    <label for="modalApiKey" class="form-label fw-semibold small text-muted">OpenRouter API Key</label>
-                    <input type="password" id="modalApiKey" class="form-control form-control-sm font-monospace" placeholder="sk-or-v1-...">
+                    <label for="modalApiKey" class="form-label fw-semibold small text-muted">Danh Sách OpenRouter API Keys (Round-Robin)</label>
+                    <textarea id="modalApiKey" rows="3" class="form-control form-control-sm font-monospace" placeholder="sk-or-v1-key1...&#10;sk-or-v1-key2...&#10;sk-or-v1-key3..."></textarea>
+                    <small class="text-muted d-block mt-1">Hỗ trợ 2 đến 3 API Keys (nhập mỗi key trên một dòng hoặc cách nhau bằng dấu phẩy) để hệ thống tự động xoay vòng cân bằng tải.</small>
                 </div>
                 <div class="mb-3">
                     <label for="modalModelName" class="form-label fw-semibold small text-muted">AI Model</label>
@@ -493,6 +494,7 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     image: base64Img,
+                    client_id: getClientId(),
                     cam_id: camId,
                     name: 'Webcam Máy Tính'
                 })
@@ -503,11 +505,24 @@
     }
 
     /**
-     * Lấy danh sách Logs để cập nhật Terminal và UI
+     * Lấy hoặc tạo Client ID riêng biệt cho từng trình duyệt (Multi-Session)
+     */
+    function getClientId() {
+        let cid = sessionStorage.getItem('rt_client_id');
+        if (!cid) {
+            cid = 'client_' + Math.random().toString(36).substring(2, 9);
+            sessionStorage.setItem('rt_client_id', cid);
+        }
+        return cid;
+    }
+
+    /**
+     * Lấy danh sách Logs để cập nhật Terminal và UI (Hỗ trợ lọc theo Client ID)
      */
     async function fetchLogs() {
         try {
-            const res = await fetch('/api/realtime/logs');
+            const cid = getClientId();
+            const res = await fetch(`/api/realtime/logs?client_id=${cid}`);
             const data = await res.json();
             if (!data.success) return;
 
@@ -564,9 +579,33 @@
                     }
                 }
             }
+
+            // Cập nhật thống kê đa phiên
+            fetchSessionStats();
         } catch (e) {
             console.error('Lỗi tải logs:', e);
         }
+    }
+
+    /**
+     * Tải thông tin thống kê Đa phiên và Cân bằng tải
+     */
+    async function fetchSessionStats() {
+        try {
+            const res = await fetch('/api/realtime/sessions');
+            const data = await res.json();
+            if (!data.success) return;
+            
+            const sessionEl = document.getElementById('statActiveSessions');
+            if (sessionEl) {
+                sessionEl.innerText = `${data.active_clients_count || 1} Clients`;
+            }
+
+            const rotEl = document.getElementById('statKeyRotation');
+            if (rotEl && data.key_stats) {
+                rotEl.innerText = `${data.key_stats.total_keys} Keys (RR)`;
+            }
+        } catch(e) {}
     }
 
     /**
@@ -586,12 +625,13 @@
      * Xóa nhật ký log
      */
     async function clearLogs() {
-        await fetch('/api/realtime/clear_logs', { method: 'POST' });
+        const cid = getClientId();
+        await fetch(`/api/realtime/clear_logs?client_id=${cid}`, { method: 'POST' });
         document.getElementById('terminalLogBox').innerHTML = '<div class="text-muted small"><span class="log-time">[SYSTEM]</span> Đã xóa nhật ký.</div>';
     }
 
     /**
-     * Lưu cấu hình AI OpenRouter
+     * Lưu cấu hình AI OpenRouter (Hỗ trợ nhiều keys)
      */
     async function saveAiConfig() {
         const apiKey = document.getElementById('modalApiKey').value.trim();
@@ -599,12 +639,14 @@
         const res = await fetch('/api/realtime/config', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ api_key: apiKey, model: model })
+            body: JSON.stringify({ api_keys: apiKey, model: model })
         });
         const data = await res.json();
         alert(data.message);
-        const modalEl = bootstrap.Modal.getInstance(document.getElementById('configAiModal'));
-        if (modalEl) modalEl.hide();
+        if (data.success) {
+            const modalEl = bootstrap.Modal.getInstance(document.getElementById('configAiModal'));
+            if (modalEl) modalEl.hide();
+        }
     }
 
     // Tự động tải log ban đầu và định kỳ mỗi 1.5 giây

@@ -1,15 +1,18 @@
 # -*- coding: utf-8 -*-
 """
-Module: Realtime Camera Surveillance (Phân tích Camera Thật Thời gian thực)
-Đồ án môn: Hệ điều hành (Multithreading & Synchronization)
-Mục tiêu:
-  - Mở trực tiếp Webcam máy tính người dùng và các luồng Camera thật.
-  - Quản lý đồng thời tới 10 luồng camera song song (Mỗi camera chạy trên 1 Thread riêng biệt).
-  - Tích hợp OpenRouter AI nhận diện hành vi (10 giây/lần) với cơ chế Rate Limit <= 20 req/phút.
-  - Hoàn toàn KHÔNG dùng video có sẵn, tập trung 100% vào Camera thật.
+Module: Realtime Camera Surveillance (Phân tích Camera Thời gian thực)
+Đồ án môn: Hệ điều hành (Multithreading, Synchronization & Load Balancing)
+Mục tiêu tối ưu:
+  1. Quản lý Đa phiên (Multi-Session): Hỗ trợ mượt mà >= 10 clients truy cập đồng thời.
+     - Sử dụng mô hình Producer-Consumer với Hàng đợi đệm (Bounded Queue).
+     - Hồ tiểu trình Worker (Thread Pool) chạy song song, xử lý không bị block chéo.
+     - Tách biệt dữ liệu và nhật ký trạng thái theo từng Client ID / Session ID riêng biệt.
+  2. Xoay vòng API Keys (Round-Robin Load Balancing):
+     - Danh sách mảng 2-3 API Keys tự động luân phiên (Round-Robin).
+     - Điều phối phân tải và tự động chuyển đổi (Failover) khi một key chạm Rate Limit.
 """
 
-from flask import Blueprint, render_template, Response, request, jsonify
+from flask import Blueprint, render_template, Response, request, jsonify, session
 import cv2
 import threading
 import queue
@@ -19,6 +22,7 @@ import requests
 import json
 import os
 import re
+import uuid
 import numpy as np
 from datetime import datetime
 
@@ -26,24 +30,112 @@ from datetime import datetime
 realtime_bp = Blueprint('realtime_bp', __name__)
 
 # ==============================================================================
-# CẤU HÌNH HỆ THỐNG & OPENROUTER AI
+# CẤU HÌNH HỆ THỐNG & DANH SÁCH API KEYS (LOAD BALANCING)
 # ==============================================================================
-def _load_api_key():
-    env_k = os.getenv("OPENROUTER_API_KEY", "").strip()
-    if env_k:
-        return env_k
+
+# Danh sách API Keys mặc định có thể cấu hình trực tiếp tại đây:
+DEFAULT_CONFIGURED_KEYS = [
+    # Bạn có thể điền trực tiếp 2 đến 3 API Keys vào mảng này:
+    # "sk-or-v1-key-thu-nhat...",
+    # "sk-or-v1-key-thu-hai...",
+    # "sk-or-v1-key-thu-ba...",
+]
+
+def _load_initial_api_keys():
+    """Tự động tải danh sách API Keys từ file cấu hình hoặc biến môi trường"""
+    keys = list(DEFAULT_CONFIGURED_KEYS)
+
+    # 1. Đọc từ biến môi trường OPENROUTER_API_KEYS (chuỗi phân cách bằng dấu phẩy)
+    env_keys_str = os.getenv("OPENROUTER_API_KEYS", "").strip()
+    if env_keys_str:
+        for k in env_keys_str.split(","):
+            k = k.strip()
+            if k and k not in keys:
+                keys.append(k)
+
+    # 2. Đọc từ biến môi trường đơn OPENROUTER_API_KEY
+    env_single = os.getenv("OPENROUTER_API_KEY", "").strip()
+    if env_single and env_single not in keys:
+        keys.append(env_single)
+
+    # 3. Đọc từ file config_local.json (nếu có)
     try:
         if os.path.exists("config_local.json"):
             with open("config_local.json", "r", encoding="utf-8") as f:
                 data = json.load(f)
-                return data.get("OPENROUTER_API_KEY", "").strip()
-    except Exception:
-        pass
-    return ""
+                json_keys = data.get("OPENROUTER_API_KEYS", [])
+                if isinstance(json_keys, list):
+                    for k in json_keys:
+                        k = str(k).strip()
+                        if k and k not in keys:
+                            keys.append(k)
+                json_single = data.get("OPENROUTER_API_KEY", "").strip()
+                if json_single and json_single not in keys:
+                    keys.append(json_single)
+    except Exception as e:
+        print(f"[Cấu hình] Không thể đọc config_local.json: {e}")
 
-OPENROUTER_API_KEY = _load_api_key()
+    # Loại bỏ các key rỗng
+    return [k for k in keys if k]
+
+
+class KeyManager:
+    """
+    Bộ điều phối xoay vòng API Keys (Round-Robin Load Balancer)
+    Bảo vệ bằng Mutex Lock (threading.Lock) đảm bảo Thread-safe khi nhiều Worker gọi cùng lúc.
+    """
+    def __init__(self, initial_keys=None):
+        self.lock = threading.Lock()
+        self.keys = initial_keys or []
+        self.index = 0
+        self.usage_counts = {k: 0 for k in self.keys}
+        self.error_counts = {k: 0 for k in self.keys}
+
+    def get_next_key(self):
+        """Lấy API Key tiếp theo theo thuật toán Round-Robin"""
+        with self.lock:
+            if not self.keys:
+                return ""
+            key = self.keys[self.index % len(self.keys)]
+            self.index = (self.index + 1) % len(self.keys)
+            self.usage_counts[key] = self.usage_counts.get(key, 0) + 1
+            return key
+
+    def record_error(self, key):
+        """Ghi nhận khi một key gặp lỗi (429 Rate Limit hoặc 401)"""
+        with self.lock:
+            if key in self.error_counts:
+                self.error_counts[key] += 1
+
+    def set_keys(self, new_keys):
+        """Cập nhật danh sách keys mới (Thread-safe)"""
+        with self.lock:
+            valid_keys = [k.strip() for k in new_keys if k and str(k).strip()]
+            if valid_keys:
+                self.keys = valid_keys
+                self.index = 0
+                self.usage_counts = {k: 0 for k in self.keys}
+                self.error_counts = {k: 0 for k in self.keys}
+
+    def get_stats(self):
+        """Thống kê trạng thái sử dụng của từng key"""
+        with self.lock:
+            return {
+                "total_keys": len(self.keys),
+                "current_index": self.index,
+                "keys_preview": [
+                    (k[:8] + "..." + k[-4:]) if len(k) > 12 else (k[:6] + "...")
+                    for k in self.keys
+                ],
+                "usage_counts": [self.usage_counts.get(k, 0) for k in self.keys],
+                "error_counts": [self.error_counts.get(k, 0) for k in self.keys]
+            }
+
+
+# Khởi tạo đối tượng KeyManager toàn cục
+key_manager = KeyManager(_load_initial_api_keys())
+
 OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
-# Ưu tiên model thị giác hoạt động ổn định và hỗ trợ tiếng Việt cực tốt cho biểu cảm (Cười, Nháy mắt,...)
 DEFAULT_MODEL = "dots-studio/dots-3-note-preview:free"
 
 FALLBACK_VISION_MODELS = [
@@ -53,48 +145,72 @@ FALLBACK_VISION_MODELS = [
     "openrouter/free"
 ]
 
-# Chu kỳ gửi AI: mỗi camera chỉ gửi 1 frame sau mỗi 10 giây
 AI_FRAME_INTERVAL = 10.0
+AI_MIN_REQUEST_INTERVAL = 1.0  # Nhờ có xoay vòng nhiều keys, khoảng cách giữa 2 request có thể rút ngắn xuống 1s
 
-# Giới hạn Rate Limit OpenRouter Free (20 requests/phút => khoảng 1 req / 3 giây)
-# Đặt 3.2s để đảm bảo tối đa 18.75 req/phút toàn hệ thống, triệt tiêu 100% lỗi 429
-AI_MIN_REQUEST_INTERVAL = 3.2
+# ==============================================================================
+# QUẢN LÝ ĐA PHIÊN (MULTI-SESSION & PER-CLIENT ISOLATION)
+# ==============================================================================
 
-# Danh sách log sự kiện AI
+# Lưu trạng thái gần nhất của từng phiên người dùng (Client ID -> Session Info)
+client_sessions = {}
+sessions_lock = threading.Lock()
+
+def update_client_session(client_id, cam_name, status_type, behavior_desc):
+    """Cập nhật trạng thái nhận diện riêng cho từng client (Thread-safe)"""
+    with sessions_lock:
+        client_sessions[client_id] = {
+            "client_id": client_id,
+            "cam_name": cam_name,
+            "status": status_type,
+            "description": behavior_desc,
+            "updated_at": datetime.now().strftime("%H:%M:%S"),
+            "last_active": time.time()
+        }
+        # Tự động dọn dẹp các phiên không hoạt động quá 30 phút
+        now = time.time()
+        expired = [cid for cid, s in client_sessions.items() if now - s.get("last_active", 0) > 1800]
+        for cid in expired:
+            del client_sessions[cid]
+
+# Danh sách log sự kiện AI toàn hệ thống
 system_ai_logs = []
 logs_lock = threading.Lock()
 
-def add_system_log(cam_id, cam_name, status_type, behavior_desc, raw_response=""):
-    """Ghi nhận nhật ký nhận diện hành vi AI (Thread-safe)"""
+def add_system_log(client_id, cam_id, cam_name, status_type, behavior_desc, raw_response=""):
+    """Ghi nhận log có gắn kèm Client ID để tách biệt người dùng (Thread-safe)"""
     with logs_lock:
         log_entry = {
             "id": len(system_ai_logs) + 1,
             "timestamp": datetime.now().strftime("%H:%M:%S"),
             "date": datetime.now().strftime("%Y-%m-%d"),
+            "client_id": client_id,
             "cam_id": cam_id,
             "cam_name": cam_name,
-            "status": status_type,        # BÌNH THƯỜNG / CẢNH BÁO / NGUY HIỂM
-            "description": behavior_desc,  # Nội dung hành vi do AI mô tả
+            "status": status_type,
+            "description": behavior_desc,
             "raw": raw_response
         }
         system_ai_logs.insert(0, log_entry)
-        if len(system_ai_logs) > 100:
+        if len(system_ai_logs) > 200:
             system_ai_logs.pop()
 
 
 # ==============================================================================
-# HÀNG ĐỢI AI (PRODUCER - CONSUMER PATTERN)
+# HÀNG ĐỢI ĐA TIỂU TRÌNH (PRODUCER - CONSUMER WITH THREAD POOL)
 # ==============================================================================
-ai_task_queue = queue.Queue(maxsize=30)
+# Bounded Queue với dung lượng 60 tasks, đủ cho 10+ clients cùng đẩy frame
+ai_task_queue = queue.Queue(maxsize=60)
 
 class AIWorker(threading.Thread):
     """
-    Consumer Thread: Lấy khung hình từ hàng đợi ai_task_queue,
-    gọi API OpenRouter và điều phối tốc độ gọi (Rate Limiting).
+    Consumer Thread trong Thread Pool:
+    Chạy song song, cạnh tranh lấy task từ hàng đợi chung để phục vụ nhiều client cùng lúc.
     """
-    def __init__(self, api_key=OPENROUTER_API_KEY, model_name=DEFAULT_MODEL):
-        super().__init__(name="Worker-OpenRouter-AI", daemon=True)
-        self.api_key = api_key
+    def __init__(self, worker_id, key_mgr, model_name=DEFAULT_MODEL):
+        super().__init__(name=f"Worker-AI-{worker_id}", daemon=True)
+        self.worker_id = worker_id
+        self.key_manager = key_mgr
         self.model_name = model_name
         self.last_api_call_time = 0.0
         self.is_running = True
@@ -108,35 +224,28 @@ class AIWorker(threading.Thread):
                 continue
 
             try:
-                cam_id, cam_name, frame = task
-
-                # Cơ chế Rate Limiting toàn cục: Giữ khoảng cách giữa 2 lần gọi >= 3.2s
-                now = time.time()
-                elapsed = now - self.last_api_call_time
-                if elapsed < AI_MIN_REQUEST_INTERVAL:
-                    time.sleep(AI_MIN_REQUEST_INTERVAL - elapsed)
-
-                self.last_api_call_time = time.time()
+                client_id, cam_id, cam_name, frame = task
                 self.total_requests += 1
 
+                # Lấy API Key xoay vòng theo thuật toán Round-Robin
+                current_api_key = self.key_manager.get_next_key()
+
                 # Gửi ảnh lên OpenRouter AI
-                status_type, description, raw_text = self._call_openrouter(frame)
+                status_type, description, raw_text = self._call_openrouter(frame, current_api_key)
 
-                # Cập nhật kết quả vào luồng Camera tương ứng
-                camera = camera_manager.get_camera(cam_id)
-                if camera:
-                    camera.update_ai_result(status_type, description)
+                # Cập nhật kết quả vào phiên riêng của client này
+                update_client_session(client_id, cam_name, status_type, description)
 
-                # Lưu log
-                add_system_log(cam_id, cam_name, status_type, description, raw_text)
+                # Ghi vào nhật ký hệ thống
+                add_system_log(client_id, cam_id, cam_name, status_type, description, raw_text)
 
             except Exception as e:
-                print(f"[AI-Worker Error] Lỗi xử lý: {e}")
+                print(f"[{self.name} Error] Lỗi xử lý task: {e}")
             finally:
                 ai_task_queue.task_done()
 
-    def _call_openrouter(self, frame):
-        """Nén ảnh, mã hóa Base64 và gửi request tới OpenRouter"""
+    def _call_openrouter(self, frame, api_key):
+        """Gửi khung hình lên AI OpenRouter với cơ chế xoay vòng và tự động thử lại khi lỗi"""
         try:
             h, w = frame.shape[:2]
             scale = 640.0 / max(w, 1)
@@ -151,13 +260,6 @@ class AIWorker(threading.Thread):
 
             base64_img = base64.b64encode(buffer).decode('utf-8')
 
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": "http://localhost:5000",
-                "X-Title": "HDH Surveillance AI System"
-            }
-
             prompt_text = (
                 "Bạn là AI phân tích biểu cảm và hành vi thời gian thực qua camera máy tính. "
                 "Hãy nhìn ảnh và miêu tả thật ngắn gọn trong 1 câu duy nhất (tiếng Việt tự nhiên, chuẩn chính tả):\n"
@@ -168,9 +270,17 @@ class AIWorker(threading.Thread):
             )
 
             models_to_try = [self.model_name] + FALLBACK_VISION_MODELS
+            active_key = api_key
             last_err = ""
 
             for model_candidate in models_to_try:
+                headers = {
+                    "Authorization": f"Bearer {active_key}",
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": "http://localhost:5000",
+                    "X-Title": "HDH Surveillance AI System"
+                }
+
                 payload = {
                     "model": model_candidate,
                     "messages": [
@@ -199,6 +309,7 @@ class AIWorker(threading.Thread):
                         timeout=8
                     )
 
+                    # Thành công
                     if response.status_code == 200:
                         res_json = response.json()
                         choices = res_json.get("choices", [])
@@ -208,11 +319,19 @@ class AIWorker(threading.Thread):
                             status_type = self._parse_status_tag(ai_content)
                             return status_type, ai_content, f"[{model_candidate}] {ai_content}"
 
-                    last_err = f"HTTP {response.status_code}: {response.text[:120]}"
+                    # Nếu gặp lỗi Rate Limit (429) -> Tự động xoay sang Key dự phòng kế tiếp
+                    elif response.status_code == 429:
+                        self.key_manager.record_error(active_key)
+                        backup_key = self.key_manager.get_next_key()
+                        if backup_key and backup_key != active_key:
+                            active_key = backup_key
+                            continue
+
+                    last_err = f"HTTP {response.status_code}: {response.text[:100]}"
                 except Exception as ex:
                     last_err = str(ex)
 
-            # Heuristic dự phòng khi mạng ngoại vi bận
+            # Heuristic dự phòng khi ngoại vi bận
             heuristic_status, heuristic_desc = self._heuristic_fallback(frame)
             return heuristic_status, heuristic_desc, last_err
 
@@ -220,13 +339,9 @@ class AIWorker(threading.Thread):
             return "CẢNH BÁO", f"Ngoại lệ xử lý: {str(e)[:50]}", str(e)
 
     def _clean_text(self, text):
-        """Chuẩn hóa chính tả tiếng Việt, loại bỏ từ sai chính tả hoặc cứng nhắc"""
         if not text:
             return "Bình thường"
-
         cleaned = text.strip()
-
-        # Loại bỏ triệt để các biến thể 'nghĩ/nghĩnh/nghiêm túc' và thay bằng 'Bình thường'
         patterns = [
             (r'(?i)nghĩ[a-zà-ỹ]*\s*túc\s*/\s*bình\s*thường', 'Bình thường'),
             (r'(?i)nghiêm\s*túc\s*/\s*bình\s*thường', 'Bình thường'),
@@ -234,29 +349,17 @@ class AIWorker(threading.Thread):
             (r'(?i)bình\s*thường\s*/\s*nghiêm\s*túc', 'Bình thường'),
             (r'(?i)nghĩ[a-zà-ỹ]*\s*túc', 'bình thường'),
             (r'(?i)nghiêm\s*túc', 'bình thường'),
-            (r'(?i)gesturing', 'cử chỉ'),
-            (r'(?i)gesture', 'cử chỉ'),
-            (r'(?i)smiling', 'mỉm cười'),
-            (r'(?i)winking', 'nháy mắt'),
-            (r'(?i)neutral', 'bình thường'),
         ]
         for pat, repl in patterns:
             cleaned = re.sub(pat, repl, cleaned)
-
-        # Xóa các tiền tố cứng nhắc như 'Biểu cảm:', 'Cử chỉ:' nếu AI trả về kiểu bullet
         cleaned = re.sub(r'(?i)^biểu cảm\s*(&\s*nét mặt)?\s*:\s*', '', cleaned)
         cleaned = re.sub(r'(?i);\s*cử chỉ\s*(&\s*hành động)?\s*:\s*', ', ', cleaned)
         cleaned = re.sub(r'(?i);\s*kết luận\s*:\s*', ', ', cleaned)
-
-        # Chuẩn hóa dấu câu: đổi chấm phẩy thừa sang phẩy, xóa dấu chấm phẩy ở cuối
         cleaned = re.sub(r'[;\s]+$', '', cleaned).strip()
         cleaned = cleaned.replace('; ', ', ').replace(';', ', ')
         cleaned = re.sub(r'\s+', ' ', cleaned).strip()
-
-        # Viết hoa chữ cái đầu tiên
         if cleaned:
             cleaned = cleaned[0].upper() + cleaned[1:]
-
         return cleaned
 
     def _parse_status_tag(self, text):
@@ -280,257 +383,16 @@ class AIWorker(threading.Thread):
 
 
 # ==============================================================================
-# LUỒNG ĐỌC CAMERA THẬT (REAL CAMERA CAPTURE THREAD)
+# KHỞI TẠO HỒ TIỂU TRÌNH WORKER (THREAD POOL - MULTI-WORKERS)
 # ==============================================================================
-class CameraStream:
-    """
-    Quản lý 1 luồng Camera Thật (Webcam máy tính hoặc IP Camera).
-    Chạy trong 1 tiểu trình (Thread) riêng biệt, hoàn toàn không làm treo Flask.
-    """
-    def __init__(self, cam_id, name, source):
-        self.cam_id = str(cam_id)
-        self.name = str(name)
-        self.source = source
-        self.is_running = False
+# Khởi chạy 3 Worker Threads chạy song song -> Đáp ứng 10+ client cùng lúc không bị nghẽn
+NUM_WORKERS = 3
+worker_pool = []
 
-        # Khóa Mutex (Lock) bảo vệ khung hình dùng chung
-        self.lock = threading.Lock()
-        self.current_frame = None
-
-        self.fps = 0.0
-        self.frame_count = 0
-        self.status = "CHỜ KHỞI TẠO"
-        # Mặc định lật ngang (Mirror) để mặt người dùng không bị ngược/lệch
-        self.flip_horizontal = True
-
-        # AI định kỳ 10 giây
-        self.ai_enabled = True
-        self.ai_interval = AI_FRAME_INTERVAL
-        self.last_ai_time = 0.0
-        self.latest_ai_result = {
-            "status": "CHỜ PHÂN TÍCH",
-            "description": "Đang đồng bộ luồng camera...",
-            "updated_at": "--:--:--"
-        }
-
-        self.thread = None
-
-    def start(self):
-        if self.is_running:
-            return
-        self.is_running = True
-        self.thread = threading.Thread(
-            target=self._capture_worker,
-            name=f"Thread-RealCamera-{self.cam_id}",
-            daemon=True
-        )
-        self.thread.start()
-
-    def stop(self):
-        self.is_running = False
-        if self.thread and self.thread.is_alive():
-            self.thread.join(timeout=1.0)
-        self.status = "ĐÃ DỪNG"
-
-    def _capture_worker(self):
-        """Vòng lặp đọc camera thật chạy song song trong luồng riêng biệt"""
-        src = self.source
-        if isinstance(src, str) and src.isdigit():
-            src = int(src)
-
-        # Mở camera thật: Trên Windows dùng CAP_DSHOW để mở webcam phần cứng tức thì
-        if isinstance(src, int):
-            if os.name == 'nt':
-                cap = cv2.VideoCapture(src, cv2.CAP_DSHOW)
-            else:
-                cap = cv2.VideoCapture(src)
-        else:
-            cap = cv2.VideoCapture(src)
-
-        # Đặt kích thước khung hình chuẩn và tối ưu bộ đệm
-        try:
-            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-        except Exception:
-            pass
-
-        if not cap.isOpened():
-            self.status = "LỖI KẾT NỐI (Không tìm thấy Camera)"
-            print(f"[Camera {self.cam_id}] Không thể mở nguồn: {self.source}")
-            return
-
-        self.status = "ĐANG CHẠY"
-        prev_time = time.time()
-        fps_counter = 0
-
-        while self.is_running:
-            ret, frame = cap.read()
-
-            if not ret or frame is None:
-                self.status = "MẤT TÍN HIỆU"
-                time.sleep(0.1)
-                continue
-
-            # Lật gương ngang để mặt người dùng tự nhiên, không bị ngược
-            if self.flip_horizontal:
-                frame = cv2.flip(frame, 1)
-
-            # ĐỒNG BỘ HÓA: Cập nhật frame với khóa Mutex (tránh Race Condition)
-            with self.lock:
-                self.current_frame = frame
-                self.frame_count += 1
-                self.status = "ĐANG CHẠY"
-
-            # Đo FPS
-            fps_counter += 1
-            now = time.time()
-            if now - prev_time >= 1.0:
-                self.fps = round(fps_counter / (now - prev_time), 1)
-                fps_counter = 0
-                prev_time = now
-
-            # TRÍCH XUẤT KHUNG HÌNH CHO AI ĐỊNH KỲ 10 GIÂY
-            if self.ai_enabled and (now - self.last_ai_time >= self.ai_interval):
-                self.last_ai_time = now
-                try:
-                    ai_task_queue.put_nowait((self.cam_id, self.name, frame.copy()))
-                except queue.Full:
-                    pass
-
-            # Nhường thời gian CPU để không làm nóng máy (0.01s ~ tối đa 60-100 fps)
-            time.sleep(0.01)
-
-        cap.release()
-        self.status = "ĐÃ ĐÓNG"
-
-    def get_frame_bytes(self):
-        """Lấy frame JPEG cho Web Stream"""
-        with self.lock:
-            if self.current_frame is None:
-                return None
-            frame_copy = self.current_frame.copy()
-
-        ai_st = self.latest_ai_result.get("status", "CHỜ")
-        color = (0, 200, 0)
-        if ai_st == "CẢNH BÁO":
-            color = (0, 165, 255)
-        elif ai_st == "NGUY HIỂM":
-            color = (0, 0, 255)
-
-        # Vẽ HUD góc trên video
-        h, w = frame_copy.shape[:2]
-        cv2.rectangle(frame_copy, (0, 0), (w, 32), (20, 20, 20), -1)
-        info_str = f"[{self.name}] FPS: {self.fps} | AI: {ai_st}"
-        cv2.putText(frame_copy, info_str, (10, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
-
-        ret, buffer = cv2.imencode('.jpg', frame_copy, [int(cv2.IMWRITE_JPEG_QUALITY), 65])
-        return buffer.tobytes() if ret else None
-
-    def toggle_flip(self):
-        """Bật/Tắt chế độ lật gương"""
-        with self.lock:
-            self.flip_horizontal = not self.flip_horizontal
-            return self.flip_horizontal
-
-    def update_ai_result(self, status, description):
-        with self.lock:
-            self.latest_ai_result = {
-                "status": status,
-                "description": description,
-                "updated_at": datetime.now().strftime("%H:%M:%S")
-            }
-
-    def to_dict(self):
-        with self.lock:
-            return {
-                "cam_id": self.cam_id,
-                "name": self.name,
-                "source": str(self.source),
-                "fps": self.fps,
-                "status": self.status,
-                "ai_enabled": self.ai_enabled,
-                "ai_result": self.latest_ai_result
-            }
-
-
-# ==============================================================================
-# BỘ QUẢN LÝ ĐA LUỒNG CAMERA THẬT (CAMERA MANAGER)
-# ==============================================================================
-class CameraManager:
-    """Quản lý đồng thời tối đa 10 luồng camera thật"""
-    MAX_CAMERAS = 10
-
-    def __init__(self):
-        self.cameras = {}
-        self.manager_lock = threading.Lock()
-
-    def add_camera(self, cam_id, name, source):
-        """Thêm và khởi chạy một camera thật vào 1 Thread riêng"""
-        with self.manager_lock:
-            if len(self.cameras) >= self.MAX_CAMERAS:
-                return False, f"Hệ thống đã đạt giới hạn tối đa {self.MAX_CAMERAS} luồng camera!"
-            if cam_id in self.cameras:
-                return False, f"Camera ID '{cam_id}' đang hoạt động!"
-
-            cam = CameraStream(cam_id, name, source)
-            cam.start()
-            self.cameras[cam_id] = cam
-            return True, f"Khởi chạy luồng camera '{name}' thành công!"
-
-    def remove_camera(self, cam_id):
-        """Dừng và hủy một luồng camera"""
-        with self.manager_lock:
-            if cam_id in self.cameras:
-                self.cameras[cam_id].stop()
-                del self.cameras[cam_id]
-                return True, f"Đã dừng luồng camera '{cam_id}'"
-            return False, "Không tìm thấy camera"
-
-    def get_camera(self, cam_id):
-        with self.manager_lock:
-            return self.cameras.get(str(cam_id))
-
-    def get_all(self):
-        with self.manager_lock:
-            return [cam.to_dict() for cam in self.cameras.values()]
-
-    def stop_all(self):
-        """Dừng tất cả các luồng camera đang chạy"""
-        with self.manager_lock:
-            for cam in self.cameras.values():
-                cam.stop()
-            self.cameras.clear()
-
-    def toggle_flip(self, cam_id):
-        cam = self.get_camera(cam_id)
-        if cam:
-            return True, cam.toggle_flip()
-        return False, False
-
-    def toggle_primary_webcam(self, device_index=0):
-        """Bật hoặc Tắt nhanh Webcam máy tính chính"""
-        cam_id = "webcam_0"
-        with self.manager_lock:
-            if cam_id in self.cameras:
-                # Đang bật -> Tắt
-                self.cameras[cam_id].stop()
-                del self.cameras[cam_id]
-                return True, False, "Đã tắt Webcam máy tính"
-            else:
-                # Đang tắt -> Bật
-                if len(self.cameras) >= self.MAX_CAMERAS:
-                    return False, False, f"Đã đạt giới hạn tối đa {self.MAX_CAMERAS} luồng!"
-                cam = CameraStream(cam_id, "Webcam Máy Tính (Trực Tiếp)", int(device_index))
-                cam.start()
-                self.cameras[cam_id] = cam
-                return True, True, "Đã mở Webcam máy tính thành công!"
-
-
-# Khởi tạo các đối tượng toàn cục
-camera_manager = CameraManager()
-ai_worker_thread = AIWorker()
-ai_worker_thread.start()
+for i in range(NUM_WORKERS):
+    w = AIWorker(worker_id=i + 1, key_mgr=key_manager, model_name=DEFAULT_MODEL)
+    w.start()
+    worker_pool.append(w)
 
 
 # ==============================================================================
@@ -539,202 +401,144 @@ ai_worker_thread.start()
 
 @realtime_bp.route('/realtime/view')
 def realtime_dashboard():
+    # Tự động gán Session ID duy nhất cho mỗi trình duyệt mở trang
+    if 'client_id' not in session:
+        session['client_id'] = f"client_{uuid.uuid4().hex[:8]}"
     return render_template('realtime.html')
-
-def generate_mjpeg_stream(cam_id):
-    """Generator phát video MJPEG đa luồng liên tục cho trình duyệt"""
-    while True:
-        cam = camera_manager.get_camera(cam_id)
-        if not cam or not cam.is_running:
-            break
-        frame_bytes = cam.get_frame_bytes()
-        if frame_bytes:
-            yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-        time.sleep(0.033) # ~30 khung hình/giây
-
-@realtime_bp.route('/realtime/feed/<cam_id>')
-def video_feed(cam_id):
-    """Endpoint trả về luồng video trực tiếp của từng camera thật"""
-    cam = camera_manager.get_camera(cam_id)
-    if not cam:
-        return "Camera không tồn tại hoặc đã dừng", 404
-    return Response(
-        generate_mjpeg_stream(cam_id),
-        mimetype='multipart/x-mixed-replace; boundary=frame'
-    )
-
-@realtime_bp.route('/api/realtime/cameras', methods=['GET'])
-def api_get_cameras():
-    """Lấy danh sách thông tin, FPS và AI status của tất cả camera thật"""
-    return jsonify({
-        "success": True,
-        "cameras": camera_manager.get_all(),
-        "total": len(camera_manager.cameras),
-        "max": camera_manager.MAX_CAMERAS,
-        "queue_size": ai_task_queue.qsize(),
-        "active_threads": threading.active_count()
-    })
-
-@realtime_bp.route('/api/realtime/webcam_toggle', methods=['POST'])
-def api_toggle_webcam():
-    """API Bật / Tắt nhanh Webcam máy tính chính (Device 0)"""
-    data = request.get_json() or {}
-    device = data.get('device', 0)
-    try:
-        device = int(device)
-    except:
-        device = 0
-    success, is_running, message = camera_manager.toggle_primary_webcam(device_index=device)
-    return jsonify({
-        "success": success,
-        "is_running": is_running,
-        "message": message
-    })
-
-@realtime_bp.route('/api/realtime/add', methods=['POST'])
-def api_add_camera():
-    """API thêm một camera thật mới (Webcam phụ hoặc IP Camera)"""
-    data = request.get_json() or {}
-    cam_id = data.get('cam_id')
-    name = data.get('name')
-    source = data.get('source', '0').strip()
-
-    if not cam_id:
-        cam_id = f"cam_{len(camera_manager.cameras) + 1}"
-    if not name:
-        name = f"Camera {cam_id}"
-
-    # Chuyển chuỗi số thành int (cho các webcam index 0, 1, 2...)
-    if source.isdigit():
-        source = int(source)
-
-    success, message = camera_manager.add_camera(cam_id, name, source)
-    return jsonify({"success": success, "message": message})
-
-@realtime_bp.route('/api/realtime/remove/<cam_id>', methods=['POST'])
-def api_remove_camera(cam_id):
-    """API dừng và xóa 1 luồng camera"""
-    success, message = camera_manager.remove_camera(cam_id)
-    return jsonify({"success": success, "message": message})
-
-@realtime_bp.route('/api/realtime/toggle_flip', methods=['POST'])
-def api_toggle_flip():
-    """Bật / Tắt chế độ lật gương (Mirror) cho camera"""
-    data = request.get_json() or {}
-    cam_id = data.get('cam_id', 'webcam_0')
-    success, state = camera_manager.toggle_flip(cam_id)
-    return jsonify({"success": success, "flipped": state, "message": f"Đã {'bật' if state else 'tắt'} chế độ lật gương!"})
-
-@realtime_bp.route('/api/realtime/trigger_ai', methods=['POST'])
-def api_trigger_ai():
-    """Kích hoạt gửi ngay 1 frame lên AI để phân tích biểu cảm tức thì"""
-    data = request.get_json() or {}
-    cam_id = data.get('cam_id', 'webcam_0')
-    cam = camera_manager.get_camera(cam_id)
-    if not cam or not cam.is_running:
-        return jsonify({"success": False, "message": "Camera chưa bật!"})
-    
-    with cam.lock:
-        if cam.current_frame is None:
-            return jsonify({"success": False, "message": "Chưa có khung hình!"})
-        frame_copy = cam.current_frame.copy()
-    
-    try:
-        ai_task_queue.put_nowait((cam.cam_id, cam.name, frame_copy))
-        return jsonify({"success": True, "message": "Đang phân tích biểu cảm & hành vi..."})
-    except queue.Full:
-        return jsonify({"success": False, "message": "Hàng đợi AI đang bận, vui lòng thử lại sau giây lát!"})
 
 @realtime_bp.route('/api/realtime/upload_web_frame', methods=['POST'])
 def api_upload_web_frame():
-    """Nhận khung hình từ Webcam trình duyệt HTML5 (navigator.mediaDevices.getUserMedia)"""
+    """
+    Endpoint nhận frame từ Webcam trình duyệt:
+    Hỗ trợ 10 người dùng đồng thời, định danh và tách biệt theo client_id.
+    """
+    data = request.get_json() or {}
+    image_b64 = data.get('image', '')
+    if not image_b64:
+        return jsonify({"success": False, "message": "Thiếu dữ liệu ảnh"}), 400
+
+    # Lấy hoặc tạo Client ID riêng biệt cho từng người dùng
+    client_id = data.get('client_id', '').strip()
+    if not client_id:
+        if 'client_id' not in session:
+            session['client_id'] = f"client_{uuid.uuid4().hex[:8]}"
+        client_id = session['client_id']
+
+    cam_id = data.get('cam_id', f'cam_{client_id}')
+    cam_name = data.get('name', f'Webcam ({client_id[:8]})')
+
     try:
-        data = request.get_json() or {}
-        img_b64 = data.get('image', '')
-        cam_id = data.get('cam_id', 'webcam_web')
-        cam_name = data.get('name', 'Webcam Trình Duyệt')
+        if ',' in image_b64:
+            image_b64 = image_b64.split(',')[1]
+        img_data = base64.b64decode(image_b64)
+        nparr = np.frombuffer(img_data, np.uint8)
+        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
-        if not img_b64:
-            return jsonify({"success": False, "message": "Không có dữ liệu ảnh"}), 400
+        if frame is None:
+            return jsonify({"success": False, "message": "Không thể giải mã ảnh"}), 400
 
-        if ',' in img_b64:
-            img_b64 = img_b64.split(',', 1)[1]
+        # Đẩy vào hàng đợi chung của Producer-Consumer (Non-blocking)
+        ai_task_queue.put_nowait((client_id, cam_id, cam_name, frame))
+        return jsonify({"success": True, "client_id": client_id})
 
-        img_bytes = base64.b64decode(img_b64)
-        np_arr = np.frombuffer(img_bytes, np.uint8)
-        frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-
-        if frame is not None:
-            try:
-                ai_task_queue.put_nowait((cam_id, cam_name, frame))
-                return jsonify({"success": True, "message": "Đã gửi khung hình lên hàng đợi AI"})
-            except queue.Full:
-                return jsonify({"success": False, "message": "Hàng đợi AI đang bận"}), 429
-
-        return jsonify({"success": False, "message": "Giải mã khung hình thất bại"}), 400
+    except queue.Full:
+        return jsonify({"success": False, "message": "Hàng đợi AI đang bận, vui lòng thử lại sau giây lát!"}), 429
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
-
-@realtime_bp.route('/api/realtime/stop_all', methods=['POST'])
-def api_stop_all():
-    """Dừng tất cả các luồng camera"""
-    camera_manager.stop_all()
-    return jsonify({"success": True, "message": "Đã dừng toàn bộ luồng camera"})
+        return jsonify({"success": False, "message": str(e)}), 500
 
 @realtime_bp.route('/api/realtime/logs', methods=['GET'])
 def api_get_logs():
-    """Lấy danh sách log nhận diện hành vi gần nhất"""
+    """
+    Lấy danh sách log:
+    Nếu client truyền ?client_id=..., hệ thống lọc trả về log của riêng client đó
+    để 10 người dùng không bị lẫn lộn kết quả phân tích của nhau.
+    """
+    client_id = request.args.get('client_id', '').strip()
     with logs_lock:
-        return jsonify({
-            "success": True,
-            "logs": list(system_ai_logs[:50])
-        })
+        if client_id and client_id != 'all':
+            filtered = [
+                l for l in system_ai_logs
+                if l.get('client_id') == client_id or not l.get('client_id')
+            ]
+            return jsonify({"success": True, "logs": filtered[:50]})
+        return jsonify({"success": True, "logs": list(system_ai_logs[:50])})
 
-@realtime_bp.route('/api/realtime/clear_logs', methods=['POST'])
-def api_clear_logs():
-    """Xóa lịch sử log"""
-    with logs_lock:
-        system_ai_logs.clear()
-    return jsonify({"success": True})
-
-@realtime_bp.route('/api/realtime/toggle_ai', methods=['POST'])
-def api_toggle_ai():
-    """Bật / Tắt nhận diện AI cho từng camera hoặc toàn bộ"""
-    data = request.get_json() or {}
-    cam_id = data.get('cam_id')
-    enable = data.get('enable', True)
-
-    if cam_id:
-        cam = camera_manager.get_camera(cam_id)
-        if cam:
-            cam.ai_enabled = enable
-            return jsonify({"success": True, "message": f"Camera {cam_id} AI: {enable}"})
-        return jsonify({"success": False, "message": "Không tìm thấy camera"}), 404
-    else:
-        for cam in camera_manager.cameras.values():
-            cam.ai_enabled = enable
-        return jsonify({"success": True, "message": f"Toàn bộ camera AI: {enable}"})
-
-@realtime_bp.route('/api/realtime/config', methods=['GET', 'POST'])
-def api_config():
-    """Xem và cập nhật cấu hình OpenRouter AI"""
-    global ai_worker_thread
-    if request.method == 'POST':
-        data = request.get_json() or {}
-        api_key = data.get('api_key', '').strip()
-        model = data.get('model', '').strip()
-        if api_key:
-            ai_worker_thread.api_key = api_key
-        if model:
-            ai_worker_thread.model_name = model
-        return jsonify({"success": True, "message": "Đã lưu cấu hình AI!"})
+@realtime_bp.route('/api/realtime/sessions', methods=['GET'])
+def api_get_sessions():
+    """Thống kê các phiên người dùng đang hoạt động đồng thời (Dành cho báo cáo HĐH)"""
+    with sessions_lock:
+        sessions_list = list(client_sessions.values())
 
     return jsonify({
         "success": True,
-        "api_key": ai_worker_thread.api_key[:10] + "..." if ai_worker_thread.api_key else "",
-        "model": ai_worker_thread.model_name,
-        "interval_seconds": AI_FRAME_INTERVAL,
-        "min_request_interval": AI_MIN_REQUEST_INTERVAL,
-        "total_requests": ai_worker_thread.total_requests
+        "active_clients_count": len(sessions_list),
+        "sessions": sessions_list,
+        "queue_size": ai_task_queue.qsize(),
+        "active_workers": len(worker_pool),
+        "key_stats": key_manager.get_stats()
+    })
+
+@realtime_bp.route('/api/realtime/clear_logs', methods=['POST'])
+def api_clear_logs():
+    client_id = request.args.get('client_id', '').strip()
+    with logs_lock:
+        if client_id and client_id != 'all':
+            global system_ai_logs
+            system_ai_logs = [l for l in system_ai_logs if l.get('client_id') != client_id]
+        else:
+            system_ai_logs.clear()
+    return jsonify({"success": True})
+
+@realtime_bp.route('/api/realtime/config', methods=['GET', 'POST'])
+def api_config():
+    """
+    Cấu hình danh sách API Keys và Model:
+    Bảo mật mã PIN qua session.get('realtime_unlocked').
+    Hỗ trợ nhập 2-3 keys cách nhau bằng dấu phẩy hoặc xuống dòng để xoay vòng.
+    """
+    # CHẶN YÊU CẦU NẾU CHƯA NHẬP MÃ PIN
+    if not session.get('realtime_unlocked'):
+        return jsonify({"success": False, "message": "Cần xác thực mã PIN"}), 401
+
+    global key_manager, worker_pool
+
+    if request.method == 'POST':
+        data = request.get_json() or {}
+        # Hỗ trợ nhận 1 key hoặc danh sách nhiều keys (chuỗi hoặc mảng)
+        keys_input = data.get('api_keys') or data.get('api_key', '')
+        model = data.get('model', '').strip()
+
+        if keys_input:
+            if isinstance(keys_input, str):
+                new_keys = [k.strip() for k in re.split(r'[,;\n]', keys_input) if k.strip()]
+            elif isinstance(keys_input, list):
+                new_keys = [str(k).strip() for k in keys_input if str(k).strip()]
+            else:
+                new_keys = []
+
+            if new_keys:
+                key_manager.set_keys(new_keys)
+
+        if model:
+            for w in worker_pool:
+                w.model_name = model
+
+        # Lock lại sau khi lưu thành công để lần sau phải nhập lại PIN
+        session.pop('realtime_unlocked', None)
+
+        return jsonify({
+            "success": True,
+            "message": f"Đã lưu thành công! Đang xoay vòng {len(key_manager.keys)} API Keys qua {len(worker_pool)} Worker Threads."
+        })
+
+    key_stats = key_manager.get_stats()
+    return jsonify({
+        "success": True,
+        "total_keys": key_stats["total_keys"],
+        "keys_preview": key_stats["keys_preview"],
+        "key_stats": key_stats,
+        "model": worker_pool[0].model_name if worker_pool else DEFAULT_MODEL,
+        "active_workers": len(worker_pool),
+        "queue_size": ai_task_queue.qsize(),
+        "total_requests": sum(w.total_requests for w in worker_pool)
     })
