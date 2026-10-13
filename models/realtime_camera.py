@@ -19,6 +19,7 @@ import requests
 import json
 import os
 import re
+import numpy as np
 from datetime import datetime
 
 # Khởi tạo Blueprint
@@ -644,6 +645,36 @@ def api_trigger_ai():
         return jsonify({"success": True, "message": "Đang phân tích biểu cảm & hành vi..."})
     except queue.Full:
         return jsonify({"success": False, "message": "Hàng đợi AI đang bận, vui lòng thử lại sau giây lát!"})
+
+@realtime_bp.route('/api/realtime/upload_web_frame', methods=['POST'])
+def api_upload_web_frame():
+    """Nhận khung hình từ Webcam trình duyệt HTML5 (navigator.mediaDevices.getUserMedia)"""
+    try:
+        data = request.get_json() or {}
+        img_b64 = data.get('image', '')
+        cam_id = data.get('cam_id', 'webcam_web')
+        cam_name = data.get('name', 'Webcam Trình Duyệt')
+
+        if not img_b64:
+            return jsonify({"success": False, "message": "Không có dữ liệu ảnh"}), 400
+
+        if ',' in img_b64:
+            img_b64 = img_b64.split(',', 1)[1]
+
+        img_bytes = base64.b64decode(img_b64)
+        np_arr = np.frombuffer(img_bytes, np.uint8)
+        frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+
+        if frame is not None:
+            try:
+                ai_task_queue.put_nowait((cam_id, cam_name, frame))
+                return jsonify({"success": True, "message": "Đã gửi khung hình lên hàng đợi AI"})
+            except queue.Full:
+                return jsonify({"success": False, "message": "Hàng đợi AI đang bận"}), 429
+
+        return jsonify({"success": False, "message": "Giải mã khung hình thất bại"}), 400
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 @realtime_bp.route('/api/realtime/stop_all', methods=['POST'])
 def api_stop_all():
