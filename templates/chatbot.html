@@ -39,10 +39,10 @@
                     <span class="position-absolute bottom-0 end-0 p-1 bg-success border border-white rounded-circle" style="width: 12px; height: 12px;"></span>
                 </div>
                 <div>
-                    <h6 class="mb-0 fw-bold text-dark">Security Assistant</h6>
+                        <h6 class="mb-0 fw-bold text-dark">Security Assistant</h6>
                     <small class="text-success d-flex align-items-center gap-1">
                         <span class="spinner-grow spinner-grow-sm text-success" style="width: 8px; height: 8px;" role="status"></span>
-                        <span id="activeModelLabel">Chưa cấu hình model</span>
+                        <span id="activeModelLabel">GPT-OSS 20B</span>
                     </small>
                 </div>
             </div>
@@ -66,7 +66,7 @@
                 <div class="message-content" style="max-width: 80%;">
                     <div class="p-3 rounded-4 shadow-sm bg-white border border-light text-dark" style="border-top-left-radius: 4px !important;">
                         <p class="mb-2 fw-semibold text-primary"><i class="fa-solid fa-sparkles me-1"></i> Xin chào! Tôi là Trợ lý AI An ninh của hệ thống.</p>
-                        <p class="mb-2 text-secondary" style="font-size: 0.93rem;">Chọn model đã cấu hình để hỏi đáp hoặc phân tích ảnh/video về hành vi an toàn và nguy hiểm.</p>
+                            <p class="mb-2 text-secondary" style="font-size: 0.93rem;">Chọn model đã cấu hình để hỏi đáp hoặc phân tích ảnh/video về hành vi an toàn và nguy hiểm.</p>
                         
                         <!-- Gợi ý câu hỏi nhanh -->
                         <div class="mt-3">
@@ -130,31 +130,27 @@
     </div>
 </div>
 
-<!-- MODAL CẤU HÌNH TOKEN -->
 <div class="modal fade" id="chatbotConfigModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content" style="border-radius: 16px;">
             <div class="modal-header">
-                <h5 class="modal-title fw-bold"><i class="fa-solid fa-key text-primary me-2"></i>Cấu hình Token cho Chatbot</h5>
+                <h5 class="modal-title fw-bold"><i class="fa-solid fa-key text-primary me-2"></i>Cấu hình Token cho Chatbox</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
             </div>
             <div class="modal-body">
-                <!-- VÙNG NHẬP PIN -->
                 <div id="chatbotPinSection">
-                    <p class="text-muted">Nhập mã PIN quản trị để truy cập cấu hình Token.</p>
+                    <p class="text-muted">Nhập mã PIN quản trị để sửa token. Mã PIN được kiểm tra theo cấu hình trong app.py.</p>
                     <form id="chatbotPinForm" class="d-flex gap-2" onsubmit="event.preventDefault(); verifyChatbotPin();">
                         <input id="chatbotPinInput" class="form-control" type="password" autocomplete="current-password" placeholder="Mã PIN quản trị" required style="max-width: 280px;">
                         <button class="btn btn-primary" type="submit">Mở cấu hình</button>
                     </form>
                     <div id="chatbotPinError" class="text-danger small mt-2" role="alert"></div>
                 </div>
-
-                <!-- VÙNG CHỈNH SỬA TOKEN -->
                 <div id="chatbotTokenEditor" class="d-none">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <div>
                             <h6 class="fw-bold mb-1">Danh sách API Key</h6>
-                            <small class="text-muted">Mỗi dòng gắn một token với một model. Cấu hình này dùng riêng cho Chatbot.</small>
+                            <small class="text-muted">Mỗi dòng gắn một token với một model. Cấu hình này dùng riêng cho chatbox.</small>
                         </div>
                         <button class="btn btn-success btn-sm" type="button" onclick="addChatbotTokenRow()"><i class="fa-solid fa-plus me-1"></i>Thêm Token</button>
                     </div>
@@ -319,26 +315,42 @@
     let mediaPreviewUrls = [];
     let previousNonVisionModelId = null;
 
-    // Xóa sạch mọi storage cũ ngay khi khởi động
+    // Xóa sạch mọi storage cũ ngay khi script khởi động
     try {
         localStorage.removeItem(CHAT_HISTORY_KEY);
         sessionStorage.removeItem(CHAT_HISTORY_KEY);
     } catch(e) {}
 
-    // Xóa khi rời trang
+    // Đảm bảo xóa sạch khi thoát web, đóng tab, đóng trình duyệt hoặc chuyển trang
     window.addEventListener('beforeunload', function() {
         try {
             sessionStorage.removeItem(CHAT_HISTORY_KEY);
             localStorage.removeItem(CHAT_HISTORY_KEY);
         } catch(e) {}
     });
+    window.addEventListener('pagehide', function() {
+        try {
+            sessionStorage.removeItem(CHAT_HISTORY_KEY);
+            localStorage.removeItem(CHAT_HISTORY_KEY);
+        } catch(e) {}
+    });
+
+    function logChatbot(message, type = 'info') {
+        if (window.SystemLog && typeof window.SystemLog.add === 'function') {
+            window.SystemLog.add(`[Chatbot] ${message}`, type);
+        }
+    }
 
     document.addEventListener("DOMContentLoaded", function() {
+        // Dọn sạch lịch sử vĩnh viễn cũ trong localStorage nếu từng tồn tại
+        localStorage.removeItem(CHAT_HISTORY_KEY);
+        localStorage.removeItem('groq_api_key_custom');
         loadChatbotModels();
         loadStoredChatHistory();
         initAutoResizeTextarea();
         document.getElementById('mediaInput').addEventListener('change', updateMediaFileLabel);
         
+        // Cập nhật nhãn khi đổi model
         document.getElementById('modelSelect').addEventListener('change', function(e) {
             localStorage.setItem(CHAT_MODEL_KEY, e.target.value);
             if (!document.getElementById('mediaInput').files[0]) {
@@ -365,13 +377,16 @@
             if (chatbotModels.length) {
                 statusLabel.className = 'badge bg-success-subtle text-success-emphasis';
                 statusLabel.textContent = `${chatbotModels.length} model đã cấu hình`;
+                logChatbot(`Đã tải ${chatbotModels.length} model chatbox.`, 'success');
             } else {
                 statusLabel.className = 'badge bg-warning-subtle text-warning-emphasis';
                 statusLabel.textContent = 'Chưa có token cho chatbox';
+                logChatbot('Chưa có token nào được cấu hình cho chatbox.', 'warning');
             }
         } catch (error) {
             statusLabel.className = 'badge bg-secondary-subtle text-secondary-emphasis';
             statusLabel.textContent = 'Không tải được cấu hình API';
+            logChatbot('Không tải được cấu hình model.', 'error');
         }
     }
 
@@ -380,39 +395,18 @@
         document.getElementById('activeModelLabel').innerText = selected && selected.value ? selected.textContent : 'Chưa cấu hình model';
     }
 
-    // Luôn bắt buộc mở khung PIN mỗi lần click nút Cấu hình
     function openChatbotConfig() {
         document.getElementById('chatbotPinError').textContent = '';
         document.getElementById('chatbotPinInput').value = '';
+        // Luôn yêu cầu PIN trước khi hiển thị danh sách API key,
+        // kể cả khi phiên đăng nhập trước đó vẫn còn hiệu lực.
         document.getElementById('chatbotPinSection').classList.remove('d-none');
         document.getElementById('chatbotTokenEditor').classList.add('d-none');
         document.getElementById('chatbotConfigFooter').classList.add('d-none');
         bootstrap.Modal.getOrCreateInstance(document.getElementById('chatbotConfigModal')).show();
     }
 
-    async function verifyChatbotPin() {
-        const errorLabel = document.getElementById('chatbotPinError');
-        errorLabel.textContent = '';
-        const pinVal = document.getElementById('chatbotPinInput').value.trim();
-        if (!pinVal) {
-            errorLabel.textContent = 'Vui lòng nhập mã PIN.';
-            return;
-        }
-        try {
-            const response = await fetch('/api/chatbot/verify-pin', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ pin: pinVal })
-            });
-            const data = await response.json();
-            if (!response.ok || !data.success) throw new Error(data.message || 'Mã PIN không đúng.');
-            await loadChatbotConfig();
-        } catch (error) {
-            errorLabel.textContent = error.message || 'Không xác thực được mã PIN.';
-        }
-    }
-
-    async function loadChatbotConfig() {
+    async function loadChatbotConfig(showPinOnFailure = true) {
         try {
             const response = await fetch('/api/chatbot/config');
             const data = await response.json();
@@ -423,10 +417,26 @@
             document.getElementById('chatbotTokenEditor').classList.remove('d-none');
             document.getElementById('chatbotConfigFooter').classList.remove('d-none');
         } catch (error) {
-            document.getElementById('chatbotPinError').textContent = error.message;
+            if (showPinOnFailure) document.getElementById('chatbotPinError').textContent = error.message;
             document.getElementById('chatbotPinSection').classList.remove('d-none');
             document.getElementById('chatbotTokenEditor').classList.add('d-none');
             document.getElementById('chatbotConfigFooter').classList.add('d-none');
+        }
+    }
+
+    async function verifyChatbotPin() {
+        const errorLabel = document.getElementById('chatbotPinError');
+        errorLabel.textContent = '';
+        try {
+            const response = await fetch('/api/chatbot/verify-pin', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pin: document.getElementById('chatbotPinInput').value })
+            });
+            if (!response.ok) throw new Error('Mã PIN không đúng.');
+            await loadChatbotConfig(true);
+        } catch (error) {
+            errorLabel.textContent = error.message || 'Không xác thực được mã PIN.';
         }
     }
 
@@ -448,17 +458,25 @@
                     </div>
                     <div class="col-md-4">
                         <label class="form-label small fw-semibold">API Key</label>
-                        <input class="form-control" data-field="api_key" type="password" autocomplete="new-password" value="${escapeHtml(token.api_key || '')}" placeholder="Nhập API Key">
+                        <input class="form-control" data-field="api_key" type="text" autocomplete="off" value="${escapeHtml(token.api_key || '')}" placeholder="Nhập API Key">
                     </div>
                     <div class="col-md-4">
                         <label class="form-label small fw-semibold">Tên Model</label>
-                        <input class="form-control" data-field="model_name" value="${escapeHtml(token.model_name || '')}" placeholder="VD: google/gemini-2.5-flash">
+                        <input class="form-control" data-field="model_name" value="${escapeHtml(token.model_name || '')}" placeholder="${token.provider === 'google_gemini' ? 'Mặc định: gemini-2.5-flash' : (token.provider === 'groq' ? 'vd: openai/gpt-oss-20b' : (token.provider === 'xai' ? 'vd: grok-4.7' : 'vd: google/gemini-2.5-flash'))}">
                     </div>
                     <div class="col-md-1 d-grid">
                         <button class="btn btn-outline-danger" type="button" onclick="removeChatbotTokenRow(${index})" title="Xóa token"><i class="fa-solid fa-trash"></i></button>
                     </div>
                 </div>
             </div>`).join('');
+        container.querySelectorAll('[data-field="provider"]').forEach(select => {
+            select.addEventListener('change', event => {
+                const modelInput = event.target.closest('[data-chat-token]').querySelector('[data-field="model_name"]');
+                modelInput.placeholder = event.target.value === 'google_gemini'
+                    ? 'Mặc định: gemini-2.5-flash'
+                    : (event.target.value === 'xai' ? 'vd: grok-4.1-fast' : 'vd: google/gemini-2.5-flash');
+            });
+        });
     }
 
     function addChatbotTokenRow() {
@@ -490,26 +508,43 @@
             });
             const data = await response.json();
             if (!response.ok || !data.success) throw new Error(data.response || 'Không lưu được cấu hình.');
+            chatbotTokenRows = apiTokens.filter(token => token.api_key);
             message.className = 'small mt-2 text-success';
-            message.textContent = 'Đã lưu cấu hình token thành công!';
+            message.textContent = 'Đã lưu cấu hình token riêng cho chatbox.';
+            logChatbot('Đã lưu cấu hình token chatbox.', 'success');
             await loadChatbotModels();
-            setTimeout(() => {
-                bootstrap.Modal.getInstance(document.getElementById('chatbotConfigModal')).hide();
-            }, 800);
+            renderChatbotTokenRows();
         } catch (error) {
             message.className = 'small mt-2 text-danger';
             message.textContent = error.message;
+            logChatbot(`Lỗi lưu cấu hình token: ${error.message}`, 'error');
         }
     }
 
+    // 2. Xử lý tin nhắn & Lịch sử trò chuyện:
+    // Tin nhắn chỉ lưu trong RAM (biến chatHistory) để AI ghi nhớ ngữ cảnh hỏi đáp liên tục.
+    // Khi thoát web / reload / đóng tab, toàn bộ tin nhắn sẽ tự động biến mất 100%.
     function loadStoredChatHistory() {
+        try {
+            sessionStorage.removeItem(CHAT_HISTORY_KEY);
+            localStorage.removeItem(CHAT_HISTORY_KEY);
+        } catch(e) {}
         chatHistory = [];
+    }
+
+    function saveChatHistory() {
+        // Không lưu vào ổ cứng hay Storage để bảo đảm tính năng: "thoát web tự động xóa đoạn chat"
     }
 
     function clearChatHistory() {
         if (confirm("Bạn có chắc chắn muốn xoá toàn bộ lịch sử trò chuyện trong phiên này?")) {
             chatHistory = [];
+            try {
+                sessionStorage.removeItem(CHAT_HISTORY_KEY);
+                localStorage.removeItem(CHAT_HISTORY_KEY);
+            } catch(e) {}
             const container = document.getElementById('chatMessages');
+            // Giữ lại tin nhắn chào đầu tiên
             const firstWelcome = container.querySelector('.bot-message');
             container.innerHTML = '';
             if (firstWelcome) container.appendChild(firstWelcome);
@@ -544,7 +579,9 @@
     function isVisionModel(model) {
         if (!model) return false;
         if (model.is_vision === true) return true;
-        const name = (model.model_name || model.name || '').toLowerCase();
+        const prov = (model.provider || '').toLowerCase();
+        const name = (model.model_name || model.name || model.label || '').toLowerCase();
+        if (prov === 'google_gemini' || prov === 'xai') return true;
         const hints = ['vision', 'omni', 'gemini', 'qwen', 'llava', 'gpt-4o', 'pixtral', '-vl'];
         return hints.some(hint => name.includes(hint));
     }
@@ -553,13 +590,45 @@
         const file = document.getElementById('mediaInput').files[0];
         const label = document.getElementById('mediaFileLabel');
         const removeBtn = document.getElementById('btnRemoveMedia');
+        const modelSelect = document.getElementById('modelSelect');
 
         if (file) {
             if (removeBtn) removeBtn.classList.remove('d-none');
+            const currentModelId = modelSelect.value;
+            const currentModel = chatbotModels.find(m => m.id === currentModelId);
+
+            // Tìm model hỗ trợ Vision
+            let targetVisionModel = null;
+            if (currentModel && isVisionModel(currentModel)) {
+                targetVisionModel = currentModel;
+            } else {
+                if (!previousNonVisionModelId) {
+                    previousNonVisionModelId = currentModelId;
+                }
+                // Tìm kiếm trong danh sách chatbotModels model có Vision
+                targetVisionModel = chatbotModels.find(m => isVisionModel(m));
+                if (targetVisionModel) {
+                    modelSelect.value = targetVisionModel.id;
+                    updateActiveModelLabel();
+                    logChatbot(`Đã tự động chuyển API sang [${targetVisionModel.name}] để phân tích hành vi ${file.type.startsWith('image/') ? 'ảnh' : 'video'}.`, 'success');
+                }
+            }
+
+            const modelNotice = targetVisionModel 
+                ? `<span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-1"><i class="fa-solid fa-wand-magic-sparkles me-1"></i>Tự chuyển API: ${escapeHtml(targetVisionModel.name)}</span>` 
+                : `<span class="badge bg-warning-subtle text-warning-emphasis border ms-1"><i class="fa-solid fa-bolt me-1"></i>Hệ thống tự động dùng API Vision</span>`;
+
             const mediaLabel = file.type.startsWith('image/') ? 'Ảnh đã chọn' : 'Video đã chọn';
-            label.innerHTML = `<i class="fa-solid fa-file-arrow-up text-primary me-1"></i><strong>${mediaLabel}:${escapeHtml(file.name)}</strong>`;
+            label.innerHTML = `<i class="fa-solid fa-file-arrow-up text-primary me-1"></i><strong>${mediaLabel}</strong> ${modelNotice}`;
         } else {
             if (removeBtn) removeBtn.classList.add('d-none');
+            // Khôi phục model trước đó nếu có
+            if (previousNonVisionModelId && chatbotModels.some(m => m.id === previousNonVisionModelId)) {
+                modelSelect.value = previousNonVisionModelId;
+                updateActiveModelLabel();
+                logChatbot(`Đã khôi phục API ban đầu.`, 'info');
+                previousNonVisionModelId = null;
+            }
             label.innerHTML = '<i class="fa-solid fa-paperclip me-1"></i> Gửi ảnh JPG/PNG/WEBP hoặc video MP4, tối đa 50 MB';
         }
     }
@@ -569,29 +638,38 @@
         updateMediaFileLabel();
     }
 
+    // 3. Gửi tin nhắn đến Backend
     function handleSendMessage() {
         const input = document.getElementById('chatInput');
         const text = input.value.trim();
         const mediaFile = document.getElementById('mediaInput').files[0];
         if (!text && !mediaFile) return;
 
+        // Kiểm tra lại ngay lúc gửi để luôn dùng model Vision cho ảnh/video,
+        // kể cả khi người dùng chọn tệp rồi bấm gửi rất nhanh.
+        if (mediaFile) updateMediaFileLabel();
         const modelId = document.getElementById('modelSelect').value;
         const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         const question = text || 'Hãy phân tích hành vi trong tệp này.';
-        
+        // Trong bong bóng chat chỉ hiển thị preview media; chỉ hiện câu hỏi nếu người dùng tự nhập.
+        const displayText = text;
         const mediaPreview = mediaFile ? {
             url: URL.createObjectURL(mediaFile),
             type: mediaFile.type.startsWith('image/') ? 'image' : 'video',
             name: mediaFile.name
         } : null;
+        if (mediaPreview) mediaPreviewUrls.push(mediaPreview.url);
 
-        renderUserBubble(text, now, true, mediaPreview);
-        chatHistory.push({ role: 'user', content: text, time: now });
+        // Hiển thị tin nhắn người dùng
+        renderUserBubble(displayText, now, true, mediaPreview);
+        chatHistory.push({ role: 'user', content: displayText, time: now });
+        saveChatHistory();
 
         input.value = '';
         input.style.height = 'auto';
         clearMediaSelection();
 
+        // Hiển thị bong bóng bot đang gõ
         const typingId = showTypingIndicator();
         setSendingState(true);
 
@@ -608,6 +686,7 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     message: question,
+                    // Tin nhắn hiện tại được gửi riêng trong `message`, không lặp lại trong history.
                     history: chatHistory.slice(0, -1).map(h => ({ role: h.role, content: h.content })),
                     model_id: modelId
                 })
@@ -635,8 +714,12 @@
             chatHistory.push({ 
                 role: 'assistant', 
                 content: botResponse, 
-                time: botTime
+                time: botTime, 
+                latency: latency,
+                model: data.model || modelId
             });
+            saveChatHistory();
+
         })
         .catch(err => {
             removeTypingIndicator(typingId);
@@ -780,7 +863,8 @@
             <div class="chat-item user-message d-flex justify-content-end gap-3 mb-4">
                 <div class="message-content text-end" style="max-width: 75%;">
                     <div class="p-3 rounded-4 shadow-sm chat-bubble-user text-start" style="display: inline-block;">
-                        ${previewHtml}${text ? `<div style="font-size: 0.94rem; white-space: pre-wrap;">${formatMarkdown(text)}</div>` : ''}
+                        ${previewHtml}
+                        ${text ? `<div style="font-size: 0.94rem; white-space: pre-wrap;">${formatMarkdown(text)}</div>` : ''}
                     </div>
                     <span class="text-muted small px-2 mt-1 d-block" style="font-size: 0.73rem;">Bạn • ${time}</span>
                 </div>
@@ -793,38 +877,6 @@
         if (shouldScroll) scrollToBottom();
     }
 
-    function showTypingIndicator() {
-        const container = document.getElementById('chatMessages');
-        const typingId = 'typing_' + Date.now();
-        const html = `
-            <div id="${typingId}" class="chat-item bot-message d-flex gap-3 mb-4">
-                <div class="avatar-circle flex-shrink-0" style="width: 38px; height: 38px; border-radius: 50%; background: #3182ce; color: white; display: flex; align-items: center; justify-content: center; font-size: 16px;">
-                    <i class="fa-solid fa-robot"></i>
-                </div>
-                <div class="message-content">
-                    <div class="p-3 rounded-4 shadow-sm chat-bubble-bot bg-white border d-flex align-items-center gap-1">
-                        <span class="typing-dot"></span>
-                        <span class="typing-dot"></span>
-                        <span class="typing-dot"></span>
-                    </div>
-                </div>
-            </div>
-        `;
-        container.insertAdjacentHTML('beforeend', html);
-        scrollToBottom();
-        return typingId;
-    }
-
-    function removeTypingIndicator(id) {
-        const elem = document.getElementById(id);
-        if (elem) elem.remove();
-    }
-
-    function appendBotMessage(text) {
-        const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        renderBotBubble(text, time, null, null, true);
-    }
-
     function renderBotBubble(text, time, latency, model, shouldScroll) {
         const container = document.getElementById('chatMessages');
         const latencyHtml = latency ? `<span class="badge bg-light text-secondary border ms-1" style="font-size: 0.68rem;"><i class="fa-solid fa-bolt text-warning me-1"></i>${latency}</span>` : '';
@@ -834,15 +886,49 @@
                     <i class="fa-solid fa-robot"></i>
                 </div>
                 <div class="message-content" style="max-width: 80%;">
-                    <div class="p-3 rounded-4 shadow-sm chat-bubble-bot bg-white border text-dark">
+                    <div class="p-3 rounded-4 shadow-sm chat-bubble-bot">
                         <div class="assistant-response">${formatMarkdown(text)}</div>
                     </div>
-                    <span class="text-muted small px-2 mt-1 d-block" style="font-size: 0.75rem;">Hệ thống AI • ${time} ${latencyHtml}</span>
+                    <span class="text-muted small px-2 mt-1 d-block" style="font-size: 0.73rem;">
+                        Trợ lý AI • ${time} ${latencyHtml}
+                    </span>
                 </div>
             </div>
         `;
         container.insertAdjacentHTML('beforeend', html);
         if (shouldScroll) scrollToBottom();
+    }
+
+    function appendBotMessage(text) {
+        const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        renderBotBubble(text, now, null, null, true);
+    }
+
+    function showTypingIndicator() {
+        const container = document.getElementById('chatMessages');
+        const id = 'typing_' + Date.now();
+        const html = `
+            <div id="${id}" class="chat-item bot-message d-flex gap-3 mb-4">
+                <div class="avatar-circle flex-shrink-0" style="width: 38px; height: 38px; border-radius: 50%; background: #3182ce; color: white; display: flex; align-items: center; justify-content: center; font-size: 16px;">
+                    <i class="fa-solid fa-robot"></i>
+                </div>
+                <div class="message-content">
+                    <div class="p-3 rounded-4 shadow-sm bg-white border border-light d-flex align-items-center gap-1" style="width: 70px; height: 42px;">
+                        <span class="typing-dot"></span>
+                        <span class="typing-dot"></span>
+                        <span class="typing-dot"></span>
+                    </div>
+                </div>
+            </div>
+        `;
+        container.insertAdjacentHTML('beforeend', html);
+        scrollToBottom();
+        return id;
+    }
+
+    function removeTypingIndicator(id) {
+        const el = document.getElementById(id);
+        if (el) el.remove();
     }
 </script>
 {% endblock %}

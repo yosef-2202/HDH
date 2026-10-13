@@ -58,17 +58,14 @@
     </div>
 </div>
 
-<!-- THÀNH VIÊN -->
+<!-- THÀNH VIÊN ĐỘNG -->
 <h5 class="fw-bold text-dark mb-4 border-bottom pb-3"><i class="fa-solid fa-users text-primary me-2"></i>Thành viên phát triển</h5>
-<div class="row row-cols-2 row-cols-sm-3 row-cols-md-3 row-cols-lg-5 g-3 mb-4">
-    <div class="col"><div class="card custom-card text-center py-4 h-100 border-0 shadow-sm rounded-4"><div class="card-body px-2"><img src="https://ui-avatars.com/api/?name=Thuy+Vi&background=3182ce&color=fff&size=70" class="rounded-circle mb-3 shadow"><h6 class="fw-bold mb-1 fs-6">Đỗ Cao Thúy Vi</h6><p class="text-muted small mb-1">49.01.103.093</p><span class="badge bg-danger-subtle text-danger border border-danger px-2 py-1 rounded-pill" style="font-size: 0.7rem;">Nhóm Trưởng</span></div></div></div>
-    <div class="col"><div class="card custom-card text-center py-4 h-100 border-0 shadow-sm rounded-4"><div class="card-body px-2"><img src="https://ui-avatars.com/api/?name=Thanh+Diem&background=38a169&color=fff&size=70" class="rounded-circle mb-3 shadow"><h6 class="fw-bold mb-1 fs-6">Đoàn Thị Thanh Diễm</h6><p class="text-muted small mb-0">50.01.103.012</p></div></div></div>
-    <div class="col"><div class="card custom-card text-center py-4 h-100 border-0 shadow-sm rounded-4"><div class="card-body px-2"><img src="https://ui-avatars.com/api/?name=Thai+Duong&background=d69e2e&color=fff&size=70" class="rounded-circle mb-3 shadow"><h6 class="fw-bold mb-1 fs-6">Nguyễn Thái Dương</h6><p class="text-muted small mb-0">49.01.104.024</p></div></div></div>
-    <div class="col"><div class="card custom-card text-center py-4 h-100 border-0 shadow-sm rounded-4"><div class="card-body px-2"><img src="https://ui-avatars.com/api/?name=Trung+Luat&background=e53e3e&color=fff&size=70" class="rounded-circle mb-3 shadow"><h6 class="fw-bold mb-1 fs-6">Nguyễn Trung Luật</h6><p class="text-muted small mb-0">49.01.104.086</p></div></div></div>
-    <div class="col"><div class="card custom-card text-center py-4 h-100 border-0 shadow-sm rounded-4"><div class="card-body px-2"><img src="https://ui-avatars.com/api/?name=Van+Thien&background=805ad5&color=fff&size=70" class="rounded-circle mb-3 shadow"><h6 class="fw-bold mb-1 fs-6">Bùi Vạn Thiên</h6><p class="text-muted small mb-0">51.01.103.084</p></div></div></div>
+<div id="members-container" class="row row-cols-2 row-cols-sm-3 row-cols-md-3 row-cols-lg-5 g-3 mb-4">
+    <!-- Thẻ thành viên sẽ được nạp tự động bằng JS ở đây -->
 </div>
 
 <script>
+    // Hàm gọi API lấy thông số phần cứng
     function fetchSystemStats() {
         fetch('/api/stats')
             .then(res => res.json())
@@ -76,25 +73,19 @@
                 let cpu = parseFloat(data.cpu_percent) || 0;
                 let ram = parseFloat(data.ram_percent) || 0;
                 
-                // --- Cập nhật CPU ---
+                // Cập nhật giao diện CPU
                 document.getElementById('stat-cpu-text').innerText = cpu.toFixed(1);
                 let cpuBar = document.getElementById('stat-cpu-bar');
                 cpuBar.style.width = cpu + '%';
-                
-                let cpuColor = cpu >= 85 ? 'bg-danger' : (cpu >= 60 ? 'bg-warning' : 'bg-primary');
-                let cpuText = cpu >= 85 ? 'text-danger' : (cpu >= 60 ? 'text-warning' : 'text-primary');
-                cpuBar.className = `progress-bar progress-bar-striped progress-bar-animated ${cpuColor}`;
-                document.getElementById('stat-cpu-text').parentElement.className = `fw-bold mb-0 ${cpuText}`;
+                cpuBar.className = `progress-bar progress-bar-striped progress-bar-animated ${cpu >= 85 ? 'bg-danger' : (cpu >= 60 ? 'bg-warning' : 'bg-primary')}`;
+                document.getElementById('stat-cpu-text').parentElement.className = `fw-bold mb-0 ${cpu >= 85 ? 'text-danger' : (cpu >= 60 ? 'text-warning' : 'text-primary')}`;
 
-                // --- Cập nhật RAM ---
+                // Cập nhật giao diện RAM
                 document.getElementById('stat-ram-text').innerText = ram.toFixed(1);
                 let ramBar = document.getElementById('stat-ram-bar');
                 ramBar.style.width = ram + '%';
-                
-                let ramColor = ram >= 85 ? 'bg-danger' : (ram >= 60 ? 'bg-warning' : 'bg-success');
-                let ramText = ram >= 85 ? 'text-danger' : (ram >= 60 ? 'text-warning' : 'text-success');
-                ramBar.className = `progress-bar progress-bar-striped progress-bar-animated ${ramColor}`;
-                document.getElementById('stat-ram-text').parentElement.className = `fw-bold mb-0 ${ramText}`;
+                ramBar.className = `progress-bar progress-bar-striped progress-bar-animated ${ram >= 85 ? 'bg-danger' : (ram >= 60 ? 'bg-warning' : 'bg-success')}`;
+                document.getElementById('stat-ram-text').parentElement.className = `fw-bold mb-0 ${ram >= 85 ? 'text-danger' : (ram >= 60 ? 'text-warning' : 'text-success')}`;
 
                 document.getElementById('stat-ram-used').innerText = data.ram_used;
                 document.getElementById('stat-ram-total').innerText = data.ram_total;
@@ -102,7 +93,59 @@
             .catch(err => console.error("Lỗi lấy dữ liệu:", err));
     }
     
+    // Khởi chạy ngay và lặp lại sau mỗi 2 giây
     fetchSystemStats();
-    setInterval(fetchSystemStats, 2000); // Tự động reload sau mỗi 2 giây
+    setInterval(fetchSystemStats, 2000);
+
+    // Render danh sách thành viên với tính năng khôi phục mặc định nếu bị trống
+    const bgColors = ["3182ce", "38a169", "d69e2e", "e53e3e", "805ad5"];
+    
+    fetch('/api/members')
+        .then(res => res.json())
+        .then(data => {
+            let memberList = [];
+            if (data.success && data.members) {
+                memberList = data.members;
+            }
+
+            // TỰ ĐỘNG KHÔI PHỤC 5 THÀNH VIÊN NẾU DATABASE BỊ RỖNG
+            if (memberList.length === 0) {
+                memberList = [
+                    {name: "Đỗ Cao Thúy Vi", id: "49.01.103.093", role: "Nhóm Trưởng", avatar: ""},
+                    {name: "Đoàn Thị Thanh Diễm", id: "50.01.103.012", role: "", avatar: ""},
+                    {name: "Nguyễn Thái Dương", id: "49.01.104.024", role: "", avatar: ""},
+                    {name: "Nguyễn Trung Luật", id: "49.01.104.086", role: "", avatar: ""},
+                    {name: "Bùi Vạn Thiên", id: "51.01.103.084", role: "", avatar: ""}
+                ];
+                
+                // Lưu ngược 5 thành viên này vào Database để sửa lỗi
+                fetch('/api/members', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ members: memberList })
+                });
+            }
+
+            // Hiển thị danh sách ra màn hình
+            const container = document.getElementById('members-container');
+            container.innerHTML = '';
+            memberList.forEach((member, index) => {
+                let roleBadge = member.role ? `<span class="badge bg-danger-subtle text-danger border border-danger px-2 py-1 rounded-pill mt-1" style="font-size: 0.7rem;">${member.role}</span>` : '';
+                let avatarUrl = member.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name)}&background=${bgColors[index % bgColors.length]}&color=fff&size=70`;
+                
+                container.innerHTML += `
+                    <div class="col">
+                        <div class="card custom-card text-center py-4 h-100 border-0 shadow-sm rounded-4">
+                            <div class="card-body px-2">
+                                <img src="${avatarUrl}" class="rounded-circle mb-3 shadow" style="width:70px; height:70px; object-fit:cover;">
+                                <h6 class="fw-bold mb-1 fs-6">${member.name}</h6>
+                                <p class="text-muted small mb-0">${member.id}</p>
+                                ${roleBadge}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+        });
 </script>
 {% endblock %}
