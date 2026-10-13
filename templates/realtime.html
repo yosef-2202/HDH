@@ -75,10 +75,15 @@
         font-size: 0.75rem;
         padding: 3px 8px;
         border-radius: 5px;
-        backdrop-filter: blur(4px);
         -webkit-backdrop-filter: blur(4px);
+        backdrop-filter: blur(4px);
         z-index: 2;
     }
+    /* Typography & Button Utilities */
+    .stat-mini-label { font-size: 0.72rem; }
+    .stat-mini-val { font-size: 0.95rem; }
+    .stat-mini-val-sub { font-size: 0.82rem; }
+    .btn-clear-logs { font-size: 0.72rem; }
     .camera-live-badge {
         position: absolute;
         top: 8px;
@@ -182,7 +187,7 @@
                     <span class="fw-bold small text-dark">
                         <i class="fa-solid fa-display text-primary me-1"></i> Khung Hình Giám Sát (Live Viewport)
                     </span>
-                    <div class="d-flex gap-1" id="camActionButtons" style="display: none !important;">
+                    <div class="d-none gap-1" id="camActionButtons">
                         <button class="btn btn-outline-secondary btn-sm py-0 px-2" onclick="toggleFlip()" title="Lật gương camera">
                             <i class="fa-solid fa-arrows-rotate me-1"></i> Lật Gương
                         </button>
@@ -213,7 +218,7 @@
                                 <span class="live-dot"></span> LIVE
                             </div>
                             <!-- Thẻ video HTML5 hiển thị luồng trực tiếp từ getUserMedia -->
-                            <video id="webVideo" class="mirrored" autoplay playsinline muted></video>
+                            <video id="webVideo" class="mirrored" autoplay muted></video>
                         </div>
                         
                         <!-- Thanh thông tin AI bên dưới camera -->
@@ -238,20 +243,20 @@
             <div class="row g-2">
                 <div class="col-4">
                     <div class="os-stat-mini text-center">
-                        <div class="text-muted" style="font-size: 0.72rem;">Luồng Camera</div>
-                        <div class="fw-bold text-primary mt-1" style="font-size: 0.95rem;">WebRTC</div>
+                        <div class="text-muted stat-mini-label">Luồng Camera</div>
+                        <div class="fw-bold text-primary mt-1 stat-mini-val">WebRTC</div>
                     </div>
                 </div>
                 <div class="col-4">
                     <div class="os-stat-mini text-center">
-                        <div class="text-muted" style="font-size: 0.72rem;">Đa Phiên</div>
-                        <div class="fw-bold text-success mt-1" id="statActiveSessions" style="font-size: 0.95rem;">Đa Luồng</div>
+                        <div class="text-muted stat-mini-label">Đa Phiên</div>
+                        <div class="fw-bold text-success mt-1 stat-mini-val" id="statActiveSessions">Đa Luồng</div>
                     </div>
                 </div>
                 <div class="col-4">
                     <div class="os-stat-mini text-center">
-                        <div class="text-muted" style="font-size: 0.72rem;">Cân Bằng Tải</div>
-                        <div class="fw-bold text-info mt-1" id="statKeyRotation" style="font-size: 0.82rem;">Round-Robin</div>
+                        <div class="text-muted stat-mini-label">Cân Bằng Tải</div>
+                        <div class="fw-bold text-info mt-1 stat-mini-val-sub" id="statKeyRotation">Round-Robin</div>
                     </div>
                 </div>
             </div>
@@ -262,7 +267,7 @@
                     <span class="small fw-bold">
                         <i class="fa-solid fa-terminal text-success me-1"></i> Nhật Ký AI Realtime
                     </span>
-                    <button class="btn btn-sm btn-outline-light py-0 px-2" style="font-size: 0.72rem;" onclick="clearLogs()" title="Xóa lịch sử log">
+                    <button class="btn btn-sm btn-outline-light py-0 px-2 btn-clear-logs" onclick="clearLogs()" title="Xóa lịch sử log">
                         <i class="fa-solid fa-trash me-1"></i> Xóa
                     </button>
                 </div>
@@ -354,6 +359,8 @@
             });
 
             // Gán luồng vào thẻ <video> và phát trực tiếp
+            videoEl.setAttribute('playsinline', '');
+            videoEl.playsInline = true;
             videoEl.srcObject = webStream;
             await videoEl.play();
 
@@ -365,7 +372,8 @@
             // Ẩn placeholder, hiện khung video
             emptyState.classList.add('d-none');
             camCard.classList.remove('d-none');
-            actionBtns.style.display = 'flex';
+            actionBtns.classList.remove('d-none');
+            actionBtns.classList.add('d-flex');
 
             appendSystemLog('[WEBCAM] Đã cấp quyền và khởi động Webcam thành công.');
 
@@ -434,7 +442,8 @@
         // Đưa UI về trạng thái chờ
         emptyState.classList.remove('d-none');
         camCard.classList.add('d-none');
-        actionBtns.style.display = 'none';
+        actionBtns.classList.remove('d-flex');
+        actionBtns.classList.add('d-none');
 
         appendSystemLog('[WEBCAM] Đã tắt Webcam máy tính.');
     }

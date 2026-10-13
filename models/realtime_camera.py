@@ -33,12 +33,9 @@ realtime_bp = Blueprint('realtime_bp', __name__)
 # CẤU HÌNH HỆ THỐNG & DANH SÁCH API KEYS (LOAD BALANCING)
 # ==============================================================================
 
-# Danh sách API Keys mặc định có thể cấu hình trực tiếp tại đây:
+# Danh sách API Keys mặc định (Các key nhạy cảm được nạp tự động từ config_local.json hoặc biến môi trường để bảo mật):
 DEFAULT_CONFIGURED_KEYS = [
-    # Bạn có thể điền trực tiếp 2 đến 3 API Keys vào mảng này:
-    # "sk-or-v1-key-thu-nhat...",
-    # "sk-or-v1-key-thu-hai...",
-    # "sk-or-v1-key-thu-ba...",
+    # Bạn có thể cấu hình danh sách keys trong file config_local.json hoặc giao diện web
 ]
 
 def _load_initial_api_keys():
