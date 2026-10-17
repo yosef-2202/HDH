@@ -9,6 +9,7 @@ import os
 # Import module RTSP & Realtime Camera
 from models.rtsp import rtsp_bp
 from models.realtime_camera import realtime_bp
+from models.image_processor import image_bp
 
 app = Flask(__name__)
 app.secret_key = 'hdh_secret_key_2026'
@@ -87,6 +88,7 @@ def inject_config():
 
 app.register_blueprint(rtsp_bp)
 app.register_blueprint(realtime_bp)
+app.register_blueprint(image_bp)
 
 # --- HÀM LẤY RAM CỦA CONTAINER ---
 def get_container_ram_info():
