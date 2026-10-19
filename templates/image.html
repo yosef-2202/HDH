@@ -1,368 +1,341 @@
 {% extends 'base.html' %}
-{% block title %}Xử Lý Ảnh Tĩnh & Phân Tích Hành Vi AI - Đồ Án Hệ Điều Hành{% endblock %}
+{% block title %}Xử Lý Ảnh & Nhận Diện AI{% endblock %}
 
 {% block content %}
 <style>
-    /* Bố cục Responsive & Dark/Dashboard Theme */
-    .image-page-container {
-        padding: 6px 0;
+    @import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@400;600;700&display=swap');
+
+    body {
+        font-family: 'Quicksand', sans-serif;
+        background-color: #fdfbf7;
+        background-image: radial-gradient(#f0e6d2 2px, transparent 2px);
+        background-size: 30px 30px;
     }
 
-    /* Thẻ chỉ số Hệ điều hành (OS Metrics Cards) */
+    .image-page-container {
+        padding: 10px 0;
+    }
+
+    .card,
+    .viewport-container,
     .os-badge-card {
-        background: #ffffff;
-        border-radius: 10px;
-        border: 1px solid #e2e8f0;
-        padding: 8px 12px;
-        transition: all 0.2s ease;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+        border-radius: 20px !important;
+        border: none !important;
+        background: rgba(255, 255, 255, 0.95);
+        box-shadow: 0 8px 24px rgba(210, 200, 190, 0.4);
+    }
+
+    .os-badge-card {
+        padding: 12px 15px;
         display: flex;
         align-items: center;
-        gap: 10px;
+        gap: 12px;
+        transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     }
+
     .os-badge-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+        transform: translateY(-5px);
     }
+
     .os-badge-icon {
-        width: 36px;
-        height: 36px;
-        border-radius: 8px;
+        width: 42px;
+        height: 42px;
+        border-radius: 14px;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 1.1rem;
-        flex-shrink: 0;
-    }
-    .os-badge-label {
-        font-size: 0.72rem;
-        text-transform: uppercase;
-        color: #718096;
-        font-weight: 600;
-        letter-spacing: 0.4px;
-        line-height: 1.2;
-    }
-    .os-badge-value {
-        font-size: 0.96rem;
-        font-weight: 700;
-        color: #2d3748;
-        line-height: 1.2;
+        font-size: 1.3rem;
     }
 
-    /* Khung Viewport hiển thị ảnh */
+    .os-badge-label {
+        font-size: 0.75rem;
+        color: #8c7b70;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .os-badge-value {
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: #5a4a42;
+    }
+
     .viewport-container {
-        background: #14171f;
-        border: 1px solid #2d3748;
-        border-radius: 12px;
         overflow: hidden;
-        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
         display: flex;
         flex-direction: column;
     }
+
     .viewport-header {
-        background: #1a202c;
-        border-bottom: 1px solid #2d3748;
-        padding: 8px 14px;
+        background: #ffecd2;
+        padding: 10px 16px;
         display: flex;
         justify-content: space-between;
         align-items: center;
+        border-bottom: 2px dashed #f0d8c0;
     }
+
+    .viewport-header .title-text {
+        color: #d47a53;
+        font-weight: 700;
+    }
+
     .viewport-body {
         position: relative;
         width: 100%;
         min-height: 330px;
         height: clamp(280px, 42vh, 400px);
-        background: #090d16;
+        background: #fffafa;
         display: flex;
         align-items: center;
         justify-content: center;
         overflow: hidden;
     }
+
     .viewport-body img {
         max-width: 100%;
         max-height: 100%;
         object-fit: contain;
-        display: block;
-        transition: transform 0.2s ease;
+        border-radius: 10px;
     }
 
-    /* Hiệu ứng quét Radar công nghệ */
-    .scan-line {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 3px;
-        background: linear-gradient(90deg, transparent, #3182ce, #63b3ed, transparent);
-        box-shadow: 0 0 12px #3182ce;
-        animation: radarScan 1.6s infinite ease-in-out;
-        z-index: 4;
-        display: none;
-    }
-    @keyframes radarScan {
-        0% { top: 0%; opacity: 0.8; }
-        50% { opacity: 1; }
-        100% { top: 100%; opacity: 0.3; }
+    .cute-placeholder {
+        text-align: center;
+        color: #d1c4b8;
     }
 
-    /* Màu sắc Badge Trạng Thái */
     .badge-status-normal {
-        background: #2e8540 !important;
-        color: #ffffff;
-    }
-    .badge-status-positive {
-        background: #2b6cb0 !important;
-        color: #ffffff;
-    }
-    .badge-status-warning {
-        background: #dd6b20 !important;
-        color: #ffffff;
-    }
-    .badge-status-danger {
-        background: #e53e3e !important;
-        color: #ffffff;
+        background: #a8e6cf !important;
+        color: #2d6a4f;
     }
 
-    /* Bảng lịch sử nhỏ gọn */
-    .history-scroll-box {
-        max-height: 170px;
-        overflow-y: auto;
+    .badge-status-positive {
+        background: #ffd3b6 !important;
+        color: #d47a53;
     }
-    .history-table {
-        font-size: 0.78rem;
-        margin-bottom: 0;
+
+    .badge-status-warning {
+        background: #ffaaa5 !important;
+        color: #c92a2a;
     }
-    .history-table th {
-        position: sticky;
-        top: 0;
-        background: #2d3748;
-        color: #e2e8f0;
-        z-index: 1;
-        padding: 6px 10px;
+
+    .badge-status-danger {
+        background: #ff8b94 !important;
+        color: #800000;
     }
-    .history-table td {
-        padding: 6px 10px;
-        vertical-align: middle;
+
+    .btn-cute {
+        border-radius: 12px;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        transition: all 0.2s;
+    }
+
+    .btn-primary-cute {
+        background-color: #ffb7b2;
+        border: none;
+        color: #fff;
+    }
+
+    .btn-primary-cute:hover {
+        background-color: #ff9a94;
+        transform: scale(1.02);
     }
 </style>
 
 <div class="image-page-container">
-    <!-- TIÊU ĐỀ MODULE -->
-    <div class="d-flex justify-content-between align-items-center mb-2">
+    <!-- TIÊU ĐỀ & NÚT -->
+    <div class="d-flex justify-content-between align-items-center mb-3 px-2">
         <div>
-            <h5 class="fw-bold mb-0 text-dark d-flex align-items-center">
-                <i class="fa-solid fa-image text-primary me-2"></i> Phân Tích Ảnh Tĩnh & Nhận Diện Hành Vi
-            </h5>
-            <small class="text-muted" style="font-size: 0.76rem;">
-                Hệ điều hành: Cân bằng tải Round-Robin API Keys • Giới hạn đa luồng Semaphore(3) • Khóa Mutex Lock
-            </small>
+            <h4 class="fw-bold mb-0" style="color: #d47a53;">
+                <i class="fa-solid fa-paw me-2"></i> Phân Tích Hình Ảnh
+            </h4>
         </div>
-        <div class="d-flex gap-2 align-items-center">
-            <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-2 py-1" style="font-size: 0.75rem;">
-                <i class="fa-solid fa-circle-check me-1"></i> Module Sẵn Sàng
+        <div class="d-flex gap-2">
+            <button class="btn btn-sm btn-outline-secondary btn-cute" data-bs-toggle="modal"
+                data-bs-target="#apiKeyModal" onclick="loadApiKeys()">
+                <i class="fa-solid fa-key text-warning"></i> Key
+            </button>
+            <span class="badge bg-success bg-opacity-25 text-success border border-success border-opacity-25 px-3 py-2"
+                style="border-radius: 12px;">
+                <i class="fa-solid fa-cat me-1"></i> Sẵn sàng rồi!!!
             </span>
         </div>
     </div>
 
-    <!-- KHỐI CHỌN FILE VÀ NÚT BẤM PHÂN TÍCH -->
-    <div class="card p-3 mb-2 border-0 shadow-sm rounded-3 bg-white" style="border: 1px solid #e2e8f0 !important;">
+    <!-- Modal Cấu Hình -->
+    <div class="modal fade" id="apiKeyModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content" style="border-radius: 20px; border: none;">
+                <div class="modal-header bg-light border-0" style="border-radius: 20px 20px 0 0;">
+                    <h5 class="modal-title fw-bold" style="color: #d47a53;"><i class="fa-solid fa-bone me-2"></i>Thiết
+                        Lập Chìa Khóa</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <label class="form-label fw-bold text-secondary">Mật khẩu hệ thống (PIN):</label>
+                    <input type="password" id="apiPinCode" class="form-control mb-3"
+                        placeholder="Nhập PIN lấy từ app.py...">
+
+                    <label class="form-label fw-bold text-secondary">Danh sách API Key (mỗi dòng 1 key):</label>
+                    <textarea class="form-control text-muted" id="apiKeysInput" rows="4" style="border-radius: 12px;"
+                        placeholder="sk-or-v1-..."></textarea>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-light btn-cute" data-bs-dismiss="modal">Đóng</button>
+                    <button type="button" class="btn btn-primary-cute btn-cute px-4" onclick="saveApiKeys()">Lưu
+                        Lại</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CHỌN FILE -->
+    <div class="card p-3 mb-3">
         <div class="row align-items-center g-2">
             <div class="col-12 col-md-8">
-                <label for="imageFileInput" class="form-label fw-bold small text-dark mb-1">
-                    <i class="fa-solid fa-cloud-arrow-up text-primary me-1"></i> Chọn ảnh từ máy tính (JPG, PNG, WebP):
+                <label for="imageFileInput" class="form-label fw-bold" style="color: #8c7b70;">
+                    <i class="fa-solid fa-images me-1"></i> Tải ảnh lên (Tối đa 10MB):
                 </label>
-                <div class="input-group input-group-sm">
-                    <input type="file" id="imageFileInput" accept="image/*" class="form-control form-control-sm py-1" onchange="previewImage(event)">
-                    <button class="btn btn-outline-secondary btn-sm" type="button" onclick="clearSelectedImage()" title="Hủy chọn ảnh">
-                        <i class="fa-solid fa-xmark"></i>
+                <div class="input-group">
+                    <input type="file" id="imageFileInput" accept="image/*" class="form-control form-control-sm py-2"
+                        style="border-radius: 12px 0 0 12px;" onchange="previewImage(event)">
+                    <button class="btn btn-light border" type="button" onclick="clearSelectedImage()"
+                        style="border-radius: 0 12px 12px 0;">
+                        <i class="fa-solid fa-xmark text-danger"></i>
                     </button>
                 </div>
             </div>
-            <div class="col-12 col-md-4 d-flex align-items-end gap-2 pt-md-3">
-                <button type="button" class="btn btn-primary btn-sm fw-bold w-100 py-1 shadow-sm" id="btnAnalyze" onclick="executeImageAnalysis()" disabled>
-                    <i class="fa-solid fa-wand-magic-sparkles me-1"></i> Phân Tích
+            <div class="col-12 col-md-4 d-flex align-items-end pt-md-4">
+                <button type="button" class="btn btn-primary-cute btn-cute w-100 py-2" id="btnAnalyze"
+                    onclick="executeImageAnalysis()" disabled>
+                    <i class="fa-solid fa-star me-1"></i> Khám Phá
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- 2 CỘT HIỂN THỊ: ẢNH GỐC (PREVIEW) VS ẢNH KẾT QUẢ (AI & MEDIAPIPE) -->
-    <div class="row g-2 mb-2">
-        <!-- Cột Trái: Ảnh Gốc -->
+    <!-- 2 CỘT ẢNH -->
+    <div class="row g-3 mb-3">
         <div class="col-12 col-lg-6">
             <div class="viewport-container h-100">
                 <div class="viewport-header">
-                    <span class="text-white small fw-bold">
-                        <i class="fa-solid fa-file-image text-primary me-2"></i> Ảnh Gốc
-                    </span>
-                    <span class="badge bg-secondary" id="origBadge" style="font-size: 0.72rem;">Chưa có ảnh</span>
+                    <span class="title-text"><i class="fa-solid fa-camera-retro me-2"></i> Ảnh Của Bạn</span>
+                    <span class="badge bg-light text-secondary" id="origBadge">Trống</span>
                 </div>
                 <div class="viewport-body" id="origBox">
-                    <!-- Placeholder khi chưa chọn file -->
-                    <div class="text-center p-3 text-secondary" id="origPlaceholder">
-                        <i class="fa-solid fa-image fa-3x mb-2 opacity-50"></i>
-                        <h6 class="text-light mb-1">Chưa chọn ảnh</h6>
-                        <small>Vui lòng chọn file ảnh ở trên để xem trước tại đây</small>
+                    <div class="cute-placeholder" id="origPlaceholder">
+                        <i class="fa-solid fa-dog fa-3x mb-2 opacity-50"></i>
+                        <h6>Đợi bạn đưa ảnh cho mình xem nè!</h6>
                     </div>
-                    <!-- Ảnh xem trước ngay khi chọn file -->
-                    <img id="origPreviewImg" src="" alt="Ảnh gốc preview" style="display: none;">
-                </div>
-                <div class="p-2 bg-dark bg-opacity-75 border-top border-secondary border-opacity-25 text-secondary small d-flex justify-content-between align-items-center" style="font-size: 0.74rem;">
-                    <span class="text-truncate" id="origFileName">Chưa chọn file</span>
-                    <span id="origFileSize">-- KB</span>
+                    <img id="origPreviewImg" src="" style="display: none;">
                 </div>
             </div>
         </div>
 
-        <!-- Cột Phải: Ảnh Kết Quả -->
         <div class="col-12 col-lg-6">
             <div class="viewport-container h-100">
                 <div class="viewport-header">
-                    <span class="text-white small fw-bold">
-                        <i class="fa-solid fa-person-rays text-success me-2"></i> Ảnh Kết Quả
-                    </span>
-                    <span class="badge bg-secondary" id="resultBadge" style="font-size: 0.72rem;">Chờ phân tích</span>
+                    <span class="title-text"><i class="fa-solid fa-wand-magic-sparkles me-2"></i> Kết Quả Từ AI</span>
+                    <span class="badge bg-light text-secondary" id="resultBadge">Chờ đợi</span>
                 </div>
                 <div class="viewport-body" id="resultBox">
-                    <div class="scan-line" id="scanLine"></div>
-
-                    <!-- Placeholder khi chưa phân tích -->
-                    <div class="text-center p-3 text-secondary" id="resultPlaceholder">
-                        <i class="fa-solid fa-microchip-ai fa-3x mb-2 opacity-50"></i>
-                        <h6 class="text-light mb-1">Ảnh kết quả (MediaPipe Pose + OpenRouter AI)</h6>
-                        <small>Nhấn nút "Phân Tích" để hiển thị khung xương và nhận định AI</small>
+                    <div class="cute-placeholder" id="resultPlaceholder">
+                        <i class="fa-solid fa-cat fa-3x mb-2 opacity-50"></i>
+                        <h6>Nhấn nút khám phá để mình phân tích nhé!</h6>
                     </div>
-
-                    <!-- Hiệu ứng đang xử lý Loading -->
-                    <div class="text-center p-3 text-light" id="loadingIndicator" style="display: none; z-index: 5;">
-                        <div class="spinner-border text-primary mb-2" role="status" style="width: 2.4rem; height: 2.4rem;"></div>
-                        <h6 class="text-light mb-1 fw-bold">Hệ thống đang xử lý...</h6>
-                        <small class="text-secondary">Đang cấp phát luồng Semaphore(3) & Gọi OpenRouter Cloud AI</small>
+                    <div class="text-center" id="loadingIndicator" style="display: none; z-index: 5;">
+                        <div class="spinner-grow text-warning mb-2" style="width: 3rem; height: 3rem;"></div>
+                        <h6 class="fw-bold" style="color: #d47a53;">Chờ xíu!!!</h6>
                     </div>
-
-                    <!-- Ảnh kết quả đã vẽ khung xương và HUD -->
-                    <img id="resultImg" src="" alt="Ảnh kết quả AI" style="display: none;">
-                </div>
-                <div class="p-2 bg-dark bg-opacity-75 border-top border-secondary border-opacity-25 text-secondary small d-flex justify-content-between align-items-center" style="font-size: 0.74rem;">
-                    <span class="text-truncate text-light fw-semibold" id="resultModelUsed">Mô hình: MediaPipe Pose + OpenRouter Vision</span>
-                    <button class="btn btn-outline-light btn-sm py-0 px-2" id="btnDownloadResult" onclick="downloadResultImage()" style="display: none; font-size: 0.72rem;">
-                        <i class="fa-solid fa-download me-1"></i> Tải Ảnh
-                    </button>
+                    <img id="resultImg" src="" style="display: none;">
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- CÁC THẺ (BADGE) BÁO CÁO KẾT QUẢ VÀ THÔNG SỐ HỆ ĐIỀU HÀNH -->
-    <div class="row g-2 mb-2">
-        <!-- Badge Trạng thái nhận diện hành vi -->
+    <!-- THẺ CHỈ SỐ -->
+    <div class="row g-3 mb-3">
         <div class="col-6 col-md-3">
             <div class="os-badge-card">
-                <div class="os-badge-icon bg-primary bg-opacity-10 text-primary" id="iconStatusBox">
-                    <i class="fa-solid fa-shield-halved"></i>
-                </div>
-                <div class="overflow-hidden">
-                    <div class="os-badge-label">Trạng Thái Hành Vi</div>
+                <div class="os-badge-icon" style="background: #e0f2fe; color: #0284c7;"><i
+                        class="fa-solid fa-face-smile"></i></div>
+                <div>
+                    <div class="os-badge-label">Nhận Định</div>
                     <div class="os-badge-value" id="badgeBehaviorStatus">
-                        <span class="badge bg-secondary" style="font-size: 0.75rem;">CHỜ PHÂN TÍCH</span>
+                        <span class="badge bg-light text-secondary">CHƯA CÓ</span>
                     </div>
                 </div>
             </div>
         </div>
-
-        <!-- Badge Thời gian xử lý của Thread (ms) -->
         <div class="col-6 col-md-3">
             <div class="os-badge-card">
-                <div class="os-badge-icon bg-success bg-opacity-10 text-success">
-                    <i class="fa-solid fa-stopwatch"></i>
+                <div class="os-badge-icon" style="background: #dcfce7; color: #16a34a;"><i class="fa-solid fa-leaf"></i>
                 </div>
-                <div class="overflow-hidden">
-                    <div class="os-badge-label">Độ Trễ Luồng Xử Lý</div>
-                    <div class="os-badge-value text-success" id="badgeLatency">
-                        0.0 <small class="text-muted fw-normal" style="font-size: 0.7rem;">ms</small>
-                    </div>
+                <div>
+                    <div class="os-badge-label">Độ Trễ</div>
+                    <div class="os-badge-value" id="badgeLatency">0.0 <small>ms</small></div>
                 </div>
             </div>
         </div>
-
-        <!-- Badge Trạng thái Semaphore & Mutex Lock -->
         <div class="col-6 col-md-3">
             <div class="os-badge-card">
-                <div class="os-badge-icon bg-warning bg-opacity-10 text-warning">
-                    <i class="fa-solid fa-traffic-light"></i>
-                </div>
-                <div class="overflow-hidden">
-                    <div class="os-badge-label">Semaphore / Mutex</div>
-                    <div class="os-badge-value text-dark" id="badgeSemaphore">
-                        <span id="activeWorkersNum">0</span> / 3 <small class="text-muted fw-normal" style="font-size: 0.7rem;">luồng (Lock OK)</small>
-                    </div>
+                <div class="os-badge-icon" style="background: #fef9c3; color: #ca8a04;"><i
+                        class="fa-solid fa-seedling"></i></div>
+                <div>
+                    <div class="os-badge-label">Luồng Xử Lý</div>
+                    <div class="os-badge-value" id="badgeSemaphore"><span id="activeWorkersNum">0</span> / 3</div>
                 </div>
             </div>
         </div>
-
-        <!-- Badge Tiến trình OS Thread & Key xoay vòng -->
         <div class="col-6 col-md-3">
             <div class="os-badge-card">
-                <div class="os-badge-icon bg-info bg-opacity-10 text-info">
-                    <i class="fa-solid fa-microchip"></i>
-                </div>
-                <div class="overflow-hidden">
-                    <div class="os-badge-label">OS Thread & Key</div>
-                    <div class="os-badge-value text-truncate" id="badgeThreadAndKey" style="font-size: 0.82rem;">
-                        Chờ lệnh...
-                    </div>
+                <div class="os-badge-icon" style="background: #fce7f3; color: #db2777;"><i
+                        class="fa-solid fa-heart"></i></div>
+                <div>
+                    <div class="os-badge-label">Chìa Khóa</div>
+                    <div class="os-badge-value text-truncate" id="badgeThreadAndKey" style="font-size: 0.8rem;">Đang
+                        đợi...</div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- KHỐI MÔ TẢ CHI TIẾT & NHẬT KÝ VÙNG GĂNG (CRITICAL SECTION) -->
-    <div class="row g-2">
-        <!-- Khối Mô tả chi tiết hành vi -->
+    <!-- MÔ TẢ & NHẬT KÝ -->
+    <div class="row g-3">
         <div class="col-12 col-lg-5">
-            <div class="card border-0 shadow-sm rounded-3 p-2 h-100 bg-white" style="border: 1px solid #e2e8f0 !important;">
-                <div class="d-flex justify-content-between align-items-center mb-1">
-                    <span class="text-dark fw-bold small">
-                        <i class="fa-solid fa-comment-dots text-primary me-1"></i> Mô Tả Chi Tiết Hành Vi & Biểu Cảm
-                    </span>
-                    <span class="badge bg-light text-dark border" id="badgePoseCount" style="font-size: 0.7rem;">
-                        0 Khung xương
-                    </span>
-                </div>
-                <div class="p-2 rounded bg-light border border-light-subtle flex-grow-1" style="min-height: 70px;">
-                    <div class="text-dark small fw-semibold" id="textBehaviorDesc" style="line-height: 1.45;">
-                        Chưa có dữ liệu phân tích. Hãy tải ảnh lên và nhấn <strong>"Phân Tích"</strong> để hệ thống tiến hành kiểm tra.
-                    </div>
+            <div class="card h-100 p-3">
+                <h6 class="fw-bold mb-3" style="color: #d47a53;"><i class="fa-solid fa-book-open me-2"></i> Mô tả
+                    hình ảnh</h6>
+                <div class="p-3 rounded flex-grow-1"
+                    style="background: #fff5f5; border: 1px dashed #ffb7b2; color: #5a4a42; font-weight: 500; font-size: 0.95rem; line-height: 1.6;"
+                    id="textBehaviorDesc">
+                    Bức ảnh của bạn có gì đặc biệt thế? Cho mình xem với nào!
                 </div>
             </div>
         </div>
 
-        <!-- Bảng Lịch sử Nhật ký (Critical Section) -->
         <div class="col-12 col-lg-7">
-            <div class="card border-0 shadow-sm rounded-3 p-2 h-100 bg-white" style="border: 1px solid #e2e8f0 !important;">
-                <div class="d-flex justify-content-between align-items-center mb-1">
-                    <span class="text-dark fw-bold small">
-                        <i class="fa-solid fa-clock-rotate-left text-warning me-1"></i> Nhật Ký Phân Tích (Critical Section Lock)
-                    </span>
-                    <button class="btn btn-outline-danger btn-sm py-0 px-2" style="font-size: 0.7rem;" onclick="clearLogsHistory()" title="Xóa toàn bộ lịch sử trong RAM">
-                        <i class="fa-solid fa-trash me-1"></i> Xóa
-                    </button>
+            <div class="card h-100 p-3">
+                <div class="d-flex justify-content-between mb-2">
+                    <h6 class="fw-bold" style="color: #d47a53;"><i class="fa-solid fa-history me-2"></i> Nhật Ký</h6>
+                    <button class="btn btn-sm btn-outline-danger btn-cute py-0" onclick="clearLogsHistory()">Xóa
+                        hết</button>
                 </div>
-                <div class="history-scroll-box border rounded bg-white">
-                    <table class="table table-sm table-hover history-table">
-                        <thead>
+                <div style="max-height: 150px; overflow-y: auto; border-radius: 12px; border: 1px solid #f0e6d2;">
+                    <table class="table table-sm table-borderless mb-0" style="font-size: 0.85rem; color: #5a4a42;">
+                        <thead style="background: #ffecd2; position: sticky; top: 0;">
                             <tr>
-                                <th style="width: 70px;">Giờ</th>
-                                <th>Tên File</th>
-                                <th style="width: 95px;">Trạng Thái</th>
-                                <th>Nhận Định</th>
-                                <th style="width: 75px;">Độ Trễ</th>
-                                <th style="width: 80px;">Thread</th>
+                                <th>Giờ</th>
+                                <th>Ảnh</th>
+                                <th>Kết quả</th>
+                                <th>Độ trễ</th>
                             </tr>
                         </thead>
                         <tbody id="historyTableRows">
                             <tr>
-                                <td colspan="6" class="text-center text-muted py-2">Chưa có bản ghi nào trong lịch sử</td>
+                                <td colspan="4" class="text-center text-muted py-3">Chưa có ai ở đây cả~</td>
                             </tr>
                         </tbody>
                     </table>
@@ -374,31 +347,58 @@
 
 <script>
     let selectedFileObject = null;
-    let currentResultImageBase64 = null;
 
-    // 1. TỰ ĐỘNG HIỂN THỊ ẢNH XEM TRƯỚC (PREVIEW) KHI CHỌN FILE
+    async function loadApiKeys() {
+        try {
+            const res = await fetch('/api/image/config');
+            const data = await res.json();
+            if (data.success && data.api_keys) {
+                document.getElementById('apiKeysInput').value = data.api_keys.join('\n');
+            }
+        } catch (e) { console.error("Lỗi:", e); }
+    }
+
+    async function saveApiKeys() {
+        const pin = document.getElementById('apiPinCode').value;
+        const lines = document.getElementById('apiKeysInput').value.split('\n');
+        const keys = lines.map(k => k.trim()).filter(k => k);
+
+        try {
+            const res = await fetch('/api/image/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ api_keys: keys, pin_code: pin })
+            });
+            const data = await res.json();
+            if (data.success) {
+                alert('Lưu thành công rồi nha!');
+                document.querySelector('#apiKeyModal .btn-close').click();
+            } else {
+                alert('Oops: ' + data.message);
+            }
+        } catch (e) {
+            alert('Lỗi mạng mất tiêu rồi.');
+        }
+    }
+
     function previewImage(event) {
         const file = event.target.files[0];
         if (!file) return;
 
-        if (!file.type.startsWith('image/')) {
-            alert('Vui lòng chọn file hình ảnh (JPG, PNG, WebP)!');
-            event.target.value = '';
+        // GIỚI HẠN DUNG LƯỢNG 10MB (10 * 1024 * 1024 bytes)
+        if (file.size > 10485760) {
+            alert("Bức ảnh này to quá (Hơn 10MB)! Hệ thống sẽ bị nghẹn mất. Bạn chọn ảnh nhẹ hơn nhé!");
+            clearSelectedImage();
             return;
         }
 
         selectedFileObject = file;
-
-        // Cập nhật thông tin file
-        document.getElementById('origFileName').textContent = file.name;
-        document.getElementById('origFileSize').textContent = `${(file.size / 1024).toFixed(1)} KB`;
-        document.getElementById('origBadge').textContent = 'Đã tải ảnh';
-        document.getElementById('origBadge').className = 'badge bg-primary';
+        document.getElementById('origBadge').textContent = 'Đã nhận ảnh';
+        document.getElementById('origBadge').className = 'badge bg-success';
         document.getElementById('btnAnalyze').disabled = false;
 
-        // Đọc và hiển thị Preview ngay lập tức
         const reader = new FileReader();
-        reader.onload = function(e) {
+        reader.onload = function (e) {
             const previewImg = document.getElementById('origPreviewImg');
             previewImg.src = e.target.result;
             previewImg.style.display = 'block';
@@ -407,241 +407,103 @@
         reader.readAsDataURL(file);
     }
 
-    // Hủy chọn ảnh
     function clearSelectedImage() {
         document.getElementById('imageFileInput').value = '';
         selectedFileObject = null;
         document.getElementById('origPreviewImg').src = '';
         document.getElementById('origPreviewImg').style.display = 'none';
         document.getElementById('origPlaceholder').style.display = 'block';
-        document.getElementById('origFileName').textContent = 'Chưa chọn file';
-        document.getElementById('origFileSize').textContent = '-- KB';
-        document.getElementById('origBadge').textContent = 'Chưa có ảnh';
-        document.getElementById('origBadge').className = 'badge bg-secondary';
+        document.getElementById('origBadge').textContent = 'Trống';
+        document.getElementById('origBadge').className = 'badge bg-light text-secondary';
         document.getElementById('btnAnalyze').disabled = true;
     }
 
-    // 2. GỌI FETCH() GỬI FILE ẢNH LÊN /api/upload_image (KHÔNG TẢI LẠI TRANG)
     async function executeImageAnalysis() {
-        if (!selectedFileObject) {
-            alert('Vui lòng chọn một file ảnh trước!');
-            return;
-        }
-
+        if (!selectedFileObject) return;
         const btnAnalyze = document.getElementById('btnAnalyze');
-        const scanLine = document.getElementById('scanLine');
-        const resultPlaceholder = document.getElementById('resultPlaceholder');
-        const loadingIndicator = document.getElementById('loadingIndicator');
-        const resultImg = document.getElementById('resultImg');
-        const resultBadge = document.getElementById('resultBadge');
-        const resultFooter = document.getElementById('resultFooter');
-
-        // Bật trạng thái đang xử lý (Loading State)
         btnAnalyze.disabled = true;
-        btnAnalyze.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i> Đang Phân Tích...';
-        scanLine.style.display = 'block';
-        resultPlaceholder.style.display = 'none';
-        loadingIndicator.style.display = 'block';
-        resultImg.style.display = 'none';
-        resultBadge.textContent = 'Đang xử lý';
-        resultBadge.className = 'badge bg-warning text-dark';
+        btnAnalyze.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Chờ xíu xiu...';
 
-        // Chuẩn bị FormData với cả field 'image' và 'file'
+        document.getElementById('resultPlaceholder').style.display = 'none';
+        document.getElementById('loadingIndicator').style.display = 'block';
+        document.getElementById('resultImg').style.display = 'none';
+
         const formData = new FormData();
         formData.append('image', selectedFileObject);
-        formData.append('file', selectedFileObject);
 
         try {
-            const response = await fetch('/api/upload_image', {
-                method: 'POST',
-                body: formData
-            });
-
+            const response = await fetch('/api/upload_image', { method: 'POST', body: formData });
             const data = await response.json();
 
             if (response.ok && data.success) {
-                // 3. HIỂN THỊ ẢNH ĐÃ VẼ KHUNG XƯƠNG VÀ BANNER HUD
-                currentResultImageBase64 = data.result_image;
-                resultImg.src = data.result_image;
-                resultImg.style.display = 'block';
-                loadingIndicator.style.display = 'none';
-                document.getElementById('btnDownloadResult').style.display = 'inline-block';
-                resultFooter.style.display = 'flex';
+                document.getElementById('resultImg').src = data.result_image;
+                document.getElementById('resultImg').style.display = 'block';
+                document.getElementById('loadingIndicator').style.display = 'none';
 
-                // Cập nhật nhãn trạng thái
                 applyStatusBadge(data.status);
+                document.getElementById('textBehaviorDesc').textContent = data.description || 'Xong rồi nè!';
 
-                // Cập nhật câu mô tả hành vi
-                document.getElementById('textBehaviorDesc').textContent = data.description || 'Đã hoàn tất phân tích.';
-
-                // Cập nhật thông số Khung Xương (MediaPipe Pose)
-                if (data.pose_details && data.pose_details.landmarks_count !== undefined) {
-                    document.getElementById('badgePoseCount').textContent = `${data.pose_details.landmarks_count} Khung xương`;
-                }
-
-                // 4. HIỂN THỊ CÁC THẺ (BADGE) THÔNG SỐ HỆ ĐIỀU HÀNH
                 if (data.os_metrics) {
-                    // Thời gian xử lý luồng
-                    document.getElementById('badgeLatency').innerHTML = `${data.os_metrics.processing_time_ms} <small class="text-muted fw-normal" style="font-size: 0.7rem;">ms</small>`;
-
-                    // Semaphore & Khóa Mutex Lock
-                    document.getElementById('badgeSemaphore').innerHTML = `
-                        <span>${data.os_metrics.active_concurrent_workers || 1}</span> / ${data.os_metrics.semaphore_limit || 3}
-                        <small class="text-success fw-bold" style="font-size: 0.7rem;">(Lock OK)</small>
-                    `;
-
-                    // OS Thread & Key xoay vòng
-                    document.getElementById('badgeThreadAndKey').textContent = `[${data.os_metrics.thread_name || 'Thread'}] | ${data.os_metrics.api_key_used || 'Key Xoay vòng'}`;
-
-                    // Tên Model đã dùng
-                    document.getElementById('resultModelUsed').textContent = `Mô hình: ${data.os_metrics.model_used || 'AI Vision'}`;
+                    document.getElementById('badgeLatency').innerHTML = `${data.os_metrics.processing_time_ms} <small>ms</small>`;
+                    document.getElementById('activeWorkersNum').textContent = data.os_metrics.active_concurrent_workers || 1;
+                    document.getElementById('badgeThreadAndKey').textContent = `[${data.os_metrics.thread_name}] ${data.os_metrics.api_key_used}`;
                 }
-
-                // Cập nhật lại danh sách lịch sử phân tích
                 refreshHistoryLogs();
             } else {
-                loadingIndicator.style.display = 'none';
-                resultPlaceholder.style.display = 'block';
-                resultPlaceholder.innerHTML = `
-                    <i class="fa-solid fa-triangle-exclamation text-danger fa-2x mb-2"></i>
-                    <h6 class="text-danger mb-1">Lỗi Phân Tích</h6>
-                    <small class="text-secondary">${data.message || 'Không thể xử lý ảnh này.'}</small>
-                `;
-                resultBadge.textContent = 'LỖI';
-                resultBadge.className = 'badge bg-danger';
-                alert(`Lỗi từ máy chủ: ${data.message || 'Không thể phân tích ảnh.'}`);
+                alert('Lỗi: ' + (data.message || 'Hệ thống đang mệt.'));
+                clearSelectedImage();
             }
         } catch (error) {
-            console.error('Fetch error:', error);
-            loadingIndicator.style.display = 'none';
-            resultPlaceholder.style.display = 'block';
-            resultPlaceholder.innerHTML = `
-                <i class="fa-solid fa-circle-xmark text-danger fa-2x mb-2"></i>
-                <h6 class="text-danger mb-1">Mất Kết Nối</h6>
-                <small class="text-secondary">Không thể gửi yêu cầu tới /api/upload_image. Hãy kiểm tra server Flask.</small>
-            `;
-            resultBadge.textContent = 'MẤT KẾT NỐI';
-            resultBadge.className = 'badge bg-danger';
-            alert('Lỗi kết nối tới máy chủ Flask! Vui lòng thử lại.');
+            alert('Lỗi kết nối.');
+            clearSelectedImage();
         } finally {
             btnAnalyze.disabled = false;
-            btnAnalyze.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles me-1"></i> Phân Tích';
-            scanLine.style.display = 'none';
+            btnAnalyze.innerHTML = '<i class="fa-solid fa-star me-1"></i> Khám Phá Ngay';
+            document.getElementById('loadingIndicator').style.display = 'none';
+            if (!document.getElementById('resultImg').src) document.getElementById('resultPlaceholder').style.display = 'block';
         }
     }
 
-    // Gắn nhãn màu sắc cho trạng thái hành vi
     function applyStatusBadge(status) {
-        const topBadge = document.getElementById('resultBadge');
-        const behaviorBadge = document.getElementById('badgeBehaviorStatus');
-        const iconBox = document.getElementById('iconStatusBox');
+        const topBadge = document.getElementById('badgeBehaviorStatus');
+        let badgeClass = 'badge bg-light text-secondary';
 
-        topBadge.className = 'badge';
-        topBadge.textContent = status || 'BÌNH THƯỜNG';
+        if (status === 'BÌNH THƯỜNG') badgeClass = 'badge badge-status-normal';
+        else if (status === 'TÍCH CỰC') badgeClass = 'badge badge-status-positive';
+        else if (status === 'CẢNH BÁO') badgeClass = 'badge badge-status-warning';
+        else if (status === 'NGUY HIỂM') badgeClass = 'badge badge-status-danger';
 
-        let badgeClass = 'badge bg-secondary';
-        let iconClass = 'fa-solid fa-shield-halved';
-
-        if (status === 'BÌNH THƯỜNG') {
-            topBadge.classList.add('badge-status-normal');
-            badgeClass = 'badge badge-status-normal';
-            iconBox.className = 'os-badge-icon bg-success bg-opacity-10 text-success';
-            iconClass = 'fa-solid fa-circle-check';
-        } else if (status === 'TÍCH CỰC') {
-            topBadge.classList.add('badge-status-positive');
-            badgeClass = 'badge badge-status-positive';
-            iconBox.className = 'os-badge-icon bg-primary bg-opacity-10 text-primary';
-            iconClass = 'fa-solid fa-face-smile';
-        } else if (status === 'CẢNH BÁO') {
-            topBadge.classList.add('badge-status-warning');
-            badgeClass = 'badge badge-status-warning';
-            iconBox.className = 'os-badge-icon bg-warning bg-opacity-10 text-warning';
-            iconClass = 'fa-solid fa-triangle-exclamation';
-        } else if (status === 'NGUY HIỂM') {
-            topBadge.classList.add('badge-status-danger');
-            badgeClass = 'badge badge-status-danger';
-            iconBox.className = 'os-badge-icon bg-danger bg-opacity-10 text-danger';
-            iconClass = 'fa-solid fa-radiation';
-        } else {
-            topBadge.classList.add('bg-secondary');
-        }
-
-        behaviorBadge.innerHTML = `<span class="${badgeClass}" style="font-size: 0.76rem;"><i class="${iconClass} me-1"></i> ${status || 'BÌNH THƯỜNG'}</span>`;
+        topBadge.innerHTML = `<span class="${badgeClass} px-2 py-1">${status || 'BÌNH THƯỜNG'}</span>`;
     }
 
-    // Tải và hiển thị danh sách lịch sử phân tích
     async function refreshHistoryLogs() {
         try {
             const res = await fetch('/api/image/logs');
             const data = await res.json();
-            if (data.success) {
+            if (data.success && data.history.length > 0) {
                 const tbody = document.getElementById('historyTableRows');
                 tbody.innerHTML = '';
-
-                if (!data.history || data.history.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-2">Chưa có bản ghi nào trong lịch sử</td></tr>';
-                    return;
-                }
-
                 data.history.forEach(row => {
                     const tr = document.createElement('tr');
-
-                    let badgeClass = 'bg-secondary';
-                    if (row.status === 'BÌNH THƯỜNG') badgeClass = 'badge-status-normal';
-                    else if (row.status === 'TÍCH CỰC') badgeClass = 'badge-status-positive';
-                    else if (row.status === 'CẢNH BÁO') badgeClass = 'badge-status-warning';
-                    else if (row.status === 'NGUY HIỂM') badgeClass = 'badge-status-danger';
-
                     const timePart = row.timestamp ? (row.timestamp.split(' ')[1] || row.timestamp) : '--';
-
                     tr.innerHTML = `
-                        <td><small class="text-muted">${timePart}</small></td>
-                        <td class="text-truncate" style="max-width: 110px;" title="${row.filename}"><strong>${row.filename}</strong></td>
-                        <td><span class="badge ${badgeClass}" style="font-size: 0.68rem;">${row.status}</span></td>
-                        <td class="text-truncate" style="max-width: 180px;" title="${row.description}">${row.description}</td>
-                        <td><small class="text-primary fw-bold">${row.processing_time_ms}ms</small></td>
-                        <td><small class="text-muted">${row.thread_name || 'Thread'}</small></td>
+                        <td><small>${timePart}</small></td>
+                        <td class="text-truncate" style="max-width: 90px;"><strong>${row.filename}</strong></td>
+                        <td><span class="badge bg-light text-dark border">${row.status}</span></td>
+                        <td><small class="fw-bold" style="color:#d47a53">${row.processing_time_ms}ms</small></td>
                     `;
                     tbody.appendChild(tr);
                 });
-
-                if (data.system_metrics) {
-                    document.getElementById('activeWorkersNum').textContent = data.system_metrics.active_workers || '0';
-                }
             }
-        } catch (err) {
-            console.error('Lỗi khi tải danh sách lịch sử:', err);
-        }
+        } catch (err) { }
     }
 
-    // Xóa lịch sử nhật ký
     async function clearLogsHistory() {
-        if (!confirm('Bạn có chắc chắn muốn xóa toàn bộ lịch sử phân tích ảnh trong bộ nhớ không?')) return;
-        try {
-            const res = await fetch('/api/image/clear-logs', { method: 'POST' });
-            const data = await res.json();
-            if (data.success) {
-                refreshHistoryLogs();
-            }
-        } catch (err) {
-            console.error('Lỗi khi xóa lịch sử:', err);
-        }
+        if (!confirm('Bạn muốn xóa hết nhật ký luôn hả?')) return;
+        await fetch('/api/image/clear-logs', { method: 'POST' });
+        document.getElementById('historyTableRows').innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">Chưa có ai ở đây cả~</td></tr>';
     }
 
-    // Tải ảnh kết quả về máy
-    function downloadResultImage() {
-        if (!currentResultImageBase64) return;
-        const a = document.createElement('a');
-        a.href = currentResultImageBase64;
-        a.download = `AI_Analysis_${Date.now()}.jpg`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-    }
-
-    // Tự động tải nhật ký lịch sử khi tải xong trang
-    document.addEventListener('DOMContentLoaded', () => {
-        refreshHistoryLogs();
-    });
+    document.addEventListener('DOMContentLoaded', refreshHistoryLogs);
 </script>
 {% endblock %}

@@ -11,7 +11,7 @@ import requests
 import threading
 import numpy as np
 from datetime import datetime
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, session
 
 # ------------------------------------------------------------------------------
 # 1. KHỞI TẠO FLASK BLUEPRINT
@@ -28,21 +28,18 @@ DEFAULT_IMAGE_API_KEYS = [
 
 OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
 
-# Danh sách Mô hình Thị giác (Vision Models)
-DEFAULT_VISION_MODEL = "dots-studio/dots-3-note-preview:free"
+DEFAULT_VISION_MODEL = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
+
 FALLBACK_VISION_MODELS = [
     "deepseek/deepseek-v4-flash:free",
     "google/gemma-4-26b-a4b-it:free",
-    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
     "openrouter/free"
 ]
-
 
 def _load_configured_api_keys():
     """Tải API Keys từ danh sách mặc định, biến môi trường, config_local.json và Database dự phòng"""
     keys = list(DEFAULT_IMAGE_API_KEYS)
 
-    # 1. Biến môi trường
     env_keys_str = os.getenv("OPENROUTER_API_KEYS", "").strip()
     if env_keys_str:
         for k in env_keys_str.split(","):
@@ -54,7 +51,6 @@ def _load_configured_api_keys():
     if env_single and env_single not in keys:
         keys.append(env_single)
 
-    # 2. File config_local.json (nếu có)
     try:
         config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config_local.json")
         if not os.path.exists(config_path):
@@ -75,7 +71,6 @@ def _load_configured_api_keys():
     except Exception as e:
         print(f"[ImageProcessor] Note when reading config_local.json: {e}")
 
-    # 3. Tự động nạp thêm các key dự phòng từ DB bằng pymysql trực tiếp (tránh circular import với app.py)
     try:
         import pymysql
         conn = pymysql.connect(
@@ -111,10 +106,7 @@ def _load_configured_api_keys():
 
 
 class ThreadSafeKeyManager:
-    """
-    Quản lý danh sách API Key theo cơ chế Round-Robin an toàn đa luồng.
-    Áp dụng Mutex Lock để tránh xung đột chỉ số giữa các request đồng thời.
-    """
+    """Quản lý danh sách API Key theo cơ chế Round-Robin an toàn đa luồng."""
     def __init__(self, initial_keys=None):
         self.lock = threading.Lock()
         self.keys = initial_keys or list(DEFAULT_IMAGE_API_KEYS)
@@ -123,7 +115,6 @@ class ThreadSafeKeyManager:
         self.error_counts = {k: 0 for k in self.keys}
 
     def get_next_key(self):
-        """Lấy key tiếp theo theo thuật toán Round-Robin"""
         with self.lock:
             if not self.keys:
                 return ""
@@ -133,20 +124,17 @@ class ThreadSafeKeyManager:
             return key
 
     def record_error(self, key):
-        """Ghi nhận lỗi 429 hoặc lỗi kết nối cho key cụ thể"""
         with self.lock:
             if key in self.error_counts:
                 self.error_counts[key] += 1
 
     @staticmethod
     def mask_key(key):
-        """Che bớt ký tự key để hiển thị an toàn trên Dashboard / Metrics"""
         if not key or len(key) < 14:
             return "******"
         return f"{key[:12]}...{key[-4:]}"
 
     def get_stats(self):
-        """Thống kê tình trạng sử dụng của các Keys"""
         with self.lock:
             return {
                 "total_keys": len(self.keys),
@@ -161,26 +149,18 @@ class ThreadSafeKeyManager:
                 ]
             }
 
-
-# Khởi tạo KeyManager dùng chung toàn module
 key_manager = ThreadSafeKeyManager(_load_configured_api_keys())
 
 
 # ------------------------------------------------------------------------------
 # 3. QUẢN LÝ TÀI NGUYÊN HỆ ĐIỀU HÀNH (SEMAPHORE & CRITICAL SECTION LOCK)
 # ------------------------------------------------------------------------------
-# Semaphore giới hạn tối đa 3 luồng xử lý ảnh đồng thời (tránh quá tải CPU/RAM)
 MAX_CONCURRENT_IMAGE_JOBS = 3
 image_concurrency_semaphore = threading.Semaphore(MAX_CONCURRENT_IMAGE_JOBS)
-
-# Khóa Lock bảo vệ vùng găng khi cập nhật Lịch sử xử lý và Bộ đếm Thống kê
 critical_section_lock = threading.Lock()
-
-# Bộ đếm giám sát luồng đang hoạt động
 active_workers_count = 0
 active_workers_lock = threading.Lock()
 
-# Lưu trữ lịch sử phân tích và thống kê hệ thống (In-memory buffer)
 image_processing_history = []
 system_metrics = {
     "total_requests": 0,
@@ -193,13 +173,11 @@ system_metrics = {
 
 
 def _record_history_log(entry):
-    """Ghi nhận log vào danh sách lịch sử với khóa bảo vệ Vùng Găng (Critical Section)"""
     with critical_section_lock:
         image_processing_history.insert(0, entry)
         if len(image_processing_history) > 100:
             image_processing_history.pop()
 
-        # Cập nhật thống kê
         system_metrics["total_requests"] += 1
         if entry.get("success", False):
             system_metrics["success_requests"] += 1
@@ -217,7 +195,6 @@ def _record_history_log(entry):
 # ------------------------------------------------------------------------------
 # 4. MODULE MEDIAPIPE POSE & COMPUTER VISION
 # ------------------------------------------------------------------------------
-# Kiểm tra khả năng nạp MediaPipe an toàn (graceful fallback nếu thiếu thư viện)
 try:
     import mediapipe as mp
     MEDIAPIPE_AVAILABLE = True
@@ -231,7 +208,6 @@ except Exception as _mp_err:
 
 
 def _calculate_angle(a, b, c):
-    """Tính góc giữa 3 điểm a, b, c (tính theo độ)"""
     radians = math.atan2(c[1] - b[1], c[0] - b[0]) - math.atan2(a[1] - b[1], a[0] - b[0])
     angle = abs(radians * 180.0 / math.pi)
     if angle > 180.0:
@@ -240,16 +216,6 @@ def _calculate_angle(a, b, c):
 
 
 def analyze_pose_and_draw(image_bgr):
-    """
-    Sử dụng MediaPipe Pose (static_image_mode=True) để nhận diện người và vẽ khung xương.
-    Nếu không phát hiện hoặc không có MediaPipe, sử dụng OpenCV để vẽ HUD và khung cảnh báo.
-    
-    Trả về:
-    - annotated_image (numpy ndarray): Ảnh đã vẽ landmarks / HUD
-    - status (str): "BÌNH THƯỜNG", "TÍCH CỰC", "CẢNH BÁO", "NGUY HIỂM"
-    - heuristic_desc (str): Mô tả tư thế nhận diện được
-    - pose_metadata (dict): Thông số tọa độ chi tiết
-    """
     h, w = image_bgr.shape[:2]
     annotated = image_bgr.copy()
 
@@ -259,7 +225,6 @@ def analyze_pose_and_draw(image_bgr):
     detected_landmarks_count = 0
     pose_metadata = {}
 
-    # 1. Thử nhận diện bằng MediaPipe Pose
     if MEDIAPIPE_AVAILABLE:
         try:
             with mp_pose.Pose(
@@ -276,7 +241,6 @@ def analyze_pose_and_draw(image_bgr):
                     landmarks = results.pose_landmarks.landmark
                     detected_landmarks_count = len(landmarks)
 
-                    # Vẽ khung xương MediaPipe lên ảnh
                     try:
                         mp_drawing.draw_landmarks(
                             annotated,
@@ -291,7 +255,6 @@ def analyze_pose_and_draw(image_bgr):
                             mp_pose.POSE_CONNECTIONS
                         )
 
-                    # Lấy các điểm giải phẫu quan trọng
                     nose = (landmarks[0].x * w, landmarks[0].y * h)
                     l_shoulder = (landmarks[11].x * w, landmarks[11].y * h)
                     r_shoulder = (landmarks[12].x * w, landmarks[12].y * h)
@@ -307,19 +270,15 @@ def analyze_pose_and_draw(image_bgr):
                     torso_height = abs(hip_mid_y - shoulder_mid_y)
                     shoulder_width = math.dist(l_shoulder, r_shoulder)
 
-                    # Phân tích các trường hợp tư thế:
-                    # A. Giơ tay / Vẫy tay (Cổ tay cao hơn vai đáng kể)
                     left_hand_up = l_wrist[1] < l_shoulder[1]
                     right_hand_up = r_wrist[1] < r_shoulder[1]
 
-                    # B. Nằm hoặc ngã (Khoảng cách dọc thân mình quá ngắn so với bề ngang vai)
                     is_horizontal = False
                     if shoulder_width > 0:
                         ratio = torso_height / max(shoulder_width, 1.0)
                         if ratio < 0.45:
                             is_horizontal = True
 
-                    # C. Cúi gập người (Góc vai - hông - gối gập nhỏ)
                     hip_angle = _calculate_angle(l_shoulder, l_hip, l_knee)
 
                     if is_horizontal:
@@ -347,28 +306,46 @@ def analyze_pose_and_draw(image_bgr):
         except Exception as ex:
             print(f"[ImageProcessor] MediaPipe runtime error: {ex}")
 
-    # 2. Nếu MediaPipe không phát hiện hoặc không khả dụng -> Dùng OpenCV vẽ HUD cảnh báo & khung
     if not pose_detected:
-        heuristic_desc = "Phát hiện đối tượng/khung hình (chưa trích xuất được khung xương người)."
+        heuristic_desc = "Phát hiện đối tượng/khung hình (chế độ quét OpenCV bề mặt)."
         status = "BÌNH THƯỜNG"
 
-        # Vẽ 4 góc khung ngắm quang học (Futuristic Viewfinder Brackets)
-        corner_len = min(w, h) // 10
-        bracket_color = (0, 220, 255)  # Màu vàng hổ phách
+        primary_color = (255, 255, 0)   
+        secondary_color = (0, 255, 0)   
+        alert_color = (0, 100, 255)     
         thickness = 2
 
-        # Góc trên - trái
-        cv2.line(annotated, (20, 20), (20 + corner_len, 20), bracket_color, thickness)
-        cv2.line(annotated, (20, 20), (20, 20 + corner_len), bracket_color, thickness)
-        # Góc trên - phải
-        cv2.line(annotated, (w - 20, 20), (w - 20 - corner_len, 20), bracket_color, thickness)
-        cv2.line(annotated, (w - 20, 20), (w - 20, 20 + corner_len), bracket_color, thickness)
-        # Góc dưới - trái
-        cv2.line(annotated, (20, h - 20), (20 + corner_len, h - 20), bracket_color, thickness)
-        cv2.line(annotated, (20, h - 20), (20, h - 20 - corner_len), bracket_color, thickness)
-        # Góc dưới - phải
-        cv2.line(annotated, (w - 20, h - 20), (w - 20 - corner_len, h - 20), bracket_color, thickness)
-        cv2.line(annotated, (w - 20, h - 20), (w - 20, h - 20 - corner_len), bracket_color, thickness)
+        gap = max(20, min(w, h) // 25)
+        corner_len = min(w, h) // 8
+
+        overlay = annotated.copy()
+        for y_line in range(gap * 4, h - gap * 4, max(10, h // 20)):
+            cv2.line(overlay, (gap, y_line), (w - gap, y_line), (40, 60, 40), 1)
+        cv2.addWeighted(overlay, 0.4, annotated, 0.6, 0, annotated)
+
+        cv2.line(annotated, (gap, gap), (gap + corner_len, gap), primary_color, thickness)
+        cv2.line(annotated, (gap, gap), (gap, gap + corner_len), primary_color, thickness)
+        cv2.line(annotated, (w - gap, gap), (w - gap - corner_len, gap), primary_color, thickness)
+        cv2.line(annotated, (w - gap, gap), (w - gap, gap + corner_len), primary_color, thickness)
+        cv2.line(annotated, (gap, h - gap), (gap + corner_len, h - gap), primary_color, thickness)
+        cv2.line(annotated, (gap, h - gap), (gap, h - gap - corner_len), primary_color, thickness)
+        cv2.line(annotated, (w - gap, h - gap), (w - gap - corner_len, h - gap), primary_color, thickness)
+        cv2.line(annotated, (w - gap, h - gap), (w - gap, h - gap - corner_len), primary_color, thickness)
+
+        center_x, center_y = w // 2, h // 2
+        cross_len = max(15, min(w, h) // 30)
+        cv2.line(annotated, (center_x - cross_len, center_y), (center_x + cross_len, center_y), secondary_color, 1)
+        cv2.line(annotated, (center_x, center_y - cross_len), (center_x, center_y + cross_len), secondary_color, 1)
+        cv2.circle(annotated, (center_x, center_y), cross_len * 2, primary_color, 1, cv2.LINE_AA)
+        cv2.circle(annotated, (center_x, center_y), 2, secondary_color, -1)
+
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = max(0.4, min(w, h) / 1000.0)
+        
+        cv2.putText(annotated, f"RES: {w}x{h}", (gap + 10, gap + 25), font, font_scale, primary_color, 1, cv2.LINE_AA)
+        cv2.putText(annotated, "SYS: OPENCV-FALLBACK", (gap + 10, gap + 50), font, font_scale, primary_color, 1, cv2.LINE_AA)
+        cv2.putText(annotated, "TARGET: ACQUIRED", (gap + 10, gap + 75), font, font_scale, secondary_color, 1, cv2.LINE_AA)
+        cv2.putText(annotated, "SCAN: COMPLETE", (gap + 10, h - gap - 10), font, font_scale, alert_color, 1, cv2.LINE_AA)
 
     return annotated, status, heuristic_desc, {
         "pose_detected": pose_detected,
@@ -376,17 +353,18 @@ def analyze_pose_and_draw(image_bgr):
         **pose_metadata
     }
 
-
 # ------------------------------------------------------------------------------
 # 5. GỌI OPENROUTER VISION AI (CLOUD LLM REASONING)
 # ------------------------------------------------------------------------------
 def _clean_ai_description(text):
-    """Làm sạch văn bản trả lời từ AI để đạt độ tự nhiên, xúc tích"""
     if not text:
         return "Bình thường, đối tượng trong khung hình."
     cleaned = text.strip()
-    # Loại bỏ tiền tố như "Miêu tả:", "Hành vi:", "Kết luận:"
     cleaned = re.sub(r'(?i)^(miêu tả|hành vi|phân tích|kết luận|trạng thái)\s*:\s*', '', cleaned)
+    # Loại bỏ các cụm máy móc nếu AI mở đầu theo quán tính
+    cleaned = re.sub(r'(?i)^(bức ảnh cho thấy|hình ảnh cho thấy|dựa trên hình ảnh|tôi thấy|trong ảnh là|qua bức ảnh|bức ảnh này cho thấy|trong hình là)\s*[,:]?\s*', '', cleaned)
+    # Loại bỏ tag trạng thái ở cuối nếu có để câu văn hoàn toàn tự nhiên
+    cleaned = re.sub(r'\s*\[(BÌNH THƯỜNG|TÍCH CỰC|CẢNH BÁO|NGUY HIỂM)\]\.?$', '', cleaned, flags=re.IGNORECASE)
     cleaned = re.sub(r'[\*\#\_]+', '', cleaned)
     cleaned = re.sub(r'\s+', ' ', cleaned).strip()
     if cleaned:
@@ -395,8 +373,17 @@ def _clean_ai_description(text):
 
 
 def _classify_ai_status(text):
-    """Phân loại trạng thái an ninh dựa trên nội dung mô tả của AI"""
     text_upper = text.upper()
+    # Ưu tiên nhận diện tag đặt trong ngoặc vuông
+    if "[NGUY HIỂM]" in text_upper or "[DANGER]" in text_upper:
+        return "NGUY HIỂM"
+    if "[CẢNH BÁO]" in text_upper or "[WARNING]" in text_upper:
+        return "CẢNH BÁO"
+    if "[TÍCH CỰC]" in text_upper or "[POSITIVE]" in text_upper:
+        return "TÍCH CỰC"
+    if "[BÌNH THƯỜNG]" in text_upper or "[NORMAL]" in text_upper:
+        return "BÌNH THƯỜNG"
+
     if any(k in text_upper for k in ["NGUY HIỂM", "DANGER", "TÉ NGÃ", "NGÃ", "ĐÁNH NHAU", "BẤT TỈNH", "NẰM BẤT ĐỘNG"]):
         return "NGUY HIỂM"
     if any(k in text_upper for k in ["CẢNH BÁO", "WARNING", "BẤT THƯỜNG", "LẢNG VÃNG", "CHE MẶT", "CÚI GẬP", "MỆT MỎI"]):
@@ -407,7 +394,6 @@ def _classify_ai_status(text):
 
 
 def _extract_answer_from_reasoning(reasoning_text):
-    """Trích xuất câu miêu tả từ khối reasoning nếu model dùng hết token vào suy luận"""
     if not reasoning_text:
         return "Bình thường, đối tượng trong khung hình."
     parts = [p.strip() for p in reasoning_text.split('\n\n') if p.strip()]
@@ -421,12 +407,7 @@ def _extract_answer_from_reasoning(reasoning_text):
 
 
 def call_openrouter_vision(image_bgr, initial_key):
-    """
-    Gửi ảnh (chiều rộng tối đa 640px, nén JPEG Base64) lên OpenRouter API để phân tích.
-    Tự động thử lần lượt các model thị giác và xoay vòng API Keys nếu gặp Rate Limit (429).
-    """
     h, w = image_bgr.shape[:2]
-    # Thu nhỏ ảnh (chiều rộng tối đa 640px)
     scale = 640.0 / max(w, 1)
     if scale < 1.0:
         small_img = cv2.resize(image_bgr, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
@@ -440,11 +421,11 @@ def call_openrouter_vision(image_bgr, initial_key):
     base64_str = base64.b64encode(buffer).decode('utf-8')
 
     prompt_text = (
-        "Bạn là chuyên gia thị giác máy tính AI phân tích hành vi và biểu cảm con người qua hình ảnh. "
-        "Hãy quan sát kỹ bức ảnh và mô tả chi tiết bằng tiếng Việt tự nhiên (khoảng 2-3 câu):\n"
-        "- Nhận diện rõ trong ảnh có những ai/con vật/đồ vật gì, trang phục, tư thế (đứng, ngồi, nằm, giơ tay...).\n"
-        "- Hành động cụ thể, cử chỉ và biểu cảm nổi bật (bình thường, vui vẻ, mỉm cười, mệt mỏi, bất thường...).\n"
-        "- Bối cảnh xung quanh và nhận định tổng thể trạng thái: [BÌNH THƯỜNG], [TÍCH CỰC], [CẢNH BÁO], hoặc [NGUY HIỂM]."
+        "Hãy quan sát bức ảnh và kể lại những gì đang diễn ra một cách tự nhiên, đúng mực như một người kể chuyện (khoảng 2-3 câu ngắn):\n"
+        "- Bao quát đầy đủ bối cảnh, nhân vật hoặc đồ vật, trang phục, hành vi cử chỉ và biểu cảm nổi bật một cách súc tích.\n"
+        "- BẮT BUỘC hành văn đúng mực, tự nhiên, mượt mà và chân thật như con người đang diễn đạt trực tiếp.\n"
+        "- TUYỆT ĐỐI KHÔNG dùng các cụm từ máy móc rập khuôn của AI như: 'Bức ảnh cho thấy', 'Dựa trên hình ảnh', 'Tôi thấy', 'Trong ảnh', 'Bức ảnh này'. Hãy đi thẳng ngay vào nội dung và diễn biến của khung cảnh.\n"
+        "- Ở câu cuối cùng, hãy kèm theo nhận định trạng thái trong ngoặc vuông: [BÌNH THƯỜNG], [TÍCH CỰC], [CẢNH BÁO], hoặc [NGUY HIỂM]."
     )
 
     models_to_try = [DEFAULT_VISION_MODEL] + [m for m in FALLBACK_VISION_MODELS if m != DEFAULT_VISION_MODEL]
@@ -491,30 +472,27 @@ def call_openrouter_vision(image_bgr, initial_key):
                     content = msg.get("content")
                     reasoning = msg.get("reasoning")
 
-                    # Ưu tiên lấy content văn bản trả lời trực tiếp
                     if content and isinstance(content, str) and content.strip():
                         cleaned_desc = _clean_ai_description(content)
                         status_tag = _classify_ai_status(content)
                         return status_tag, cleaned_desc, model_name, active_key
 
-                    # Nếu content là None nhưng có reasoning
                     if reasoning and isinstance(reasoning, str) and reasoning.strip() and not best_reasoning_fallback:
                         cleaned_r = _extract_answer_from_reasoning(reasoning)
                         best_reasoning_fallback = (_classify_ai_status(cleaned_r), cleaned_r, model_name, active_key)
 
-            elif resp.status_code == 429:
+            elif resp.status_code == 429 or resp.status_code == 401:
                 key_manager.record_error(active_key)
                 backup_key = key_manager.get_next_key()
                 if backup_key and backup_key != active_key:
                     active_key = backup_key
-                last_error = f"Rate Limit (429) trên model {model_name}"
+                last_error = f"Lỗi {resp.status_code} trên model {model_name}"
                 continue
 
             last_error = f"Model {model_name} HTTP {resp.status_code}"
         except Exception as req_ex:
             last_error = f"Lỗi gọi {model_name}: {req_ex}"
 
-    # Nếu có kết quả trích xuất từ reasoning của một model 200 OK
     if best_reasoning_fallback:
         return best_reasoning_fallback
 
@@ -525,38 +503,26 @@ def call_openrouter_vision(image_bgr, initial_key):
 # 6. ĐÓNG DẤU GIAO DIỆN QUANG HỌC LÊN ẢNH KẾT QUẢ (HUD OVERLAY BANNER)
 # ------------------------------------------------------------------------------
 def overlay_hud_banner(image_bgr, status, thread_name, processing_time_ms, model_name=""):
-    """
-    Vẽ thanh thông tin trạng thái HUD chuẩn quân sự / AI Vision ở đầu ảnh.
-    Sử dụng màu sắc trực quan tương ứng với mức độ an ninh:
-    - BÌNH THƯỜNG: Xanh lục
-    - TÍCH CỰC: Xanh lam / Cyan
-    - CẢNH BÁO: Vàng / Cam
-    - NGUY HIỂM: Đỏ thẫm
-    """
     output = image_bgr.copy()
     h, w = output.shape[:2]
 
-    # Bảng màu BGR
     status_colors = {
-        "BÌNH THƯỜNG": (46, 139, 87),   # Xanh lá biển (SeaGreen)
-        "TÍCH CỰC": (220, 160, 30),     # Xanh ngọc / Cyan
-        "CẢNH BÁO": (0, 140, 255),      # Cam
-        "NGUY HIỂM": (34, 34, 215)      # Đỏ
+        "BÌNH THƯỜNG": (46, 139, 87),   
+        "TÍCH CỰC": (220, 160, 30),     
+        "CẢNH BÁO": (0, 140, 255),      
+        "NGUY HIỂM": (34, 34, 215)      
     }
     badge_color = status_colors.get(status, (80, 80, 80))
 
     banner_height = max(42, int(h * 0.075))
     overlay = output.copy()
 
-    # Dải băng tối màu trong suốt ở phía trên
     cv2.rectangle(overlay, (0, 0), (w, banner_height), (20, 24, 30), -1)
     cv2.addWeighted(overlay, 0.75, output, 0.25, 0, output)
 
-    # Khối màu trạng thái
     badge_w = min(170, w // 3)
     cv2.rectangle(output, (8, 6), (badge_w, banner_height - 6), badge_color, -1)
 
-    # Chuyển text tiếng Việt sang không dấu cho cv2.putText
     status_ascii_map = {
         "BÌNH THƯỜNG": "BINH THUONG",
         "TÍCH CỰC": "TICH CUC",
@@ -568,19 +534,15 @@ def overlay_hud_banner(image_bgr, status, thread_name, processing_time_ms, model
     font = cv2.FONT_HERSHEY_SIMPLEX
     cv2.putText(output, status_ascii, (16, banner_height - 14), font, 0.55, (255, 255, 255), 2, cv2.LINE_AA)
 
-    # Hiển thị thông số Hệ điều hành: Thread, Thời gian xử lý, Model
     now_str = datetime.now().strftime("%H:%M:%S")
     os_info_str = f"[{thread_name}] | {processing_time_ms:.1f}ms | {now_str}"
     cv2.putText(output, os_info_str, (badge_w + 12, banner_height - 15), font, 0.45, (200, 215, 230), 1, cv2.LINE_AA)
 
-    # Đường chỉ viền màu công nghệ phía dưới banner
     cv2.line(output, (0, banner_height), (w, banner_height), badge_color, 2)
 
     return output
 
-
 def _encode_image_to_base64(image_bgr):
-    """Mã hóa ảnh OpenCV sang chuỗi Data URI JPEG Base64"""
     ret, buffer = cv2.imencode('.jpg', image_bgr, [int(cv2.IMWRITE_JPEG_QUALITY), 82])
     if not ret:
         return ""
@@ -594,34 +556,19 @@ def _encode_image_to_base64(image_bgr):
 
 @image_bp.route('/api/upload_image', methods=['POST'])
 def api_upload_image():
-    """
-    API tiếp nhận và phân tích ảnh tĩnh:
-    - Hỗ trợ tải file: multipart/form-data với field 'image' hoặc 'file'
-    - Hỗ trợ chuỗi base64: application/json với key 'image' hoặc 'image_base64'
-    - Kiểm soát đa luồng: Sử dụng Semaphore(3) giới hạn tối đa 3 tiến trình đồng thời
-    - Đo đạc thời gian thực thi (Latency / Processing Time ms)
-    - Trả về JSON chứa kết quả ảnh base64, nhãn trạng thái và thông số Hệ điều hành
-    """
     start_time = time.perf_counter()
     current_thread = threading.current_thread()
     thread_name = current_thread.name
     thread_id = threading.get_ident()
 
-    # Bước 1: Áp dụng Semaphore để kiểm soát số luồng song song (OS Concurrency Control)
-    # Thử xin quyền với thời gian chờ tối đa 15 giây nếu hệ thống đang đầy tải
     acquired = image_concurrency_semaphore.acquire(blocking=True, timeout=15.0)
     if not acquired:
         return jsonify({
             "success": False,
-            "message": "Hệ thống đang quá tải (vượt quá 3 luồng xử lý ảnh đồng thời). Vui lòng thử lại sau giây lát!",
-            "os_metrics": {
-                "semaphore_available": 0,
-                "thread_name": thread_name,
-                "status": "SEMAPHORE_TIMEOUT"
-            }
+            "message": "Hệ thống đang quá tải. Vui lòng thử lại sau giây lát!",
+            "os_metrics": { "semaphore_available": 0, "thread_name": thread_name, "status": "SEMAPHORE_TIMEOUT" }
         }), 503
 
-    # Tăng biến đếm worker đang hoạt động
     global active_workers_count
     with active_workers_lock:
         active_workers_count += 1
@@ -631,27 +578,22 @@ def api_upload_image():
     original_filename = "upload.jpg"
 
     try:
-        # Bước 2: Đọc dữ liệu ảnh từ Multipart Form hoặc JSON Payload
         if request.content_type and "application/json" in request.content_type:
             data = request.get_json(silent=True) or {}
             b64_data = data.get("image") or data.get("image_base64", "")
             if not b64_data:
-                return jsonify({"success": False, "message": "Không tìm thấy dữ liệu ảnh trong JSON"}), 400
+                return jsonify({"success": False, "message": "Không tìm thấy dữ liệu ảnh"}), 400
 
-            # Xử lý tiền tố data:image/...;base64,
             if "," in b64_data:
                 b64_data = b64_data.split(",", 1)[1]
 
-            try:
-                img_bytes = base64.b64decode(b64_data)
-                np_arr = np.frombuffer(img_bytes, np.uint8)
-                image_bgr = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-            except Exception as dec_err:
-                return jsonify({"success": False, "message": f"Dữ liệu base64 không hợp lệ: {dec_err}"}), 400
+            img_bytes = base64.b64decode(b64_data)
+            np_arr = np.frombuffer(img_bytes, np.uint8)
+            image_bgr = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
         else:
             uploaded_file = request.files.get('image') or request.files.get('file')
             if not uploaded_file or uploaded_file.filename == '':
-                return jsonify({"success": False, "message": "Vui lòng chọn một file ảnh để tải lên"}), 400
+                return jsonify({"success": False, "message": "Vui lòng chọn ảnh"}), 400
 
             original_filename = uploaded_file.filename
             file_bytes = uploaded_file.read()
@@ -659,16 +601,12 @@ def api_upload_image():
             image_bgr = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
         if image_bgr is None or image_bgr.size == 0:
-            return jsonify({"success": False, "message": "Không thể giải mã định dạng ảnh này. Hãy thử ảnh JPG hoặc PNG!"}), 400
+            return jsonify({"success": False, "message": "Không giải mã được ảnh."}), 400
 
-        # Bước 3: Phân tích khung xương MediaPipe Pose & tính toán Heuristic sơ bộ
         annotated_img, pose_status, heuristic_desc, pose_meta = analyze_pose_and_draw(image_bgr)
-
-        # Bước 4: Lấy API Key xoay vòng (Round-Robin) và gọi OpenRouter Vision AI
         assigned_key = key_manager.get_next_key()
         ai_status, ai_desc, model_used, key_or_err = call_openrouter_vision(image_bgr, assigned_key)
 
-        # Quyết định kết quả cuối cùng (Ưu tiên nhận định sâu từ AI, fallback về Heuristic nếu Cloud bận)
         if ai_desc:
             final_status = ai_status or pose_status
             final_description = ai_desc
@@ -677,33 +615,22 @@ def api_upload_image():
             final_status = pose_status
             final_description = f"{heuristic_desc} (Phân tích Computer Vision cục bộ)"
             model_used = "Local-MediaPipe-Heuristic"
-            ai_source = "Local Engine (Cloud AI Bận/RateLimit)"
+            ai_source = "Local Engine (Cloud AI Bận/RateLimit/Invalid Key)"
 
-        # Bước 5: Đóng dấu HUD trực quan lên ảnh kết quả
         elapsed_ms = (time.perf_counter() - start_time) * 1000.0
-        final_hud_image = overlay_hud_banner(
-            annotated_img,
-            final_status,
-            thread_name,
-            elapsed_ms,
-            model_name=model_used
-        )
+        final_hud_image = overlay_hud_banner(annotated_img, final_status, thread_name, elapsed_ms, model_used)
         result_b64 = _encode_image_to_base64(final_hud_image)
 
-        # Tính toán thông số Hệ điều hành (OS Metrics)
         total_time_ms = round((time.perf_counter() - start_time) * 1000.0, 2)
         os_metrics = {
             "processing_time_ms": total_time_ms,
             "thread_name": thread_name,
-            "thread_id": thread_id,
             "api_key_used": ThreadSafeKeyManager.mask_key(assigned_key),
             "model_used": model_used,
-            "ai_source": ai_source,
             "active_concurrent_workers": current_active,
             "semaphore_limit": MAX_CONCURRENT_IMAGE_JOBS
         }
 
-        # Bước 6: Lưu log vào Vùng Găng (Critical Section)
         log_entry = {
             "id": str(uuid.uuid4())[:8],
             "filename": original_filename,
@@ -712,7 +639,6 @@ def api_upload_image():
             "description": final_description,
             "processing_time_ms": total_time_ms,
             "thread_name": thread_name,
-            "model_used": model_used,
             "success": True
         }
         _record_history_log(log_entry)
@@ -728,40 +654,93 @@ def api_upload_image():
 
     except Exception as ex:
         total_time_ms = round((time.perf_counter() - start_time) * 1000.0, 2)
-        error_log = {
-            "id": str(uuid.uuid4())[:8],
-            "filename": original_filename,
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "status": "LỖI",
-            "description": f"Ngoại lệ xử lý: {str(ex)}",
-            "processing_time_ms": total_time_ms,
-            "thread_name": thread_name,
-            "model_used": "None",
-            "success": False
-        }
-        _record_history_log(error_log)
-        return jsonify({
-            "success": False,
-            "message": f"Lỗi trong quá trình xử lý ảnh: {str(ex)}",
-            "os_metrics": {
-                "processing_time_ms": total_time_ms,
-                "thread_name": thread_name
-            }
-        }), 500
-
+        return jsonify({ "success": False, "message": f"Lỗi: {str(ex)}", "os_metrics": { "processing_time_ms": total_time_ms, "thread_name": thread_name } }), 500
     finally:
-        # Giải phóng Semaphore và giảm bộ đếm luồng
         with active_workers_lock:
             active_workers_count = max(0, active_workers_count - 1)
         image_concurrency_semaphore.release()
 
 
+@image_bp.route('/api/image/config', methods=['GET', 'POST'])
+def api_image_config():
+    """API cho phép thiết lập và lưu trữ OpenRouter API Key thông qua UI (Yêu cầu PIN xác thực)"""
+    config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config_local.json")
+    
+    if request.method == 'POST':
+        data = request.get_json(silent=True) or {}
+        
+        # 1. Kiểm tra xác thực mã PIN bảo mật liên kết với app.py
+        client_pin = str(data.get('pin_code', '')).strip()
+        expected_pin = "123456"
+        try:
+            from app import get_setting
+            db_pin = get_setting('system_pin')
+            if db_pin:
+                expected_pin = str(db_pin).strip()
+        except Exception:
+            pass
+            
+        admin_env_pin = os.getenv("ADMIN_PIN", os.getenv("SYSTEM_PIN", "")).strip()
+
+        is_authenticated = (
+            session.get('realtime_unlocked') or
+            session.get('chatbot_unlocked') or
+            session.get('is_admin') or
+            (client_pin and (client_pin == expected_pin or (admin_env_pin and client_pin == admin_env_pin)))
+        )
+        
+        if not is_authenticated:
+            return jsonify({
+                "success": False, 
+                "message": "Mã PIN không đúng hoặc chưa được xác thực! Vui lòng nhập đúng mã PIN hệ thống."
+            }), 401
+
+        keys_input = data.get('api_keys', [])
+        valid_keys = [k.strip() for k in keys_input if k.strip()]
+        
+        config_data = {}
+        if os.path.exists(config_path):
+            try:
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    config_data = json.load(f)
+            except:
+                pass
+        
+        config_data['OPENROUTER_API_KEYS'] = valid_keys
+        
+        try:
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(config_data, f, ensure_ascii=False, indent=4)
+        except Exception as e:
+            return jsonify({"success": False, "message": f"Lỗi ghi file: {str(e)}"}), 500
+            
+        # Áp dụng thay đổi ngay vào Key Manager mà không cần reset server
+        global key_manager
+        new_keys = _load_configured_api_keys()
+        with key_manager.lock:
+            key_manager.keys = new_keys
+            key_manager.index = 0
+            key_manager.usage_counts = {k: 0 for k in new_keys}
+            key_manager.error_counts = {k: 0 for k in new_keys}
+            
+        return jsonify({"success": True, "message": "Đã lưu cấu hình API Keys thành công!"})
+        
+    # Xử lý Request GET (Đổ dữ liệu ra UI)
+    config_data = {}
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config_data = json.load(f)
+        except:
+            pass
+            
+    return jsonify({
+        "success": True, 
+        "api_keys": config_data.get('OPENROUTER_API_KEYS', [])
+    })
+
 @image_bp.route('/api/image/logs', methods=['GET'])
 def api_image_logs():
-    """
-    Trả về danh sách lịch sử các bức ảnh đã phân tích và các chỉ số thống kê hệ điều hành.
-    Truy xuất được bảo vệ an toàn bằng Khóa (Lock).
-    """
     with critical_section_lock:
         logs_copy = list(image_processing_history)
         metrics_copy = dict(system_metrics)
@@ -769,47 +748,10 @@ def api_image_logs():
     with active_workers_lock:
         current_workers = active_workers_count
 
-    key_stats = key_manager.get_stats()
-
-    return jsonify({
-        "success": True,
-        "total_records": len(logs_copy),
-        "history": logs_copy,
-        "system_metrics": {
-            **metrics_copy,
-            "active_workers": current_workers,
-            "semaphore_available_estimate": max(0, MAX_CONCURRENT_IMAGE_JOBS - current_workers)
-        },
-        "api_keys_status": key_stats
-    })
-
-
-@image_bp.route('/api/image/stats', methods=['GET'])
-def api_image_stats():
-    """API nhanh trả về tóm tắt trạng thái tải và thông số hệ thống của module xử lý ảnh"""
-    with critical_section_lock:
-        metrics_copy = dict(system_metrics)
-    with active_workers_lock:
-        current_workers = active_workers_count
-
-    return jsonify({
-        "success": True,
-        "active_workers": current_workers,
-        "semaphore_capacity": MAX_CONCURRENT_IMAGE_JOBS,
-        "metrics": metrics_copy,
-        "keys": key_manager.get_stats()
-    })
-
+    return jsonify({ "success": True, "history": logs_copy, "system_metrics": { **metrics_copy, "active_workers": current_workers } })
 
 @image_bp.route('/api/image/clear-logs', methods=['POST'])
 def api_clear_image_logs():
-    """Xóa lịch sử phân tích trong bộ nhớ RAM"""
     with critical_section_lock:
         image_processing_history.clear()
-        system_metrics["total_requests"] = 0
-        system_metrics["success_requests"] = 0
-        system_metrics["failed_requests"] = 0
-        system_metrics["total_processing_time_ms"] = 0.0
-        system_metrics["average_processing_time_ms"] = 0.0
-
-    return jsonify({"success": True, "message": "Đã xóa toàn bộ lịch sử phân tích ảnh"})
+    return jsonify({"success": True})
