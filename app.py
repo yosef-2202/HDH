@@ -6,18 +6,16 @@ import json
 import psutil
 import os
 
-# Import module RTSP & Realtime Camera
 from models.rtsp import rtsp_bp
 from models.realtime_camera import realtime_bp
+from models.chatbot_manager import chatbot_bp
 from models.image_processor import image_bp
 
 app = Flask(__name__)
 app.secret_key = 'hdh_secret_key_2026'
 
-# Khai báo ProxyFix giúp ứng dụng nhận diện chuẩn xác IP thực
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
-# --- CẤU HÌNH MYSQL ---
 db_user = 'u50283_95Wuon3aKO'
 db_pass = quote_plus('e!nfV.oVXQ6Qcwso9P@WCkz5')
 db_host = '91.99.159.222:3306'
@@ -38,7 +36,6 @@ class SystemSettings(db.Model):
 with app.app_context():
     db.create_all()
     
-    # 5 thành viên cố định của nhóm
     default_team = [
         {"name": "Đỗ Cao Thúy Vi", "id": "49.01.103.093", "role": "Nhóm Trưởng", "avatar": ""},
         {"name": "Đoàn Thị Thanh Diễm", "id": "50.01.103.012", "role": "", "avatar": ""},
@@ -88,9 +85,9 @@ def inject_config():
 
 app.register_blueprint(rtsp_bp)
 app.register_blueprint(realtime_bp)
+app.register_blueprint(chatbot_bp)
 app.register_blueprint(image_bp)
 
-# --- HÀM LẤY RAM CỦA CONTAINER ---
 def get_container_ram_info():
     try:
         if os.path.exists('/sys/fs/cgroup/memory.max'):
@@ -116,7 +113,6 @@ def get_container_ram_info():
         vm = psutil.virtual_memory()
         return vm.percent, vm.used, vm.total
 
-# --- API XÁC THỰC MÃ PIN HỆ THỐNG CŨ ---
 @app.route('/verify-pin', methods=['POST'])
 def verify_pin():
     data = request.get_json()
@@ -183,7 +179,6 @@ def api_config():
         "enable_realtime": get_setting('enable_realtime') == 'true',
     })
 
-# --- API LƯU ẢNH THÀNH VIÊN ĐỘNG ---
 @app.route('/api/members', methods=['GET', 'POST'])
 def api_members():
     if request.method == 'POST':
@@ -198,7 +193,7 @@ def api_members():
         members = []
     return jsonify({"success": True, "members": members})
 
-# --- API QUẢN LÝ CHATBOT ---
+# --- KHÔI PHỤC API QUẢN LÝ CHATBOT ---
 @app.route('/api/chatbot/verify-pin', methods=['POST'])
 def chatbot_verify_pin():
     data = request.get_json()
@@ -229,7 +224,6 @@ def api_chatbot_config():
     return jsonify({"success": True, "api_tokens": tokens})
 
 
-# --- API XÁC THỰC MÃ PIN CHO REALTIME ---
 @app.route('/api/realtime/verify-pin', methods=['POST'])
 def realtime_verify_pin():
     data = request.get_json()
@@ -237,7 +231,6 @@ def realtime_verify_pin():
         session['realtime_unlocked'] = True
         return jsonify({"success": True})
     return jsonify({"success": False, "message": "Mã PIN không đúng."}), 401
-
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=24706, threaded=True)

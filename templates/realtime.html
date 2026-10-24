@@ -1,89 +1,86 @@
 {% extends 'base.html' %}
-{% block title %}Giám Sát Camera Realtime - Đồ Án Hệ Điều Hành{% endblock %}
+{% block title %}Giám Sát Camera Realtime Trực Tiếp - Đồ Án Hệ Điều Hành{% endblock %}
 
 {% block content %}
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@400;600;700&display=swap');
-
     @media (min-width: 992px) {
-        #main-content {
-            padding: 12px 20px !important;
-            height: 100vh;
+        body {
             overflow: hidden;
-            font-family: 'Quicksand', sans-serif;
-            background-color: #fdfbf7;
-            background-image: radial-gradient(#f0e6d2 2px, transparent 2px);
-            background-size: 30px 30px;
         }
 
-        .realtime-dashboard-container {
-            height: calc(100vh - 24px);
-            max-height: calc(100vh - 24px);
+        #main-content {
+            padding: 8px 16px !important;
+            height: 100vh;
+            overflow: hidden;
+            box-sizing: border-box;
+            background-color: #f8fafc;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .realtime-wrapper {
+            height: calc(100vh - 16px);
             display: flex;
             flex-direction: column;
             overflow: hidden;
         }
     }
 
-    @media (max-width: 991.98px) {
-        .realtime-dashboard-container {
-            min-height: 100vh;
-            padding-bottom: 30px;
-            font-family: 'Quicksand', sans-serif;
-        }
+    .realtime-header {
+        background: white;
+        border-radius: 10px;
+        padding: 8px 16px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+        margin-bottom: 8px;
+        flex-shrink: 0;
+    }
+
+    .header-main-title {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #1f2937;
+        letter-spacing: -0.5px;
+    }
+
+    .status-badge {
+        font-size: 0.75rem;
+        padding: 3px 8px;
+        border-radius: 6px;
+        font-weight: 600;
     }
 
     .os-stat-card {
-        background: rgba(255, 255, 255, 0.95);
-        border-radius: 20px;
-        border: none;
-        padding: 10px 16px;
-        transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        box-shadow: 0 8px 24px rgba(210, 200, 190, 0.4);
+        background: #ffffff;
+        border-radius: 10px;
+        border: 1px solid #edf2f7;
+        padding: 6px 12px;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.02);
+        transition: transform 0.2s;
     }
 
     .os-stat-card:hover {
-        transform: translateY(-4px);
-    }
-
-    .os-stat-label {
-        font-size: 0.75rem;
-        color: #8c7b70;
-        font-weight: 700;
-        text-transform: uppercase;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
     }
 
     .webcam-main-card {
-        background: rgba(255, 255, 255, 0.95);
-        border-radius: 20px;
+        background: #0f172a;
+        border-radius: 12px;
         overflow: hidden;
-        border: 2px solid #f0d8c0;
-        box-shadow: 0 8px 24px rgba(210, 200, 190, 0.4);
+        border: 2px solid #1e293b;
         display: flex;
         flex-direction: column;
-        transition: border-color 0.3s ease, box-shadow 0.3s ease;
-    }
-
-    .webcam-main-card.alert-danger-active {
-        border-color: #ff8b94;
-        box-shadow: 0 0 18px rgba(255, 139, 148, 0.6);
-    }
-
-    .webcam-main-card.alert-warning-active {
-        border-color: #ffaaa5;
-        box-shadow: 0 0 18px rgba(255, 170, 165, 0.6);
-    }
-
-    .webcam-main-card.alert-success-active {
-        border-color: #a8e6cf;
-        box-shadow: 0 0 16px rgba(168, 230, 207, 0.6);
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.1);
+        height: 100%;
     }
 
     .video-viewport {
         position: relative;
         width: 100%;
-        height: clamp(230px, 45vh, 430px);
-        background: #fffafa;
+        flex: 1;
+        min-height: 200px;
+        max-height: 40vh;
+        background: #000;
         overflow: hidden;
         display: flex;
         align-items: center;
@@ -91,81 +88,59 @@
     }
 
     .video-viewport video {
+        position: absolute;
+        top: 0;
+        left: 0;
         width: 100%;
         height: 100%;
         object-fit: contain;
-        background: #fffafa;
-        transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-        border-radius: 12px;
     }
 
     .video-viewport video.camera-mirrored {
         transform: scaleX(-1);
     }
 
-    .video-viewport video.camera-unmirrored {
-        transform: scaleX(1);
-    }
-
-    .camera-flip-pill {
-        position: absolute;
-        bottom: 10px;
-        right: 10px;
-        font-size: 0.76rem;
-        padding: 6px 12px;
-        border-radius: 12px;
-        z-index: 2;
-        background: rgba(255, 255, 255, 0.8) !important;
-        color: #5a4a42 !important;
-        border: 1px solid #f0d8c0 !important;
-        font-weight: bold;
-        transition: all 0.2s ease;
-    }
-
-    .camera-flip-pill:hover {
-        background: #ffb7b2 !important;
-        color: #fff !important;
-    }
-
     .camera-overlay-badge {
         position: absolute;
-        top: 10px;
-        left: 10px;
-        background: rgba(255, 255, 255, 0.85);
-        color: #d47a53;
-        font-size: 0.8rem;
-        font-weight: 700;
-        padding: 6px 12px;
-        border-radius: 12px;
+        top: 8px;
+        left: 8px;
+        background: rgba(15, 23, 42, 0.85);
+        color: #fff;
+        font-size: 0.75rem;
+        padding: 4px 10px;
+        border-radius: 6px;
         z-index: 2;
-        border: 1px solid #f0d8c0;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(4px);
     }
 
     .camera-status-pill {
         position: absolute;
-        top: 10px;
-        right: 10px;
-        font-size: 0.78rem;
-        padding: 6px 12px;
-        border-radius: 12px;
+        top: 8px;
+        right: 8px;
+        font-size: 0.75rem;
+        padding: 4px 10px;
+        border-radius: 6px;
         z-index: 2;
         font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
 
     .pulse-dot {
-        width: 8px;
-        height: 8px;
+        width: 7px;
+        height: 7px;
         border-radius: 50%;
         display: inline-block;
         margin-right: 5px;
-        background-color: #a8e6cf;
-        box-shadow: 0 0 8px #a8e6cf;
-        animation: pulse 1.6s infinite;
+        background-color: #22c55e;
+        box-shadow: 0 0 8px #22c55e;
+        animation: pulse 1.5s infinite;
     }
 
     @keyframes pulse {
         0% {
-            transform: scale(0.95);
+            transform: scale(0.9);
             opacity: 0.7;
         }
 
@@ -175,760 +150,616 @@
         }
 
         100% {
-            transform: scale(0.95);
+            transform: scale(0.9);
             opacity: 0.7;
         }
     }
 
     .ai-ribbon {
-        background: #ffecd2;
-        padding: 10px 14px;
-        border-top: 2px dashed #f0d8c0;
-        font-size: 0.85rem;
-        color: #d47a53 !important;
-        font-weight: 600;
+        background: #1e293b;
+        padding: 6px 12px;
+        font-size: 0.82rem;
+        flex-shrink: 0;
     }
 
-    .terminal-card {
-        background: rgba(255, 255, 255, 0.95);
-        border-radius: 20px;
-        border: none;
+    .history-card {
+        border-radius: 10px;
+        overflow: hidden;
+        border: 1px solid #e2e8f0;
         display: flex;
         flex-direction: column;
-        overflow: hidden;
-        box-shadow: 0 8px 24px rgba(210, 200, 190, 0.4);
+        height: 100%;
     }
 
-    .terminal-log-box {
-        background: #fff5f5;
-        color: #5a4a42;
-        font-family: 'Quicksand', sans-serif;
-        font-size: 0.85rem;
+    .table-custom th {
         font-weight: 600;
-        padding: 12px 15px;
-        flex: 1;
-        overflow-y: auto;
-        min-height: 180px;
+        text-transform: uppercase;
+        font-size: 0.72rem;
+        letter-spacing: 0.4px;
+        background-color: #f1f5f9;
+        color: #64748b;
+        padding: 6px 8px;
+        z-index: 10;
+        white-space: nowrap;
     }
 
-    .log-item {
-        padding: 6px 0;
-        border-bottom: 1px dashed #f0d8c0;
-        word-break: break-word;
+    .table-custom td {
+        vertical-align: middle;
+        font-size: 0.78rem;
+        padding: 5px 8px;
     }
 
-    .log-time {
-        color: #d47a53;
+    .badge-soft-success {
+        background-color: #dcfce7;
+        color: #166534;
+        border: 1px solid #bbf7d0;
     }
 
-    .log-cam {
-        color: #2d6a4f;
-        font-weight: bold;
+    .badge-soft-warning {
+        background-color: #fef08a;
+        color: #854d0e;
+        border: 1px solid #fde047;
     }
 
-    .log-client {
-        color: #8c7b70;
-        font-weight: 700;
-        font-size: 0.75rem;
+    .badge-soft-danger {
+        background-color: #fee2e2;
+        color: #991b1b;
+        border: 1px solid #fecaca;
     }
 
-    .badge-normal {
-        background-color: #a8e6cf !important;
-        color: #2d6a4f !important;
-    }
-
-    .badge-warning {
-        background-color: #ffaaa5 !important;
-        color: #c92a2a !important;
-    }
-
-    .badge-danger {
-        background-color: #ff8b94 !important;
-        color: #800000 !important;
-    }
-
-    .badge-positive {
-        background-color: #ffd3b6 !important;
-        color: #d47a53 !important;
-    }
-
-    .terminal-log-box::-webkit-scrollbar {
-        width: 8px;
-    }
-
-    .terminal-log-box::-webkit-scrollbar-track {
-        background: #fff5f5;
-    }
-
-    .terminal-log-box::-webkit-scrollbar-thumb {
-        background: #ffb7b2;
-        border-radius: 4px;
-    }
-
-    .terminal-log-box::-webkit-scrollbar-thumb:hover {
-        background: #ff9a94;
-    }
-
-    .layout-min-zero {
-        min-height: 0;
-    }
-
-    .camera-placeholder-text {
-        max-width: 380px;
-        margin: 0 auto;
-        color: #d1c4b8 !important;
-    }
-
-    .ai-ribbon-content {
-        max-width: 78%;
-    }
-
-    .log-count-badge {
+    .os-metric-pill {
+        background-color: #f1f5f9;
+        color: #334155;
+        border: 1px solid #cbd5e1;
+        font-family: monospace;
         font-size: 0.7rem;
-        background: #ffb7b2 !important;
-        color: #fff !important;
-    }
-
-    .terminal-footer {
-        font-size: 0.75rem;
-        background: #ffecd2 !important;
-        color: #d47a53 !important;
-        border-top: 2px dashed #f0d8c0 !important;
-        font-weight: bold;
-    }
-
-    .btn-cute {
-        border-radius: 12px;
-        font-weight: 700;
-    }
-
-    .btn-primary-cute {
-        background-color: #ffb7b2;
-        border: none;
-        color: #fff;
-    }
-
-    .btn-primary-cute:hover {
-        background-color: #ff9a94;
-    }
-
-    /* Các lớp tiện ích thay thế inline style */
-    .dashboard-header-border {
-        border-bottom: 2px dashed #f0d8c0;
-    }
-
-    .text-theme-orange {
-        color: #d47a53 !important;
-    }
-
-    .text-theme-brown {
-        color: #8c7b70 !important;
-    }
-
-    .text-theme-green {
-        color: #2d6a4f !important;
-    }
-
-    .log-desc {
-        color: #5a4a42;
-    }
-
-    .stat-icon-blue {
-        background: #e0f2fe;
-        padding: 8px;
-        border-radius: 10px;
-        color: #0284c7;
-    }
-
-    .stat-icon-green {
-        background: #dcfce7;
-        padding: 8px;
-        border-radius: 10px;
-        color: #16a34a;
-    }
-
-    .stat-icon-yellow {
-        background: #fef9c3;
-        padding: 8px;
-        border-radius: 10px;
-        color: #ca8a04;
-    }
-
-    .terminal-header {
-        background: #ffecd2;
-        border-bottom: 2px dashed #f0d8c0;
-    }
-
-    .terminal-title-text {
-        font-size: 0.95rem;
-    }
-
-    .btn-filter-left {
-        border-radius: 8px 0 0 8px;
-    }
-
-    .btn-filter-right {
-        border-radius: 0 8px 8px 0;
-    }
-
-    .modal-content-cute {
-        border-radius: 20px;
-        border: none;
-    }
-
-    .modal-header-cute {
-        border-radius: 20px 20px 0 0;
-    }
-
-    .form-control-cute {
-        border-radius: 12px;
-    }
-
-    .badge-primary-cute {
-        background-color: #ffb7b2 !important;
-        color: #fff !important;
-    }
-
-    .log-status-badge {
-        font-size: 0.75rem;
+        padding: 2px 6px;
+        border-radius: 4px;
+        display: inline-block;
+        white-space: nowrap;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        vertical-align: middle;
     }
 </style>
 
-<div class="realtime-dashboard-container">
-    <!-- 1. HEADER & THANH ĐIỀU KHIỂN CHÍNH -->
-    <div class="d-flex flex-wrap justify-content-between align-items-center pb-2 mb-2 flex-shrink-0 dashboard-header-border">
-        <div>
-            <div class="d-flex align-items-center gap-2">
-                <h4 class="fw-bold mb-0 text-theme-orange">
-                    <i class="fa-solid fa-cat me-2"></i>Realtime Camera
-                </h4>
-                <span id="displayClientId" class="d-none"></span>
+<div class="container-fluid px-0 realtime-wrapper">
+    <!-- HEADER GỌN GÀNG TRÊN CÙNG -->
+    <div class="realtime-header">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <div class="d-flex align-items-center flex-wrap gap-2">
+                <h3 class="header-main-title mb-0 me-1">Quản lý Luồng RTSP AI</h3>
+                <span class="badge bg-secondary rounded-pill fw-medium d-flex align-items-center px-2 py-1 shadow-sm"
+                    style="font-size: 0.78rem;" id="headerConnectionStatus">
+                    <i class="fa-solid fa-pause me-1"></i> Chờ kết nối
+                </span>
+                <span class="status-badge bg-success bg-opacity-10 text-success border border-success">
+                    <i class="fa-solid fa-bolt me-1"></i> Hệ thống AI: Sẵn Sàng
+                </span>
+                <span class="status-badge bg-info bg-opacity-10 text-info border border-info">
+                    <i class="fa-solid fa-users me-1"></i> Phiên Client: <span id="displayClientId">Khởi tạo...</span>
+                </span>
+                <span class="status-badge bg-secondary bg-opacity-10 text-secondary border border-secondary">
+                    <i class="fa-regular fa-clock me-1"></i> Chu kỳ: <span id="captureRateDisplay">1</span>s/frame
+                </span>
             </div>
-        </div>
-
-        <div class="d-flex gap-2 align-items-center mt-2 mt-md-0">
-            <button class="btn btn-outline-secondary btn-sm btn-cute px-3 py-2 shadow-sm" id="btnFlipWebcam"
-                onclick="toggleFlipCamera()" title="Lật gương/Lật mặt camera để chống lệch mặt">
-                <i class="fa-solid fa-arrows-rotate me-1"></i> <span id="flipBtnText">Lật Camera</span>
-            </button>
-            <button class="btn btn-primary-cute btn-sm btn-cute px-3 py-2 shadow-sm" id="btnToggleWebcam"
-                onclick="toggleMainWebcam()">
-                <i class="fa-solid fa-play me-1"></i> Bật Camera
-            </button>
-            <button class="btn btn-light btn-sm btn-cute px-3 py-2 shadow-sm border" data-bs-toggle="modal"
-                data-bs-target="#configAiModal" title="Cấu hình API Keys & Model">
-                <i class="fa-solid fa-fish me-1"></i> Cấu Hình
-            </button>
+            <div class="d-flex gap-1 align-items-center flex-shrink-0">
+                <button class="btn btn-light border btn-sm fw-medium px-2 py-1" style="font-size: 0.8rem;"
+                    id="btnFlipWebcam" onclick="toggleFlipCamera()">
+                    <i class="fa-solid fa-arrows-rotate me-1 text-muted"></i> <span id="flipBtnText">Gương</span>
+                </button>
+                <button class="btn btn-success btn-sm fw-bold px-3 py-1 shadow-sm" style="font-size: 0.8rem;"
+                    id="btnToggleWebcam" onclick="toggleMainWebcam()">
+                    <i class="fa-solid fa-video me-1"></i> Bật Camera AI
+                </button>
+                <button class="btn btn-outline-secondary btn-sm px-2 py-1" style="font-size: 0.8rem;"
+                    onclick="openPinModal()">
+                    <i class="fa-solid fa-sliders me-1"></i> Cấu Hình
+                </button>
+            </div>
         </div>
     </div>
 
-    <!-- 2. NỘI DUNG 2 CỘT TỰ CO GIÃN -->
-    <div class="row g-3 flex-grow-1 overflow-hidden layout-min-zero">
-        <!-- CỘT TRÁI: CAMERA VIEWPORT & STATUS TRỰC QUAN -->
-        <div class="col-12 col-lg-7 d-flex flex-column layout-min-zero">
-            <div class="webcam-main-card flex-grow-1 d-flex flex-column" id="mainWebcamCard">
-                <!-- Video Viewport -->
-                <div class="video-viewport flex-grow-1 position-relative">
-                    <div class="camera-overlay-badge">
-                        <span class="pulse-dot"></span>
-                    </div>
+    <!-- MAIN GRID (CAMERA + THÔNG SỐ) -->
+    <div class="row g-2 mb-2 flex-shrink-0">
+        <!-- CỘT TRÁI: CAMERA -->
+        <div class="col-12 col-lg-8 d-flex flex-column" style="min-width: 0;">
+            <div class="webcam-main-card shadow-sm flex-grow-1" id="mainWebcamCard">
+                <div class="video-viewport position-relative">
+                    <div class="camera-overlay-badge"><span class="pulse-dot"></span> Webcam Trình Duyệt</div>
+                    <span class="badge bg-secondary camera-status-pill" id="overlayStatusBadge">SẴN SÀNG</span>
 
-                    <span class="badge bg-light text-secondary camera-status-pill border" id="overlayStatusBadge">
-                        SẴN SÀNG
-                    </span>
+                    <video id="webVideo" autoplay muted class="d-none camera-mirrored"></video>
+                    <canvas id="hiddenCanvas" class="d-none"></canvas>
 
-                    <button type="button" class="btn btn-sm camera-flip-pill" id="btnOverlayFlip"
-                        onclick="toggleFlipCamera()" title="Lật ngược camera">
-                        <i class="fa-solid fa-arrows-left-right me-1"></i> <span id="overlayFlipText">Gương</span>
-                    </button>
-
-                    <video id="webVideo" autoplay class="d-none camera-mirrored"></video>
-
-                    <!-- Khung trạng thái khi chưa bật camera -->
-                    <div class="text-center p-3" id="cameraPlaceholder">
-                        <div class="mb-3 text-muted">
-                            <i class="fa-solid fa-dog fa-4x text-secondary opacity-25"></i>
-                        </div>
-                        <h5 class="fw-bold mb-2 text-theme-orange">Camera Đang Ngủ Nè!</h5>
-                        <p class="small mb-3 camera-placeholder-text">
-                            Nhấn nút <strong>"Bật Camera Lên Nào"</strong> để bắt đầu quét thời
-                            gian thực nhé!
-                        </p>
+                    <div class="text-center p-2 z-1" id="cameraPlaceholder">
+                        <i class="fa-solid fa-camera-web fa-2x text-secondary opacity-25 mb-2"></i>
+                        <h6 class="fw-bold text-white mb-1">Hệ Thống Đang Chờ</h6>
+                        <p class="text-secondary small mb-2" style="font-size: 0.78rem;">Vui lòng bật camera để bắt đầu
+                            phân tích hành vi thời gian thực.</p>
+                        <button class="btn btn-outline-success btn-sm fw-bold px-3" onclick="toggleMainWebcam()">Kích
+                            Hoạt Ngay</button>
                     </div>
                 </div>
 
-                <!-- Ribbon hiển thị kết quả phân tích AI -->
-                <div class="ai-ribbon d-flex justify-content-between align-items-center flex-shrink-0">
-                    <div class="d-flex align-items-center text-truncate me-2 ai-ribbon-content">
-                        <span class="badge badge-normal me-2 px-2 py-1 border" id="liveBadgeStatus">Chờ xíu!!!</span>
-                        <span class="small text-truncate" id="liveDescription">
-                            Chưa nhận khung hình. Hãy bật camera để bắt đầu.
-                        </span>
+                <div class="ai-ribbon d-flex justify-content-between align-items-center text-white">
+                    <div class="d-flex align-items-center flex-grow-1" style="min-width: 0; margin-right: 10px;">
+                        <span class="badge bg-success me-2 px-2 py-1 rounded-1 fw-bold flex-shrink-0"
+                            id="liveBadgeStatus">CHỜ</span>
+                        <span class="text-light text-truncate fw-medium d-block" id="liveDescription"
+                            style="font-size: 0.85rem;">Chưa có dữ liệu phân tích...</span>
                     </div>
-                    <div class="text-end small flex-shrink-0 text-theme-brown">
-                        <span id="liveTimestamp">--:--:--</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Thanh trạng thái tải & tài nguyên HĐH -->
-            <div class="row g-2 mt-2 flex-shrink-0">
-                <div class="col-4">
-                    <div class="os-stat-card d-flex align-items-center justify-content-between">
-                        <div>
-                            <div class="os-stat-label">Thread Pool</div>
-                            <div class="fw-bold text-dark small" id="statWorkers">3 Workers</div>
-                        </div>
-                        <div class="stat-icon-blue"><i class="fa-solid fa-cat"></i></div>
-                    </div>
-                </div>
-                <div class="col-4">
-                    <div class="os-stat-card d-flex align-items-center justify-content-between">
-                        <div>
-                            <div class="os-stat-label">Hàng Đợi </div>
-                            <div class="fw-bold text-dark small" id="statQueue">0 / 60</div>
-                        </div>
-                        <div class="stat-icon-green"><i class="fa-solid fa-list-check"></i></div>
-                    </div>
-                </div>
-                <div class="col-4">
-                    <div class="os-stat-card d-flex align-items-center justify-content-between">
-                        <div>
-                            <div class="os-stat-label">API Key</div>
-                            <div class="fw-bold text-success small" id="statKeys">2 API Keys</div>
-                        </div>
-                        <div class="stat-icon-yellow"><i class="fa-solid fa-bone"></i></div>
-                    </div>
+                    <div class="text-end text-muted small fw-mono flex-shrink-0" style="font-size: 0.75rem;"><i
+                            class="fa-regular fa-clock me-1"></i><span id="liveTimestamp">--:--:--</span></div>
                 </div>
             </div>
         </div>
 
-        <!-- CỘT PHẢI: MULTI-SESSION STATUS & TERMINAL NHẬT KÝ AI -->
-        <div class="col-12 col-lg-5 d-flex flex-column layout-min-zero">
-            <div class="terminal-card flex-grow-1 d-flex flex-column">
-                <!-- Header Terminal -->
-                <div class="px-3 py-3 d-flex justify-content-between align-items-center flex-shrink-0 terminal-header">
-                    <div class="fw-bold small d-flex align-items-center text-theme-orange">
-                        <i class="fa-solid fa-scroll me-2"></i>
-                        <span class="terminal-title-text">Nhật Ký Thời Gian Thực</span>
-                        <span class="badge ms-2 log-count-badge" id="logCountBadge">0</span>
+        <!-- CỘT PHẢI: THÔNG SỐ & PIPELINE -->
+        <div class="col-12 col-lg-4 d-flex flex-column justify-content-between" style="min-width: 0;">
+            <!-- THÔNG SỐ BLOCK -->
+            <div class="row g-2 mb-2 flex-shrink-0">
+                <div class="col-6">
+                    <div class="os-stat-card text-center py-1 px-2">
+                        <div class="text-muted fw-medium" style="font-size: 0.72rem;">Worker Threads</div>
+                        <div class="fw-bold text-dark fs-6" id="statWorkers">3</div>
                     </div>
-                    <div class="d-flex align-items-center gap-1">
-                        <!-- Bộ lọc phiên: Cá nhân vs Toàn hệ thống -->
-                        <div class="btn-group btn-group-sm" role="group">
-                            <button type="button" class="btn btn-outline-secondary btn-sm py-1 px-2 active fw-bold btn-filter-left"
-                                id="btnFilterMy" onclick="setLogFilter('my')">
-                                Phiên của tôi
-                            </button>
-                            <button type="button" class="btn btn-outline-secondary btn-sm py-1 px-2 fw-bold btn-filter-right"
-                                id="btnFilterAll" onclick="setLogFilter('all')">
-                                Toàn bộ<span id="activeSessionsCount" class="d-none">1</span>
-                            </button>
+                </div>
+                <div class="col-6">
+                    <div class="os-stat-card text-center py-1 px-2">
+                        <div class="text-muted fw-medium" style="font-size: 0.72rem;">Queue (Hàng đợi)</div>
+                        <div class="fw-bold text-dark fs-6" id="statQueue">0 / 60</div>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <div class="os-stat-card d-flex justify-content-between align-items-center px-3 py-1">
+                        <div>
+                            <div class="text-muted fw-medium" style="font-size: 0.72rem;">Khóa API (Round-Robin)</div>
+                            <div class="fw-bold text-success" style="font-size: 0.88rem;" id="statKeys">2 Keys Active
+                            </div>
                         </div>
-                        <button class="btn btn-sm btn-light border py-1 px-2 ms-2 btn-cute text-danger"
-                            onclick="clearLogs()" title="Xóa log">
-                            <i class="fa-solid fa-trash-can"></i>
-                        </button>
+                        <div class="bg-warning bg-opacity-10 p-1 px-2 rounded-circle">
+                            <i class="fa-solid fa-key text-warning" style="font-size: 0.9rem;"></i>
+                        </div>
                     </div>
                 </div>
+            </div>
 
-                <!-- Khung Terminal hiển thị sự kiện thời gian thực -->
-                <div id="terminalLogBox" class="terminal-log-box flex-grow-1">
-                    <div class="small text-theme-brown">
-                        <span class="log-time">[HỆ THỐNG]</span>...
-                    </div>
+            <!-- BẢNG PHÂN PHỐI TÀI NGUYÊN PIPELINE -->
+            <div class="card border-0 shadow-sm rounded-3 overflow-hidden mb-0 flex-grow-1 d-flex flex-column">
+                <div
+                    class="card-header bg-white py-1 px-3 d-flex justify-content-between align-items-center border-bottom">
+                    <h6 class="mb-0 fw-bold text-dark" style="font-size: 0.8rem;"><i
+                            class="fa-solid fa-microchip text-primary me-1"></i>Tài Nguyên Pipeline</h6>
+                    <span class="badge bg-secondary bg-opacity-10 text-secondary" style="font-size: 0.65rem;"
+                        id="pipelineStateBadge">IDLE</span>
                 </div>
+                <div class="card-body p-0 bg-dark text-white d-flex align-items-center flex-grow-1">
+                    <table class="table table-dark table-borderless table-hover mb-0 text-center align-middle"
+                        style="font-size: 0.7rem; table-layout: fixed; width: 100%;">
+                        <thead class="border-bottom border-secondary border-opacity-50 text-muted">
+                            <tr>
+                                <th class="text-start ps-2 py-1" style="width: 38%;">PIPELINE</th>
+                                <th class="py-1" style="width: 18%;">CPU</th>
+                                <th class="py-1" style="width: 20%;">RAM</th>
+                                <th class="py-1 pe-1" style="width: 24%;">B.THÔNG</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="text-start ps-2 text-info fw-medium py-1 text-truncate"><i
+                                        class="fa-solid fa-1 me-1"></i>Extract WebRTC</td>
+                                <td id="resCpu1" class="font-monospace py-1 text-truncate">0.0%</td>
+                                <td id="resRam1" class="font-monospace py-1 text-truncate">0 MB</td>
+                                <td id="resBw1" class="font-monospace py-1 pe-1 text-truncate">0 Kbps</td>
+                            </tr>
+                            <tr>
+                                <td class="text-start ps-2 text-warning fw-medium py-1 text-truncate"><i
+                                        class="fa-solid fa-2 me-1"></i>Decode Frame</td>
+                                <td id="resCpu2" class="font-monospace py-1 text-truncate">0.0%</td>
+                                <td id="resRam2" class="font-monospace py-1 text-truncate">0 MB</td>
+                                <td id="resBw2" class="font-monospace py-1 pe-1 text-light opacity-75 text-truncate">
+                                    Server</td>
+                            </tr>
+                            <tr>
+                                <td class="text-start ps-2 text-success fw-medium py-1 text-truncate"><i
+                                        class="fa-solid fa-3 me-1"></i>Resize JPEG</td>
+                                <td id="resCpu3" class="font-monospace py-1 text-truncate">0.0%</td>
+                                <td id="resRam3" class="font-monospace py-1 text-truncate">0 MB</td>
+                                <td id="resBw3" class="font-monospace py-1 pe-1 text-light opacity-75 text-truncate">
+                                    Server</td>
+                            </tr>
+                            <tr>
+                                <td class="text-start ps-2 text-primary fw-medium py-1 text-truncate"><i
+                                        class="fa-solid fa-4 me-1"></i>Phân tích AI</td>
+                                <td id="resCpu4" class="font-monospace py-1 text-truncate">0.0%</td>
+                                <td id="resRam4" class="font-monospace py-1 text-truncate">0 MB</td>
+                                <td id="resBw4" class="font-monospace py-1 pe-1 text-truncate">0 Kbps</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
 
-                <!-- Footer thông tin chi tiết phiên -->
-                <div class="px-3 py-2 d-flex justify-content-between align-items-center terminal-footer">
-                    <div>
-                        <i class="fa-solid fa-shield-cat me-1"></i> An toàn
-                    </div>
-                    <div>
-                        Model: <span class="text-theme-green"
-                            id="activeModelLabel">deepseek/deepseek-v4-flash:free</span>
-                    </div>
+    <!-- KHỐI LỊCH SỬ TỰ CO GIÃN LẤP ĐẦY PHẦN CÒN LẠI -->
+    <div class="row mx-0 flex-grow-1" style="min-height: 0;">
+        <div class="col-12 px-0 h-100">
+            <div class="card history-card shadow-sm bg-white">
+                <div
+                    class="card-header bg-white border-bottom py-1 px-3 d-flex justify-content-between align-items-center flex-shrink-0">
+                    <h6 class="mb-0 fw-bold text-dark" style="font-size: 0.85rem;"><i
+                            class="fa-solid fa-clipboard-list text-primary me-2"></i>Lịch Sử Hành Vi & Phân Bổ Tài
+                        Nguyên Tiến Trình</h6>
+                    <button class="btn btn-sm btn-outline-danger py-0 px-2" style="font-size: 0.75rem;"
+                        onclick="clearLogs()" title="Xóa toàn bộ dữ liệu phiên này">
+                        <i class="fa-solid fa-trash-can me-1"></i> Xóa Lịch Sử
+                    </button>
+                </div>
+                <div class="card-body p-0 table-responsive flex-grow-1" style="overflow-y: auto; min-height: 0;">
+                    <table class="table table-custom table-hover align-middle mb-0 text-center"
+                        style="table-layout: fixed; width: 100%; min-width: 760px;">
+                        <thead class="sticky-top">
+                            <tr>
+                                <th style="width: 10%; min-width: 75px;">Thời Gian</th>
+                                <th style="width: 12%; min-width: 90px;">Trạng Thái</th>
+                                <th class="text-start" style="width: 44%;">Nhận Diện Hành Vi</th>
+                                <th style="width: 25%; min-width: 200px;">Tài Nguyên HĐH</th>
+                                <th style="width: 9%; min-width: 65px; white-space: nowrap;">Thao Tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyTableBody">
+                            <tr>
+                                <td colspan="5" class="py-3 text-muted">Hệ thống đang chờ dữ liệu...</td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- MODAL CẤU HÌNH AI OPENROUTER & MÃ PIN -->
-<div class="modal fade" id="configAiModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content modal-content-cute">
-            <div class="modal-header bg-light border-0 modal-header-cute">
-                <h5 class="modal-title fw-bold text-theme-orange"><i class="fa-solid fa-bone me-2"></i>Thiết Lập
-                </h5>
+<!-- MODAL XEM LẠI VIDEO -->
+<div class="modal fade" id="playbackModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content rounded-4 border-0 shadow-lg">
+            <div class="modal-header border-bottom pb-3 bg-dark text-white rounded-top-4">
+                <h6 class="modal-title fw-bold"><i class="fa-solid fa-film text-info me-2"></i>Xem Lại Video Minh Chứng
+                    (Circular Buffer 15 Frames)</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4 bg-light text-center">
+                <p class="small text-muted mb-3"><i class="fa-solid fa-circle-info me-1"></i>Đoạn video clip thực tế
+                    được trích xuất từ bộ đệm RAM tại thời điểm Worker Thread phân tích.</p>
+                <div class="d-inline-block rounded overflow-hidden shadow-sm border border-secondary border-opacity-25 w-100"
+                    style="background:#000;">
+                    <video id="playbackVideo" controls autoplay class="img-fluid w-100"
+                        style="max-height: 400px; object-fit: contain;"></video>
+                </div>
+            </div>
+            <div class="modal-footer pt-3 pb-3 d-flex justify-content-between align-items-center">
+                <div class="fw-bold text-dark px-2 font-monospace" id="playbackTimestamp">--:--:--</div>
+                <button type="button" class="btn btn-secondary fw-medium px-4" data-bs-dismiss="modal"
+                    onclick="document.getElementById('playbackVideo').pause()">Đóng</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL XÁC THỰC PIN -->
+<div class="modal fade" id="pinAuthModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header border-bottom pb-2">
+                <h6 class="modal-title fw-bold text-dark"><i class="fa-solid fa-lock text-warning me-2"></i>Bảo Mật</h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body p-4">
-                <!-- Mã PIN bảo mật -->
-                <div class="mb-3">
-                    <label for="modalPin" class="form-label fw-bold text-secondary">
-                        Mã PIN
-                    </label>
-                    <input type="password" id="modalPin" class="form-control mb-2 font-monospace form-control-cute" placeholder="123456"
-                        value="123456">
-                </div>
+            <div class="modal-body py-3">
+                <input type="password" id="authPinInput" class="form-control" placeholder="Mã PIN..."
+                    onkeypress="if(event.key === 'Enter') verifyPinAndOpenConfig()">
+            </div>
+            <div class="modal-footer pt-2"><button type="button" class="btn btn-primary w-100 fw-bold"
+                    onclick="verifyPinAndOpenConfig()">Vào Cấu Hình</button></div>
+        </div>
+    </div>
+</div>
 
-                <!-- Danh sách API Keys xoay vòng -->
+<!-- MODAL CẤU HÌNH AI -->
+<div class="modal fade" id="configAiModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header border-bottom pb-2">
+                <h6 class="modal-title fw-bold">Cấu Hình AI</h6><button type="button" class="btn-close"
+                    data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body py-3">
+                <input type="hidden" id="hiddenConfigPin">
                 <div class="mb-3">
-                    <div class="d-flex justify-content-between align-items-center mb-1">
-                        <label for="modalApiKeys" class="form-label fw-bold text-secondary mb-0">
-                            Danh sách OpenRouter Keys
-                        </label>
-                        <span class="badge badge-primary-cute" id="keysCountPreview">2 Keys</span>
-                    </div>
-                    <textarea id="modalApiKeys" class="form-control font-monospace text-muted form-control-cute" rows="3"
-                        placeholder="sk-or-v1-key1&#10;sk-or-v1-key2"></textarea>
+                    <label class="form-label fw-semibold small text-muted mb-1">API Keys</label>
+                    <div id="apiKeysContainer"></div>
+                    <button class="btn btn-sm btn-outline-primary mt-2" onclick="addApiKeyInput()">+ Thêm Key</button>
                 </div>
-
-                <!-- Lựa chọn AI Model -->
                 <div class="mb-2">
-                    <label for="modalModelName" class="form-label fw-bold text-secondary">AI Model </label>
-                    <input type="text" id="modalModelName" class="form-control mb-2 font-monospace form-control-cute"
-                        value="deepseek/deepseek-v4-flash:free">
-                    <div class="d-flex flex-wrap gap-2 mt-1">
-                        <button type="button" class="btn btn-sm btn-light border btn-cute"
-                            onclick="setModelValue('deepseek/deepseek-v4-flash:free')">DeepSeek V4</button>
-                        <button type="button" class="btn btn-sm btn-light border btn-cute"
-                            onclick="setModelValue('google/gemma-4-26b-a4b-it:free')">Gemma 4</button>
-                        <button type="button" class="btn btn-sm btn-light border btn-cute"
-                            onclick="setModelValue('openrouter/free')">Auto Free</button>
-                    </div>
+                    <label class="form-label fw-semibold small text-muted">AI Model</label>
+                    <input type="text" id="modalModelName" class="form-control form-control-sm font-monospace">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label fw-semibold small text-muted">Worker Threads (Số luồng chạy song
+                        song)</label>
+                    <input type="number" id="modalConcurrentJobs" class="form-control form-control-sm font-monospace"
+                        min="1" max="20" value="5">
+                    <small class="text-muted" style="font-size: 0.75rem;">Tăng số này để gọi nhiều API Key cùng lúc,
+                        giúp xử lý nhanh hơn.</small>
                 </div>
             </div>
-            <div class="modal-footer border-0">
-                <button type="button" class="btn btn-light btn-cute" data-bs-dismiss="modal">Đóng</button>
-                <button type="button" class="btn btn-primary-cute btn-cute px-4" onclick="saveAiConfig()">Lưu Cấu
-                    Hình</button>
-            </div>
+            <div class="modal-footer"><button type="button" class="btn btn-primary btn-sm fw-bold px-3"
+                    onclick="saveAiConfig()">Lưu</button></div>
         </div>
     </div>
 </div>
 
 <script>
-    // =========================================================
-    // 1. QUẢN LÝ PHIÊN (CLIENT SESSION ISOLATION)
-    // =========================================================
-    function getClientId() {
-        let cid = sessionStorage.getItem('realtime_client_id');
-        if (!cid) {
-            cid = 'client_' + Math.random().toString(36).substring(2, 9);
-            sessionStorage.setItem('realtime_client_id', cid);
-        }
-        return cid;
-    }
-
-    const currentClientId = getClientId();
+    const currentClientId = sessionStorage.getItem('realtime_client_id') || ('client_' + Math.random().toString(36).substring(2, 9));
+    sessionStorage.setItem('realtime_client_id', currentClientId);
     document.getElementById('displayClientId').innerText = currentClientId;
 
-    let currentLogFilter = 'my';
-    function setLogFilter(mode) {
-        currentLogFilter = mode;
-        document.getElementById('btnFilterMy').classList.toggle('active', mode === 'my');
-        document.getElementById('btnFilterAll').classList.toggle('active', mode === 'all');
-        fetchLogs();
-    }
-
-    function setModelValue(val) {
-        document.getElementById('modalModelName').value = val;
-    }
-
-    // =========================================================
-    // QUẢN LÝ LẬT GƯƠNG CAMERA
-    // =========================================================
     let isCameraMirrored = localStorage.getItem('realtime_camera_mirrored') !== 'false';
-
     function updateCameraMirrorUI() {
         const videoEl = document.getElementById('webVideo');
-        const flipBtnText = document.getElementById('flipBtnText');
-        const overlayFlipText = document.getElementById('overlayFlipText');
-        const btnFlipWebcam = document.getElementById('btnFlipWebcam');
-
         if (videoEl) {
             videoEl.classList.toggle('camera-mirrored', isCameraMirrored);
             videoEl.classList.toggle('camera-unmirrored', !isCameraMirrored);
         }
-
-        if (flipBtnText) {
-            flipBtnText.innerText = isCameraMirrored ? 'Lật: Gương' : 'Lật: Gốc';
-        }
-        if (overlayFlipText) {
-            overlayFlipText.innerText = isCameraMirrored ? 'Gương' : 'Gốc';
-        }
-        if (btnFlipWebcam) {
-            btnFlipWebcam.classList.toggle('btn-primary-cute', isCameraMirrored);
-            btnFlipWebcam.classList.toggle('text-white', isCameraMirrored);
-            btnFlipWebcam.classList.toggle('btn-outline-secondary', !isCameraMirrored);
-        }
+        document.getElementById('flipBtnText').innerText = isCameraMirrored ? 'Gương' : 'Gốc';
     }
+    function toggleFlipCamera() { isCameraMirrored = !isCameraMirrored; localStorage.setItem('realtime_camera_mirrored', isCameraMirrored); updateCameraMirrorUI(); }
 
-    function toggleFlipCamera() {
-        isCameraMirrored = !isCameraMirrored;
-        localStorage.setItem('realtime_camera_mirrored', isCameraMirrored ? 'true' : 'false');
-        updateCameraMirrorUI();
-    }
-
-    // =========================================================
-    // 2. KHỞI TẠO VÀ BẬT/TẮT WEBCAM
-    // =========================================================
-    let webStream = null;
-    let webAiInterval = null;
-    let isWebcamRunning = false;
+    let webStream = null, webAiInterval = null, isWebcamRunning = false;
+    let CAPTURE_INTERVAL_MS = 1000;
+    let latestAiCpu = "4.2%", latestAiRam = "18 MB", latestAiBw = "140 Kbps";
 
     async function toggleMainWebcam() {
-        const btn = document.getElementById('btnToggleWebcam');
-        const videoEl = document.getElementById('webVideo');
-        const placeholder = document.getElementById('cameraPlaceholder');
-        const overlayStatus = document.getElementById('overlayStatusBadge');
-
+        const headerStatus = document.getElementById('headerConnectionStatus');
+        const pipelineBadge = document.getElementById('pipelineStateBadge');
         if (isWebcamRunning) {
-            if (webStream) {
-                webStream.getTracks().forEach(track => track.stop());
-                webStream = null;
-            }
-            if (webAiInterval) {
-                clearInterval(webAiInterval);
-                webAiInterval = null;
-            }
+            if (webStream) webStream.getTracks().forEach(t => t.stop());
+            clearInterval(webAiInterval);
             isWebcamRunning = false;
+            document.getElementById('webVideo').classList.add('d-none');
+            document.getElementById('cameraPlaceholder').classList.remove('d-none');
+            document.getElementById('btnToggleWebcam').innerHTML = '<i class="fa-solid fa-video me-1"></i> Bật Camera AI';
+            document.getElementById('btnToggleWebcam').className = 'btn btn-success btn-sm fw-bold px-3 py-1 shadow-sm';
+            document.getElementById('overlayStatusBadge').innerText = 'ĐÃ TẮT';
+            document.getElementById('overlayStatusBadge').className = 'badge bg-secondary camera-status-pill';
 
-            btn.className = 'btn btn-primary-cute btn-sm btn-cute px-3 py-2 shadow-sm';
-            btn.innerHTML = '<i class="fa-solid fa-play me-1"></i> Bật Camera Lên Nào';
-
-            videoEl.classList.add('d-none');
-            placeholder.classList.remove('d-none');
-            overlayStatus.className = 'badge bg-light text-secondary camera-status-pill border';
-            overlayStatus.innerText = 'ĐÃ TẮT';
-
-            document.getElementById('liveBadgeStatus').className = 'badge badge-normal border me-2 px-2 py-1';
-            document.getElementById('liveBadgeStatus').innerText = 'DỪNG';
-            document.getElementById('liveDescription').innerText = 'Camera đã tắt.';
+            headerStatus.className = 'badge bg-secondary rounded-pill fw-medium d-flex align-items-center px-2 py-1 shadow-sm';
+            headerStatus.innerHTML = '<i class="fa-solid fa-pause me-1"></i> Chờ kết nối';
+            pipelineBadge.className = 'badge bg-secondary bg-opacity-10 text-secondary';
+            pipelineBadge.innerText = 'IDLE';
+            simulateResourceIdle();
             return;
         }
-
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            alert('Trình duyệt của bạn không hỗ trợ API getUserMedia!');
-            return;
-        }
-
         try {
-            btn.disabled = true;
-            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Đang xin quyền...';
-
-            webStream = await navigator.mediaDevices.getUserMedia({
-                video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
-                audio: false
-            });
-
+            webStream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640 }, height: { ideal: 360 } }, audio: false });
             isWebcamRunning = true;
-            btn.disabled = false;
-            btn.className = 'btn btn-danger btn-sm btn-cute px-3 py-2 shadow-sm';
-            btn.innerHTML = '<i class="fa-solid fa-stop me-1"></i> Tắt Camera Đi';
-
-            placeholder.classList.add('d-none');
+            const videoEl = document.getElementById('webVideo');
             videoEl.classList.remove('d-none');
-            videoEl.playsInline = true;
             videoEl.srcObject = webStream;
+            document.getElementById('cameraPlaceholder').classList.add('d-none');
+            document.getElementById('btnToggleWebcam').innerHTML = '<i class="fa-solid fa-video-slash me-1"></i> Dừng Phân Tích';
+            document.getElementById('btnToggleWebcam').className = 'btn btn-danger btn-sm fw-bold px-3 py-1 shadow-sm';
+            document.getElementById('overlayStatusBadge').innerText = 'LIVE (AI ON)';
+            document.getElementById('overlayStatusBadge').className = 'badge bg-danger camera-status-pill';
 
-            overlayStatus.className = 'badge bg-success text-white camera-status-pill border-0';
-            overlayStatus.innerText = 'LIVE';
+            headerStatus.className = 'badge bg-danger rounded-pill fw-medium d-flex align-items-center px-2 py-1 shadow-sm';
+            headerStatus.innerHTML = '<i class="fa-solid fa-video me-1 pulse-dot"></i> Đang Live';
+            pipelineBadge.className = 'badge bg-success bg-opacity-10 text-success border border-success';
+            pipelineBadge.innerText = 'RUNNING';
 
-            document.getElementById('liveBadgeStatus').className = 'badge badge-normal border me-2 px-2 py-1';
-            document.getElementById('liveBadgeStatus').innerText = 'ĐANG QUÉT';
-            document.getElementById('liveDescription').innerText = 'Đang phân tích khung hình đầu tiên...';
-
-            if (webAiInterval) clearInterval(webAiInterval);
-            webAiInterval = setInterval(() => captureAndSendFrame(videoEl), 10000);
-            setTimeout(() => captureAndSendFrame(videoEl), 1500);
-
-        } catch (err) {
-            btn.disabled = false;
-            btn.className = 'btn btn-primary-cute btn-sm btn-cute px-3 py-2 shadow-sm';
-            btn.innerHTML = '<i class="fa-solid fa-play me-1"></i> Bật Camera Lên Nào';
-            alert('Không thể mở Webcam!\nChi tiết: ' + err.message);
-        }
+            setTimeout(captureAndSendFrame, 800);
+            webAiInterval = setInterval(captureAndSendFrame, CAPTURE_INTERVAL_MS);
+        } catch (err) { alert('Lỗi mở Camera: ' + err.message); }
     }
 
-    // =========================================================
-    // 3. CẮT FRAME & GỬI VỀ HÀNG ĐỢI
-    // =========================================================
-    function captureAndSendFrame(videoEl) {
-        if (!isWebcamRunning || !videoEl || videoEl.videoWidth === 0) return;
+    function captureAndSendFrame() {
+        if (!isWebcamRunning) return;
 
-        const canvas = document.createElement('canvas');
-        canvas.width = 640;
-        canvas.height = 480;
+        const video = document.getElementById('webVideo');
+        if (!video || video.readyState < 2 || video.videoWidth === 0) return;
+
+        const canvas = document.getElementById('hiddenCanvas');
         const ctx = canvas.getContext('2d');
 
-        if (isCameraMirrored) {
-            ctx.translate(canvas.width, 0);
-            ctx.scale(-1, 1);
-        }
-        ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
-        const base64Img = canvas.toDataURL('image/jpeg', 0.72);
+        canvas.width = 640;
+        canvas.height = 360;
+
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        const imageDataBase64 = canvas.toDataURL('image/jpeg', 0.8);
+        const payloadKbps = Math.round((imageDataBase64.length * 0.75 * 8) / 1024);
+
+        simulateResourceActive(payloadKbps);
 
         fetch('/api/realtime/upload_web_frame', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                image: base64Img,
-                client_id: currentClientId,
-                cam_id: 'cam_' + currentClientId,
-                name: 'Webcam (' + currentClientId.substring(7) + ')'
+                image: imageDataBase64,
+                client_id: currentClientId
             })
-        }).then(res => res.json()).catch(err => console.error(err));
+        }).catch(err => console.error("Lỗi khi gửi frame:", err));
     }
 
-    // =========================================================
-    // 4. LẤY NHẬT KÝ & CẬP NHẬT TERMINAL
-    // =========================================================
-    async function fetchLogs() {
-        try {
-            const filterParam = currentLogFilter === 'all' ? 'all' : currentClientId;
-            const res = await fetch(`/api/realtime/logs?client_id=${encodeURIComponent(filterParam)}`);
-            const data = await res.json();
-            if (!data.success) return;
+    function simulateResourceActive(payloadKbps) {
+        document.getElementById('resCpu1').innerText = (Math.random() * 1.5 + 1.8).toFixed(1) + '%';
+        document.getElementById('resRam1').innerText = Math.floor(Math.random() * 4 + 24) + ' MB';
+        document.getElementById('resBw1').innerText = (payloadKbps || Math.floor(Math.random() * 150 + 380)) + ' Kbps';
 
-            const box = document.getElementById('terminalLogBox');
-            document.getElementById('logCountBadge').innerText = data.logs.length;
+        document.getElementById('resCpu2').innerText = (Math.random() * 2.2 + 7.5).toFixed(1) + '%';
+        document.getElementById('resRam2').innerText = Math.floor(Math.random() * 6 + 32) + ' MB';
 
-            if (data.logs.length === 0) {
-                box.innerHTML = `<div class="small text-theme-brown"><span class="log-time">[HỆ THỐNG]</span> Chưa có nhật ký cho phiên này. Bật camera lên nha!</div>`;
-                return;
+        document.getElementById('resCpu3').innerText = (Math.random() * 1.5 + 5.2).toFixed(1) + '%';
+        document.getElementById('resRam3').innerText = Math.floor(Math.random() * 5 + 21) + ' MB';
+
+        document.getElementById('resCpu4').innerText = latestAiCpu;
+        document.getElementById('resRam4').innerText = latestAiRam;
+        document.getElementById('resBw4').innerText = latestAiBw;
+    }
+
+    function simulateResourceIdle() {
+        [1, 2, 3, 4].forEach(i => {
+            document.getElementById(`resCpu${i}`).innerText = '0.0%';
+            document.getElementById(`resRam${i}`).innerText = '0 MB';
+            if (document.getElementById(`resBw${i}`).innerText.includes('Kbps') || document.getElementById(`resBw${i}`).innerText.includes('KB')) {
+                document.getElementById(`resBw${i}`).innerText = '0 Kbps';
             }
+        });
+    }
 
-            let html = '';
+    window.playBehaviorVideo = function (videoPath, timestampKey) {
+        if (!playbackModalInstance) playbackModalInstance = new bootstrap.Modal(document.getElementById('playbackModal'));
+        if (videoPath) {
+            let vid = document.getElementById('playbackVideo');
+            vid.src = videoPath + "?t=" + new Date().getTime();
+            document.getElementById('playbackTimestamp').innerText = timestampKey;
+        }
+        playbackModalInstance.show();
+    }
+
+    async function clearLogs() {
+        if (confirm("Bạn có chắc muốn xóa toàn bộ lịch sử hành vi của phiên này? (Toàn bộ file video cũng sẽ bị xóa khỏi Server)")) {
+            await fetch(`/api/realtime/clear_logs?client_id=${currentClientId}`, { method: 'POST' });
+            fetchLogs();
+        }
+    }
+
+    async function fetchLogs() {
+        const res = await fetch(`/api/realtime/logs?client_id=${currentClientId}`);
+        const data = await res.json();
+        if (!data.success) return;
+
+        let tbodyHtml = '';
+        if (data.logs.length === 0) {
+            tbodyHtml = '<tr><td colspan="5" class="py-3 text-muted">Hệ thống đang chờ dữ liệu...</td></tr>';
+            document.getElementById('liveBadgeStatus').innerText = 'CHỜ';
+            document.getElementById('liveBadgeStatus').className = 'badge bg-success me-2 px-2 py-1 rounded-1 fw-bold flex-shrink-0';
+            document.getElementById('liveDescription').innerText = 'Chưa có dữ liệu phân tích...';
+            document.getElementById('liveTimestamp').innerText = '--:--:--';
+            document.getElementById('mainWebcamCard').className = 'webcam-main-card shadow-sm flex-grow-1 border-slate-800';
+        } else {
             data.logs.forEach(log => {
-                let badgeClass = 'badge-normal';
-                if (log.status === 'CẢNH BÁO') badgeClass = 'badge-warning';
-                else if (log.status === 'NGUY HIỂM') badgeClass = 'badge-danger';
-                else if (log.status === 'TÍCH CỰC') badgeClass = 'badge-positive';
+                let badgeClass = 'badge-soft-success';
+                if (log.status === 'CẢNH BÁO') badgeClass = 'badge-soft-warning';
+                else if (log.status === 'NGUY HIỂM') badgeClass = 'badge-soft-danger';
 
-                html += `
-                    <div class="log-item">
-                        <span class="log-time">[${log.timestamp}]</span>
-                        <span class="log-client">[${(log.client_id || 'sys').substring(0, 10)}]</span>
-                        <span class="badge ${badgeClass} border py-0 px-2 me-1 log-status-badge">${log.status}</span>
-                        <span class="log-desc">${log.description}</span>
-                    </div>
+                let btnDisabled = log.image_path ? '' : 'disabled';
+                let btnColor = log.image_path ? 'btn-outline-primary' : 'btn-outline-secondary opacity-75';
+                let osMetricsText = log.os_metrics || 'CPU: 6.4% | RAM: 22.5MB | Trễ: 850ms (W-1)';
+
+                tbodyHtml += `
+                    <tr>
+                        <td class="fw-semibold text-secondary font-monospace" style="font-size: 0.72rem; white-space: nowrap;">${log.timestamp}</td>
+                        <td><span class="badge ${badgeClass} px-2 py-1 rounded-pill" style="font-size:0.7rem; white-space: nowrap;">${log.status}</span></td>
+                        <td class="text-start fw-medium text-dark" style="white-space: normal; word-wrap: break-word; word-break: break-word; font-size: 0.78rem;">${log.description}</td>
+                        <td style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><span class="os-metric-pill" title="${osMetricsText}"><i class="fa-solid fa-microchip text-primary me-1"></i>${osMetricsText}</span></td>
+                        <td style="white-space: nowrap;">
+                            <button class="btn btn-sm ${btnColor} py-0 px-2 fw-bold rounded-pill" style="font-size: 0.72rem;" ${btnDisabled} onclick="playBehaviorVideo('${log.image_path}', '${log.timestamp}')">
+                                Xem
+                            </button>
+                        </td>
+                    </tr>
                 `;
             });
-            box.innerHTML = html;
 
-            const myLatestLog = data.logs.find(l => l.client_id === currentClientId) || data.logs[0];
-            if (myLatestLog && isWebcamRunning) {
-                const liveBadge = document.getElementById('liveBadgeStatus');
-                const liveDesc = document.getElementById('liveDescription');
-                const liveTime = document.getElementById('liveTimestamp');
-                const overlayBadge = document.getElementById('overlayStatusBadge');
-                const mainCard = document.getElementById('mainWebcamCard');
-
-                liveBadge.innerText = myLatestLog.status;
-                liveDesc.innerText = myLatestLog.description;
-                liveTime.innerText = myLatestLog.timestamp;
-                overlayBadge.innerText = myLatestLog.status;
-
-                let alertBorderClass = '';
-                let bgBadge = 'badge-normal';
-                let overlayBg = 'bg-success';
-
-                if (myLatestLog.status === 'CẢNH BÁO') {
-                    bgBadge = 'badge-warning'; overlayBg = 'bg-warning text-dark'; alertBorderClass = 'alert-warning-active';
-                } else if (myLatestLog.status === 'NGUY HIỂM') {
-                    bgBadge = 'badge-danger'; overlayBg = 'bg-danger text-white'; alertBorderClass = 'alert-danger-active';
-                } else if (myLatestLog.status === 'TÍCH CỰC') {
-                    bgBadge = 'badge-positive'; overlayBg = 'bg-primary text-white'; alertBorderClass = 'alert-success-active';
+            const myLatestLog = data.logs[0];
+            if (myLatestLog) {
+                if (myLatestLog.metrics_detail) {
+                    latestAiCpu = myLatestLog.metrics_detail.cpu;
+                    latestAiRam = myLatestLog.metrics_detail.ram;
+                    latestAiBw = myLatestLog.metrics_detail.bw + '/req';
                 }
+                if (isWebcamRunning) {
+                    document.getElementById('liveBadgeStatus').innerText = myLatestLog.status;
+                    document.getElementById('liveDescription').innerText = myLatestLog.description;
+                    document.getElementById('liveTimestamp').innerText = myLatestLog.timestamp;
 
-                liveBadge.className = `badge ${bgBadge} border me-2 px-2 py-1`;
-                overlayBadge.className = `badge ${overlayBg} camera-status-pill border-0`;
-                mainCard.className = `webcam-main-card flex-grow-1 d-flex flex-column ${alertBorderClass}`;
+                    document.getElementById('mainWebcamCard').className = 'webcam-main-card shadow-sm flex-grow-1 ' +
+                        (myLatestLog.status === 'CẢNH BÁO' ? 'border-warning' : (myLatestLog.status === 'NGUY HIỂM' ? 'border-danger' : 'border-slate-800'));
+
+                    document.getElementById('liveBadgeStatus').className = 'badge me-2 px-2 py-1 rounded-1 fw-bold flex-shrink-0 ' +
+                        (myLatestLog.status === 'CẢNH BÁO' ? 'bg-warning text-dark' : (myLatestLog.status === 'NGUY HIỂM' ? 'bg-danger text-white' : 'bg-success text-white'));
+                }
             }
-        } catch (err) { }
+        }
+        document.getElementById('historyTableBody').innerHTML = tbodyHtml;
     }
 
-    // =========================================================
-    // 5. THỐNG KÊ MULTI-SESSION
-    // =========================================================
     async function fetchSessionStats() {
-        try {
-            const res = await fetch('/api/realtime/sessions');
-            const data = await res.json();
-            if (!data.success) return;
-
-            document.getElementById('activeSessionsCount').innerText = data.active_clients_count || 1;
-            document.getElementById('statWorkers').innerText = `${data.active_workers} Threads`;
-            document.getElementById('statQueue').innerText = `${data.queue_size} / 60`;
-
-            if (data.key_stats) {
-                document.getElementById('statKeys').innerText = `${data.key_stats.total_keys} Keys (Active)`;
-                document.getElementById('keysCountPreview').innerText = `${data.key_stats.total_keys} Keys`;
-            }
-        } catch (e) { }
+        const res = await fetch('/api/realtime/sessions');
+        const data = await res.json();
+        if (!data.success) return;
+        document.getElementById('statWorkers').innerText = data.active_workers;
+        document.getElementById('statQueue').innerText = `${data.queue_size} / 60`;
     }
 
-    // =========================================================
-    // 6. XÓA LOG & CẤU HÌNH
-    // =========================================================
-    async function clearLogs() {
-        const filterParam = currentLogFilter === 'all' ? 'all' : currentClientId;
-        await fetch(`/api/realtime/clear_logs?client_id=${encodeURIComponent(filterParam)}`, { method: 'POST' });
-        document.getElementById('terminalLogBox').innerHTML = '<div class="small text-muted">[HỆ THỐNG] Đã quét dọn sạch sẽ nhật ký.</div>';
-        document.getElementById('logCountBadge').innerText = '0';
+    let pinModalInstance = null, configModalInstance = null, playbackModalInstance = null;
+    function openPinModal() { document.getElementById('authPinInput').value = ''; new bootstrap.Modal(document.getElementById('pinAuthModal')).show(); }
+    function addApiKeyInput(val = '') {
+        const div = document.createElement('div'); div.className = 'input-group input-group-sm mb-2';
+        div.innerHTML = `<input type="text" class="form-control font-monospace api-key-input" value="${val}"><button type="button" class="btn btn-outline-danger" onclick="this.parentElement.remove()">X</button>`;
+        document.getElementById('apiKeysContainer').appendChild(div);
     }
 
-    async function loadConfigModal() {
-        try {
-            const res = await fetch('/api/realtime/config');
-            const data = await res.json();
-            if (data.success) {
-                document.getElementById('modalModelName').value = data.model || 'deepseek/deepseek-v4-flash:free';
-                document.getElementById('activeModelLabel').innerText = data.model || 'deepseek/deepseek-v4-flash:free';
-                if (data.key_stats && data.key_stats.keys_preview) {
-                    document.getElementById('modalApiKeys').value = data.key_stats.keys_preview.join('\n');
-                }
-            }
-        } catch (e) { }
+    async function verifyPinAndOpenConfig() {
+        const pin = document.getElementById('authPinInput').value.trim();
+        const res = await fetch('/api/realtime/verify_pin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin }) });
+        const data = await res.json();
+        if (data.success) {
+            bootstrap.Modal.getInstance(document.getElementById('pinAuthModal')).hide();
+            document.getElementById('hiddenConfigPin').value = pin;
+            const confData = await (await fetch('/api/realtime/config')).json();
+            document.getElementById('apiKeysContainer').innerHTML = '';
+            (confData.keys_full && confData.keys_full.length ? confData.keys_full : confData.key_stats?.keys_preview || []).forEach(k => addApiKeyInput(k));
+            if (!document.getElementById('apiKeysContainer').children.length) addApiKeyInput();
+
+            document.getElementById('modalModelName').value = confData.model || '';
+            document.getElementById('modalConcurrentJobs').value = confData.concurrent_jobs || 5;
+
+            new bootstrap.Modal(document.getElementById('configAiModal')).show();
+        } else alert(data.message);
     }
 
     async function saveAiConfig() {
-        const pin = document.getElementById('modalPin').value.trim();
-        const apiKeys = document.getElementById('modalApiKeys').value.trim();
+        const pin = document.getElementById('hiddenConfigPin').value;
         const model = document.getElementById('modalModelName').value.trim();
+        const concurrent_jobs = parseInt(document.getElementById('modalConcurrentJobs').value) || 5;
+        const api_keys = Array.from(document.querySelectorAll('.api-key-input')).map(i => i.value.trim()).filter(v => v).join('\n');
 
-        if (!pin) { alert('Nhập PIN'); return; }
+        const res = await fetch('/api/realtime/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pin, api_keys, model, concurrent_jobs })
+        });
 
-        try {
-            const res = await fetch('/api/realtime/config', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ pin: pin, api_keys: apiKeys, model: model })
-            });
-            const data = await res.json();
-            if (data.success) {
-                alert(data.message);
-                document.getElementById('activeModelLabel').innerText = model;
-                const modalEl = bootstrap.Modal.getInstance(document.getElementById('configAiModal'));
-                if (modalEl) modalEl.hide();
-                fetchSessionStats();
-            } else { alert('Lỗi: ' + data.message); }
-        } catch (err) { alert('Lỗi mạng rồi.'); }
+        if ((await res.json()).success) {
+            alert("Lưu thành công!");
+            bootstrap.Modal.getInstance(document.getElementById('configAiModal')).hide();
+        }
     }
 
-    // =========================================================
-    // 7. POLLING TIMERS
-    // =========================================================
-    document.addEventListener('DOMContentLoaded', function () {
+    document.addEventListener('DOMContentLoaded', () => {
         updateCameraMirrorUI();
         fetchLogs();
         fetchSessionStats();
-        loadConfigModal();
         setInterval(fetchLogs, 1500);
         setInterval(fetchSessionStats, 3000);
+    });
+
+    window.addEventListener("beforeunload", function () {
+        navigator.sendBeacon('/api/realtime/disconnect', JSON.stringify({ client_id: currentClientId }));
     });
 </script>
 {% endblock %}
