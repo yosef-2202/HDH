@@ -11,12 +11,10 @@ import queue
 import uuid
 import base64
 import requests
-import traceback
 import json
 import numpy as np
 from datetime import datetime
 
-# Ép kiểu UTF-8 cho Terminal Windows để không bị lỗi charmap khi print tiếng Việt
 if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
 if sys.stderr and hasattr(sys.stderr, 'reconfigure'):
@@ -25,17 +23,14 @@ if sys.stderr and hasattr(sys.stderr, 'reconfigure'):
 realtime_bp = Blueprint('realtime_bp', __name__)
 
 DEFAULT_VISION_MODEL = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
-OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
+OPENROUTER_ENDPOINT = "[https://openrouter.ai/api/v1/chat/completions](https://openrouter.ai/api/v1/chat/completions)"
 
-# --- Quản lý Trạng thái & Phiên (Tối đa 20 phiên client độc lập) ---
 MAX_CLIENTS = 20
 clients = {} 
 clients_lock = threading.Lock()
 
-# Hàng đợi phân tích AI dùng chung
 analysis_queue = queue.Queue(maxsize=300)
 
-# Khóa xoay vòng Token chuẩn Round-Robin
 token_lock = threading.Lock()
 token_turn = 0
 
@@ -44,8 +39,6 @@ current_workers_count = 0
 worker_lock = threading.Lock()
 
 os.makedirs('static/temp', exist_ok=True)
-
-# --- Các hàm Lõi (Core Functions) ---
 
 def init_client(client_id):
     with clients_lock:
@@ -67,12 +60,12 @@ def get_realtime_credentials():
     with app.app_context():
         try: 
             keys_list = json.loads(get_setting('realtime_api_keys', '[]'))
-        except: 
+        except Exception: 
             keys_list = []
         model_name = get_setting('realtime_ai_model', DEFAULT_VISION_MODEL).strip()
         if not model_name: model_name = DEFAULT_VISION_MODEL
     
-    valid_apis = [k.strip() for k in keys_list if k.strip()]
+    valid_apis = [k.strip() for k in keys_list if isinstance(k, str) and k.strip()]
     if not valid_apis: 
         return None, model_name, []
 
@@ -88,7 +81,7 @@ def start_workers_if_needed():
     from app import app, get_setting
     with app.app_context():
         try: target_workers = int(get_setting('realtime_concurrent_jobs', 5))
-        except: target_workers = 5
+        except Exception: target_workers = 5
 
     with worker_lock:
         if not workers_started:
@@ -135,7 +128,6 @@ def clean_ai_response_and_extract_status(raw_text):
     elif "[CẢNH BÁO]" in upper_text:
         status_badge = "CẢNH BÁO"
 
-    # Xóa bỏ các nhãn trạng thái ở đầu câu để câu mô tả sạch đẹp
     cleaned_text = re.sub(
         r'^(\s*\[?(BÌNH THƯỜNG|CẢNH BÁO|NGUY HIỂM|TÍCH CỰC)\]?\s*[:\-–—]?\s*)+',
         '',
@@ -146,11 +138,9 @@ def clean_ai_response_and_extract_status(raw_text):
     return status_badge, (cleaned_text if cleaned_text else text)
 
 def calculate_os_metrics(frame, buffer_bytes, recent_frames_count, latency_ms):
-    """Tính toán thông số phân bổ tài nguyên HĐH cho tác vụ xử lý frame hiện tại"""
     frame_ram_mb = (frame.nbytes * max(recent_frames_count, 1)) / (1024 * 1024)
     process_overhead_mb = 18.5 + (frame_ram_mb * 1.2)
     payload_kb = len(buffer_bytes) / 1024.0
-    # Ước tính % CPU chiếm dụng của Worker Thread trong chu kỳ nén OpenCV + I/O
     cpu_est = min(28.5, max(3.2, (latency_ms / 150.0) + (payload_kb / 8.0)))
     thread_name = threading.current_thread().name
     if "Worker-" in thread_name:
@@ -216,7 +206,6 @@ def analyze_frame_with_ai(client_id, frame, recent_frames, alert_id):
         last_error = None
         raw_text = None
 
-        # Cơ chế Retry tối đa 2 lần và tự động xoay vòng Key khi gặp lỗi
         for attempt in range(2):
             headers = {
                 "Authorization": f"Bearer {api_key}",
@@ -265,7 +254,6 @@ def analyze_frame_with_ai(client_id, frame, recent_frames, alert_id):
             print(f"Loi goi API sau 2 lan thu: {last_error}")
             return
 
-        # Ghi file video minh chứng (.webm) ở luồng phụ
         threading.Thread(target=record_short_clip, args=(list(recent_frames), alert_id), daemon=True).start()
         
         status_badge, clean_desc = clean_ai_response_and_extract_status(raw_text)
@@ -282,7 +270,6 @@ def analyze_frame_with_ai(client_id, frame, recent_frames, alert_id):
     except Exception as e:
         print(f"Loi trong analyze_frame_with_ai: {str(e).encode('ascii', 'ignore').decode('ascii')}")
 
-# --- API Routes ---
 @realtime_bp.route('/realtime/view')
 def realtime_dashboard():
     if 'client_id' not in session: session['client_id'] = f"client_{uuid.uuid4().hex[:8]}"
@@ -309,7 +296,6 @@ def api_upload_web_frame():
 
         frame_resized = cv2.resize(frame, (640, 360))
         
-        # Bỏ qua các frame tối đen khi webcam vừa khởi động (mean < 8.0)
         if frame_resized.mean() < 8.0:
             return jsonify({"success": True, "client_id": client_id, "skipped": "black_frame"})
 
@@ -328,7 +314,6 @@ def api_upload_web_frame():
 
         return jsonify({"success": True, "client_id": client_id})
     except Exception as e:
-        print("Loi Upload Frame:", str(e).encode('ascii', 'ignore').decode('ascii'))
         return jsonify({"success": False, "message": str(e)}), 500
 
 @realtime_bp.route('/api/realtime/logs', methods=['GET'])
@@ -342,12 +327,20 @@ def api_get_logs():
 def api_get_sessions():
     with clients_lock: active_users = len(clients)
     global current_workers_count
+    from app import app, get_setting
+    with app.app_context():
+        try:
+            saved_keys = json.loads(get_setting('realtime_api_keys', '[]'))
+            active_keys_count = len([k for k in saved_keys if isinstance(k, str) and k.strip()])
+        except Exception:
+            active_keys_count = 0
 
     return jsonify({
         "success": True, 
         "active_clients_count": active_users,
         "queue_size": analysis_queue.qsize(), 
-        "active_workers": current_workers_count
+        "active_workers": current_workers_count,
+        "active_keys_count": active_keys_count
     })
 
 @realtime_bp.route('/api/realtime/clear_logs', methods=['POST'])
@@ -371,10 +364,11 @@ def api_verify_pin():
     pin = str(data.get('pin', '')).strip()
     from app import app, get_setting
     with app.app_context():
-        system_pin = get_setting('system_pin', '123456')
+        system_pin = str(get_setting('system_pin', '123456')).strip()
         
     if pin == system_pin or pin == 'admin':
         session['realtime_unlocked'] = True
+        session['is_admin'] = True
         return jsonify({"success": True, "message": "Xác thực mã PIN thành công!"})
     return jsonify({"success": False, "message": "Mã PIN không đúng"}), 401
 
@@ -387,19 +381,24 @@ def api_config():
         req_pin = str(data.get('pin', '')).strip()
         
         with app.app_context():
-            system_pin = get_setting('system_pin', '123456')
+            system_pin = str(get_setting('system_pin', '123456')).strip()
             
-        if req_pin == system_pin or req_pin == 'admin': 
+        if req_pin and (req_pin == system_pin or req_pin == 'admin'): 
             session['realtime_unlocked'] = True
+            session['is_admin'] = True
             
-        if not session.get('realtime_unlocked') and not session.get('is_admin'):
+        if not (session.get('realtime_unlocked') or session.get('is_admin')):
             return jsonify({"success": False, "message": "Cần xác thực mã PIN!"}), 401
             
         keys_input = data.get('api_keys', '')
-        new_keys = [k.strip() for k in keys_input.replace(',', '\n').split('\n') if k.strip()]
-        model_input = data.get('model', '').strip()
+        if isinstance(keys_input, list):
+            new_keys = [str(k).strip() for k in keys_input if str(k).strip()]
+        else:
+            new_keys = [k.strip() for k in str(keys_input).replace(',', '\n').split('\n') if k.strip()]
+
+        model_input = str(data.get('model', '')).strip()
         try: concurrent_jobs = int(data.get('concurrent_jobs', 5))
-        except: concurrent_jobs = 5
+        except Exception: concurrent_jobs = 5
         
         with app.app_context():
             update_setting('realtime_api_keys', json.dumps(new_keys))
@@ -407,18 +406,18 @@ def api_config():
             update_setting('realtime_concurrent_jobs', str(concurrent_jobs))
             
         start_workers_if_needed()
-        return jsonify({"success": True, "message": "Đã lưu cấu hình và cập nhật luồng thành công!"})
+        return jsonify({"success": True, "message": "Đã lưu cấu hình vào MySQL và cập nhật luồng thành công!"})
 
     with app.app_context():
         try: saved_keys = json.loads(get_setting('realtime_api_keys', '[]'))
-        except: saved_keys = []
+        except Exception: saved_keys = []
         saved_model = get_setting('realtime_ai_model', DEFAULT_VISION_MODEL)
         try: concurrent_jobs = int(get_setting('realtime_concurrent_jobs', 5))
-        except: concurrent_jobs = 5
+        except Exception: concurrent_jobs = 5
 
     return jsonify({
         "success": True, 
-        "keys_full": saved_keys if session.get('realtime_unlocked') or session.get('is_admin') else [],
+        "keys_full": saved_keys if (session.get('realtime_unlocked') or session.get('is_admin')) else [],
         "key_stats": {"keys_preview": [k[:8]+"..." for k in saved_keys]},
         "model": saved_model,
         "concurrent_jobs": concurrent_jobs

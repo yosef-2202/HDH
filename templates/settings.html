@@ -2,83 +2,96 @@
 {% block title %}Cài đặt hệ thống - AI Vision{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h3 class="fw-bold mb-0 text-dark">Bảng điều khiển Trung tâm</h3>
+<style>
+    .form-check-input:checked {
+        background-color: #ffb7b2 !important;
+        border-color: #ffb7b2 !important;
+    }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-4 px-2">
+    <h4 class="fw-bold mb-0" style="color: #d47a53;"><i class="fa-solid fa-paw me-2"></i>Cài Đặt Trung Tâm</h4>
 </div>
 
 <div class="row justify-content-center">
-    <div class="col-12 col-lg-8 mx-auto"> 
+    <div class="col-12 col-lg-9 mx-auto"> 
         
         <!-- CARD 1: Cấu hình tính năng -->
-        <div class="card custom-card p-4 border-0 shadow-sm mb-4">
-            <form id="configForm">
-                <h5 class="fw-bold mb-4 border-bottom pb-2 text-primary">
-                    <i class="fa-solid fa-power-off me-2"></i>Quản lý Tính năng Hệ thống
-                </h5>
-                <div class="row g-4 mb-4">
-                    <div class="col-12 col-sm-6">
-                        <div class="form-check form-switch p-3 bg-light rounded border d-flex justify-content-between align-items-center m-0">
-                            <label class="form-check-label fw-bold m-0" for="enableVideo">Xử lý Video (Tải file)</label>
-                            <input class="form-check-input fs-4 m-0" type="checkbox" role="switch" id="enableVideo">
+        <div class="card custom-card mb-4 overflow-hidden">
+            <div class="viewport-header">
+                <h6 class="fw-bold mb-0" style="color: #d47a53;">
+                    <i class="fa-solid fa-power-off me-2"></i>Quản Lý Tính Năng Hệ Thống
+                </h6>
+            </div>
+            <div class="p-4">
+                <form id="configForm">
+                    <div class="row g-3 mb-4">
+                        <div class="col-12 col-sm-6">
+                            <div class="form-check form-switch p-3 rounded-4 d-flex justify-content-between align-items-center m-0" style="background: #fff5f5; border: 1px dashed #ffb7b2;">
+                                <label class="form-check-label fw-bold m-0" style="color: #5a4a42;" for="enableVideo"><i class="fa-solid fa-file-video me-2" style="color: #d47a53;"></i>Xử lý Video (Tải file)</label>
+                                <input class="form-check-input fs-4 m-0" type="checkbox" role="switch" id="enableVideo">
+                            </div>
+                        </div>
+                        <div class="col-12 col-sm-6">
+                            <div class="form-check form-switch p-3 rounded-4 d-flex justify-content-between align-items-center m-0" style="background: #fff5f5; border: 1px dashed #ffb7b2;">
+                                <label class="form-check-label fw-bold m-0" style="color: #5a4a42;" for="enableRtsp"><i class="fa-solid fa-satellite-dish me-2" style="color: #d47a53;"></i>Xử lý Luồng RTSP</label>
+                                <input class="form-check-input fs-4 m-0" type="checkbox" role="switch" id="enableRtsp">
+                            </div>
+                        </div>
+                        <div class="col-12 col-sm-6">
+                            <div class="form-check form-switch p-3 rounded-4 d-flex justify-content-between align-items-center m-0" style="background: #fff5f5; border: 1px dashed #ffb7b2;">
+                                <label class="form-check-label fw-bold m-0" style="color: #5a4a42;" for="enableChatbot"><i class="fa-solid fa-robot me-2" style="color: #d47a53;"></i>Chatbot AI (Upload)</label>
+                                <input class="form-check-input fs-4 m-0" type="checkbox" role="switch" id="enableChatbot">
+                            </div>
+                        </div>
+                        <div class="col-12 col-sm-6">
+                            <div class="form-check form-switch p-3 rounded-4 d-flex justify-content-between align-items-center m-0" style="background: #fff5f5; border: 1px dashed #ffb7b2;">
+                                <label class="form-check-label fw-bold m-0" style="color: #5a4a42;" for="enableImage"><i class="fa-solid fa-image me-2" style="color: #d47a53;"></i>Phân tích Ảnh</label>
+                                <input class="form-check-input fs-4 m-0" type="checkbox" role="switch" id="enableImage">
+                            </div>
+                        </div>
+                        <div class="col-12 col-sm-6">
+                            <div class="form-check form-switch p-3 rounded-4 d-flex justify-content-between align-items-center m-0" style="background: #fff5f5; border: 1px dashed #ffb7b2;">
+                                <label class="form-check-label fw-bold m-0" style="color: #5a4a42;" for="enableRealtime"><i class="fa-solid fa-clock-rotate-left me-2" style="color: #d47a53;"></i>Phân tích Realtime</label>
+                                <input class="form-check-input fs-4 m-0" type="checkbox" role="switch" id="enableRealtime">
+                            </div>
                         </div>
                     </div>
-                    <div class="col-12 col-sm-6">
-                        <div class="form-check form-switch p-3 bg-light rounded border d-flex justify-content-between align-items-center m-0">
-                            <label class="form-check-label fw-bold m-0" for="enableRtsp">Xử lý Luồng RTSP</label>
-                            <input class="form-check-input fs-4 m-0" type="checkbox" role="switch" id="enableRtsp">
-                        </div>
+                    <div class="d-grid d-md-flex justify-content-md-end">
+                        <button type="submit" class="btn btn-primary-cute btn-cute px-4 py-2 shadow-sm"><i class="fa-solid fa-heart me-2"></i>Lưu Trạng Thái Tính Năng</button>
                     </div>
-                    <div class="col-12 col-sm-6">
-                        <div class="form-check form-switch p-3 bg-light rounded border d-flex justify-content-between align-items-center m-0">
-                            <label class="form-check-label fw-bold m-0" for="enableChatbot">Chatbot AI (Upload)</label>
-                            <input class="form-check-input fs-4 m-0" type="checkbox" role="switch" id="enableChatbot">
-                        </div>
-                    </div>
-                    <div class="col-12 col-sm-6">
-                        <div class="form-check form-switch p-3 bg-light rounded border d-flex justify-content-between align-items-center m-0">
-                            <label class="form-check-label fw-bold m-0" for="enableImage">Phân tích Ảnh</label>
-                            <input class="form-check-input fs-4 m-0" type="checkbox" role="switch" id="enableImage">
-                        </div>
-                    </div>
-                    <div class="col-12 col-sm-6">
-                        <div class="form-check form-switch p-3 bg-light rounded border d-flex justify-content-between align-items-center m-0">
-                            <label class="form-check-label fw-bold m-0" for="enableRealtime">Phân tích Realtime</label>
-                            <input class="form-check-input fs-4 m-0" type="checkbox" role="switch" id="enableRealtime">
-                        </div>
-                    </div>
-                </div>
-                <div class="d-grid d-md-flex justify-content-md-end">
-                    <button type="submit" class="btn btn-primary btn-md px-4 fw-bold shadow-sm"><i class="fa-solid fa-floppy-disk me-2"></i>Lưu trạng thái tính năng</button>
-                </div>
-            </form>
+                </form>
+            </div>
         </div>
 
-        <!-- CARD 2: Chỉnh sửa ảnh thành viên (Cố định 5 người) -->
-        <div class="card custom-card p-4 border-0 shadow-sm">
-            <h5 class="fw-bold mb-4 border-bottom pb-2 text-primary">
-                <i class="fa-solid fa-image-portrait me-2"></i>Cập nhật Ảnh đại diện Thành viên
-            </h5>
-            
-            <div class="table-responsive mb-3">
-                <table class="table table-bordered align-middle">
-                    <thead class="table-light">
-                        <tr>
-                            <th style="width: 60px;">Ảnh</th>
-                            <th style="width: 25%;">Họ tên</th>
-                            <th style="width: 15%;">Mã SV</th>
-                            <th>Link URL Ảnh (Bỏ trống = Avatar màu tự động)</th>
-                        </tr>
-                    </thead>
-                    <tbody id="memberTableBody">
-                        <!-- Render bằng JS -->
-                    </tbody>
-                </table>
+        <!-- CARD 2: Chỉnh sửa ảnh thành viên -->
+        <div class="card custom-card overflow-hidden">
+            <div class="viewport-header">
+                <h6 class="fw-bold mb-0" style="color: #d47a53;">
+                    <i class="fa-solid fa-image-portrait me-2"></i>Cập Nhật Ảnh Đại Diện Thành Viên
+                </h6>
             </div>
+            <div class="p-4">
+                <div class="table-responsive mb-3" style="border-radius: 14px; border: 1px solid #f0e6d2; overflow: hidden;">
+                    <table class="table table-borderless align-middle mb-0" style="color: #5a4a42;">
+                        <thead style="background: #ffecd2; color: #d47a53; border-bottom: 2px dashed #f0d8c0;">
+                            <tr>
+                                <th style="width: 60px;">Ảnh</th>
+                                <th style="width: 25%;">Họ tên</th>
+                                <th style="width: 15%;">Mã SV</th>
+                                <th>Link URL Ảnh (Bỏ trống = Avatar tự động)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="memberTableBody">
+                        </tbody>
+                    </table>
+                </div>
 
-            <div class="d-grid d-md-flex justify-content-md-end mt-2">
-                <button type="button" class="btn btn-primary btn-md px-4 fw-bold shadow-sm" onclick="saveMembers()">
-                    <i class="fa-solid fa-floppy-disk me-2"></i>Lưu thay đổi Ảnh
-                </button>
+                <div class="d-grid d-md-flex justify-content-md-end mt-2">
+                    <button type="button" class="btn btn-primary-cute btn-cute px-4 py-2 shadow-sm" onclick="saveMembers()">
+                        <i class="fa-solid fa-star me-2"></i>Lưu Thay Đổi Ảnh
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -86,9 +99,8 @@
 
 <script>
     let members = [];
-    const bgColors = ["3182ce", "38a169", "d69e2e", "e53e3e", "805ad5"];
+    const bgColors = ["ffb7b2", "a8e6cf", "ffd3b6", "ffaaa5", "d47a53"];
 
-    // 1. Nạp Cấu hình bật/tắt tính năng
     fetch('/api/config')
         .then(res => res.json())
         .then(data => {
@@ -99,7 +111,6 @@
             document.getElementById('enableRealtime').checked = data.enable_realtime;
         });
 
-    // 2. Nạp danh sách thành viên và khôi phục nếu rỗng
     fetch('/api/members')
         .then(res => res.json())
         .then(data => {
@@ -107,7 +118,6 @@
                 members = data.members;
             }
             
-            // Tự động khôi phục 5 thành viên nếu Database trống
             if (members.length === 0) {
                 members = [
                     {name: "Đỗ Cao Thúy Vi", id: "49.01.103.093", role: "Nhóm Trưởng", avatar: ""},
@@ -121,38 +131,35 @@
             renderMembers();
         });
 
-    // 3. Render danh sách thành viên ra bảng
     function renderMembers() {
         const tbody = document.getElementById('memberTableBody');
         tbody.innerHTML = '';
         members.forEach((mem, index) => {
-            let avatarUrl = mem.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(mem.name)}&background=${bgColors[index % bgColors.length]}&color=fff&size=50`;
+            let avatarUrl = mem.avatar || `[https://ui-avatars.com/api/?name=$](https://ui-avatars.com/api/?name=$){encodeURIComponent(mem.name)}&background=${bgColors[index % bgColors.length]}&color=fff&size=50`;
             
             tbody.innerHTML += `
-                <tr>
-                    <td><img src="${avatarUrl}" id="img-preview-${index}" width="45" height="45" class="rounded-circle object-fit-cover shadow-sm"></td>
-                    <td class="fw-bold">${mem.name}</td>
-                    <td>${mem.id}</td>
+                <tr style="border-bottom: 1px dashed #f0e6d2;">
+                    <td><img src="${avatarUrl}" id="img-preview-${index}" width="45" height="45" class="rounded-circle object-fit-cover shadow-sm" style="border: 2px solid #ffb7b2;"></td>
+                    <td class="fw-bold" style="color: #5a4a42;">${mem.name}</td>
+                    <td class="fw-semibold" style="color: #8c7b70;">${mem.id}</td>
                     <td>
-                        <input type="text" class="form-control form-control-sm" id="avatar-input-${index}" value="${mem.avatar}" placeholder="Nhập link ảnh (VD: https://...)" onchange="updatePreview(${index})">
+                        <input type="text" class="form-control form-control-sm" style="border-radius: 10px; border-color: #f0d8c0;" id="avatar-input-${index}" value="${mem.avatar}" placeholder="Nhập link ảnh (VD: https://...)" onchange="updatePreview(${index})">
                     </td>
                 </tr>
             `;
         });
     }
 
-    // 4. Hàm cập nhật xem trước (preview) ảnh khi người dùng vừa dán link
     function updatePreview(index) {
         const inputVal = document.getElementById(`avatar-input-${index}`).value.trim();
         const imgEl = document.getElementById(`img-preview-${index}`);
         if (inputVal) {
             imgEl.src = inputVal;
         } else {
-            imgEl.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(members[index].name)}&background=${bgColors[index % bgColors.length]}&color=fff&size=50`;
+            imgEl.src = `[https://ui-avatars.com/api/?name=$](https://ui-avatars.com/api/?name=$){encodeURIComponent(members[index].name)}&background=${bgColors[index % bgColors.length]}&color=fff&size=50`;
         }
     }
 
-    // 5. Hàm lưu thay đổi ảnh vào Server
     function saveMembers() {
         members.forEach((mem, index) => {
             mem.avatar = document.getElementById(`avatar-input-${index}`).value.trim();
@@ -162,10 +169,9 @@
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ members: members })
-        }).then(() => alert("Đã lưu Ảnh đại diện thành công!"));
+        }).then(() => alert("Lưu ảnh đại diện thành công rồi nha!"));
     }
 
-    // 6. Xử lý khi ấn nút Lưu trạng thái tính năng
     document.getElementById('configForm').addEventListener('submit', function(e) {
         e.preventDefault();
         const payload = {
@@ -180,7 +186,7 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         }).then(() => { 
-            alert('Đã lưu trạng thái tính năng!'); 
+            alert('Lưu trạng thái tính năng thành công rồi nha!'); 
             window.location.reload(); 
         });
     });

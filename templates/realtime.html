@@ -9,17 +9,16 @@
         }
 
         #main-content {
-            padding: 8px 16px !important;
+            padding: 10px 20px !important;
             height: 100vh;
             overflow: hidden;
             box-sizing: border-box;
-            background-color: #f8fafc;
             display: flex;
             flex-direction: column;
         }
 
         .realtime-wrapper {
-            height: calc(100vh - 16px);
+            height: calc(100vh - 20px);
             display: flex;
             flex-direction: column;
             overflow: hidden;
@@ -27,50 +26,48 @@
     }
 
     .realtime-header {
-        background: white;
-        border-radius: 10px;
-        padding: 8px 16px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
-        margin-bottom: 8px;
+        background: rgba(255, 255, 255, 0.95);
+        border-radius: 20px;
+        padding: 10px 16px;
+        box-shadow: 0 8px 24px rgba(210, 200, 190, 0.4);
+        margin-bottom: 10px;
         flex-shrink: 0;
     }
 
     .header-main-title {
-        font-size: 1.25rem;
+        font-size: 1.2rem;
         font-weight: 700;
-        color: #1f2937;
-        letter-spacing: -0.5px;
+        color: #d47a53;
     }
 
     .status-badge {
         font-size: 0.75rem;
-        padding: 3px 8px;
-        border-radius: 6px;
-        font-weight: 600;
+        padding: 4px 10px;
+        border-radius: 10px;
+        font-weight: 700;
     }
 
     .os-stat-card {
-        background: #ffffff;
-        border-radius: 10px;
-        border: 1px solid #edf2f7;
-        padding: 6px 12px;
-        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.02);
+        background: rgba(255, 255, 255, 0.95);
+        border-radius: 18px;
+        border: none;
+        padding: 8px 14px;
+        box-shadow: 0 6px 18px rgba(210, 200, 190, 0.35);
         transition: transform 0.2s;
     }
 
     .os-stat-card:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+        transform: translateY(-2px);
     }
 
     .webcam-main-card {
-        background: #0f172a;
-        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.95);
+        border-radius: 20px;
         overflow: hidden;
-        border: 2px solid #1e293b;
+        border: none;
         display: flex;
         flex-direction: column;
-        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 8px 24px rgba(210, 200, 190, 0.4);
         height: 100%;
     }
 
@@ -80,7 +77,7 @@
         flex: 1;
         min-height: 200px;
         max-height: 40vh;
-        background: #000;
+        background: #fffafa;
         overflow: hidden;
         display: flex;
         align-items: center;
@@ -104,14 +101,14 @@
         position: absolute;
         top: 8px;
         left: 8px;
-        background: rgba(15, 23, 42, 0.85);
-        color: #fff;
+        background: rgba(255, 236, 210, 0.92);
+        color: #d47a53;
+        font-weight: 700;
         font-size: 0.75rem;
-        padding: 4px 10px;
-        border-radius: 6px;
+        padding: 4px 12px;
+        border-radius: 10px;
         z-index: 2;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        backdrop-filter: blur(4px);
+        border: 1px dashed #f0d8c0;
     }
 
     .camera-status-pill {
@@ -120,7 +117,7 @@
         right: 8px;
         font-size: 0.75rem;
         padding: 4px 10px;
-        border-radius: 6px;
+        border-radius: 10px;
         z-index: 2;
         font-weight: 700;
         text-transform: uppercase;
@@ -128,93 +125,85 @@
     }
 
     .pulse-dot {
-        width: 7px;
-        height: 7px;
+        width: 8px;
+        height: 8px;
         border-radius: 50%;
         display: inline-block;
         margin-right: 5px;
-        background-color: #22c55e;
-        box-shadow: 0 0 8px #22c55e;
+        background-color: #2d6a4f;
+        box-shadow: 0 0 8px #a8e6cf;
         animation: pulse 1.5s infinite;
     }
 
     @keyframes pulse {
-        0% {
-            transform: scale(0.9);
-            opacity: 0.7;
-        }
-
-        50% {
-            transform: scale(1.2);
-            opacity: 1;
-        }
-
-        100% {
-            transform: scale(0.9);
-            opacity: 0.7;
-        }
+        0% { transform: scale(0.9); opacity: 0.7; }
+        50% { transform: scale(1.2); opacity: 1; }
+        100% { transform: scale(0.9); opacity: 0.7; }
     }
 
     .ai-ribbon {
-        background: #1e293b;
-        padding: 6px 12px;
-        font-size: 0.82rem;
+        background: #ffecd2;
+        border-top: 2px dashed #f0d8c0;
+        padding: 8px 14px;
+        font-size: 0.85rem;
         flex-shrink: 0;
+        color: #5a4a42;
     }
 
     .history-card {
-        border-radius: 10px;
+        border-radius: 20px;
         overflow: hidden;
-        border: 1px solid #e2e8f0;
+        border: none;
+        background: rgba(255, 255, 255, 0.95);
+        box-shadow: 0 8px 24px rgba(210, 200, 190, 0.4);
         display: flex;
         flex-direction: column;
         height: 100%;
     }
 
     .table-custom th {
-        font-weight: 600;
+        font-weight: 700;
         text-transform: uppercase;
-        font-size: 0.72rem;
+        font-size: 0.75rem;
         letter-spacing: 0.4px;
-        background-color: #f1f5f9;
-        color: #64748b;
-        padding: 6px 8px;
+        background-color: #ffecd2;
+        color: #d47a53;
+        padding: 8px 10px;
         z-index: 10;
         white-space: nowrap;
+        border-bottom: 2px dashed #f0d8c0;
     }
 
     .table-custom td {
         vertical-align: middle;
-        font-size: 0.78rem;
-        padding: 5px 8px;
+        font-size: 0.82rem;
+        padding: 6px 10px;
+        color: #5a4a42;
     }
 
     .badge-soft-success {
-        background-color: #dcfce7;
-        color: #166534;
-        border: 1px solid #bbf7d0;
+        background-color: #a8e6cf;
+        color: #2d6a4f;
     }
 
     .badge-soft-warning {
-        background-color: #fef08a;
-        color: #854d0e;
-        border: 1px solid #fde047;
+        background-color: #ffaaa5;
+        color: #c92a2a;
     }
 
     .badge-soft-danger {
-        background-color: #fee2e2;
-        color: #991b1b;
-        border: 1px solid #fecaca;
+        background-color: #ff8b94;
+        color: #800000;
     }
 
     .os-metric-pill {
-        background-color: #f1f5f9;
-        color: #334155;
-        border: 1px solid #cbd5e1;
+        background-color: #fff5f5;
+        color: #5a4a42;
+        border: 1px dashed #ffb7b2;
         font-family: monospace;
-        font-size: 0.7rem;
-        padding: 2px 6px;
-        border-radius: 4px;
+        font-size: 0.72rem;
+        padding: 2px 8px;
+        border-radius: 8px;
         display: inline-block;
         white-space: nowrap;
         max-width: 100%;
@@ -229,68 +218,68 @@
     <div class="realtime-header">
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
             <div class="d-flex align-items-center flex-wrap gap-2">
-                <h3 class="header-main-title mb-0 me-1">Quản lý Luồng RTSP AI</h3>
-                <span class="badge bg-secondary rounded-pill fw-medium d-flex align-items-center px-2 py-1 shadow-sm"
+                <h3 class="header-main-title mb-0 me-1"><i class="fa-solid fa-paw me-2"></i>Phân Tích Camera Realtime</h3>
+                <span class="badge bg-light text-secondary border rounded-pill fw-bold d-flex align-items-center px-3 py-1"
                     style="font-size: 0.78rem;" id="headerConnectionStatus">
                     <i class="fa-solid fa-pause me-1"></i> Chờ kết nối
                 </span>
-                <span class="status-badge bg-success bg-opacity-10 text-success border border-success">
-                    <i class="fa-solid fa-bolt me-1"></i> Hệ thống AI: Sẵn Sàng
+                <span class="status-badge badge-status-normal">
+                    <i class="fa-solid fa-cat me-1"></i> Sẵn sàng rồi!!!
                 </span>
-                <span class="status-badge bg-info bg-opacity-10 text-info border border-info">
-                    <i class="fa-solid fa-users me-1"></i> Phiên Client: <span id="displayClientId">Khởi tạo...</span>
+                <span class="status-badge" style="background: #e0f2fe; color: #0284c7;">
+                    <i class="fa-solid fa-users me-1"></i> Phiên: <span id="displayClientId">Khởi tạo...</span>
                 </span>
-                <span class="status-badge bg-secondary bg-opacity-10 text-secondary border border-secondary">
+                <span class="status-badge" style="background: #fef9c3; color: #ca8a04;">
                     <i class="fa-regular fa-clock me-1"></i> Chu kỳ: <span id="captureRateDisplay">1</span>s/frame
                 </span>
             </div>
-            <div class="d-flex gap-1 align-items-center flex-shrink-0">
-                <button class="btn btn-light border btn-sm fw-medium px-2 py-1" style="font-size: 0.8rem;"
+            <div class="d-flex gap-2 align-items-center flex-shrink-0">
+                <button class="btn btn-light border btn-sm btn-cute px-2 py-1" style="font-size: 0.8rem; color: #8c7b70;"
                     id="btnFlipWebcam" onclick="toggleFlipCamera()">
-                    <i class="fa-solid fa-arrows-rotate me-1 text-muted"></i> <span id="flipBtnText">Gương</span>
+                    <i class="fa-solid fa-arrows-rotate me-1"></i> <span id="flipBtnText">Gương</span>
                 </button>
-                <button class="btn btn-success btn-sm fw-bold px-3 py-1 shadow-sm" style="font-size: 0.8rem;"
+                <button class="btn btn-primary-cute btn-sm btn-cute px-3 py-1 shadow-sm" style="font-size: 0.8rem;"
                     id="btnToggleWebcam" onclick="toggleMainWebcam()">
                     <i class="fa-solid fa-video me-1"></i> Bật Camera AI
                 </button>
-                <button class="btn btn-outline-secondary btn-sm px-2 py-1" style="font-size: 0.8rem;"
-                    onclick="openPinModal()">
-                    <i class="fa-solid fa-sliders me-1"></i> Cấu Hình
+                <button class="btn btn-primary-cute btn-sm btn-cute px-3 py-1 shadow-sm" style="font-size: 0.8rem;"
+                    type="button" onclick="openPinModal()">
+                    <i class="fa-solid fa-key me-1"></i> Admin Cấu Hình
                 </button>
             </div>
         </div>
     </div>
 
     <!-- MAIN GRID (CAMERA + THÔNG SỐ) -->
-    <div class="row g-2 mb-2 flex-shrink-0">
+    <div class="row g-3 mb-2 flex-shrink-0">
         <!-- CỘT TRÁI: CAMERA -->
         <div class="col-12 col-lg-8 d-flex flex-column" style="min-width: 0;">
-            <div class="webcam-main-card shadow-sm flex-grow-1" id="mainWebcamCard">
+            <div class="webcam-main-card flex-grow-1" id="mainWebcamCard">
                 <div class="video-viewport position-relative">
-                    <div class="camera-overlay-badge"><span class="pulse-dot"></span> Webcam Trình Duyệt</div>
-                    <span class="badge bg-secondary camera-status-pill" id="overlayStatusBadge">SẴN SÀNG</span>
+                    <div class="camera-overlay-badge"><span class="pulse-dot"></span> Webcam Của Bạn</div>
+                    <span class="badge bg-light text-secondary border camera-status-pill" id="overlayStatusBadge">SẴN SÀNG</span>
 
                     <video id="webVideo" autoplay muted class="d-none camera-mirrored"></video>
                     <canvas id="hiddenCanvas" class="d-none"></canvas>
 
-                    <div class="text-center p-2 z-1" id="cameraPlaceholder">
-                        <i class="fa-solid fa-camera-web fa-2x text-secondary opacity-25 mb-2"></i>
-                        <h6 class="fw-bold text-white mb-1">Hệ Thống Đang Chờ</h6>
-                        <p class="text-secondary small mb-2" style="font-size: 0.78rem;">Vui lòng bật camera để bắt đầu
-                            phân tích hành vi thời gian thực.</p>
-                        <button class="btn btn-outline-success btn-sm fw-bold px-3" onclick="toggleMainWebcam()">Kích
-                            Hoạt Ngay</button>
+                    <div class="text-center p-2 z-1" id="cameraPlaceholder" style="color: #d1c4b8;">
+                        <i class="fa-solid fa-dog fa-3x mb-2 opacity-50"></i>
+                        <h6 class="fw-bold mb-1" style="color: #8c7b70;">Đợi bạn bật camera lên nè!</h6>
+                        <p class="small mb-2" style="font-size: 0.8rem; color: #8c7b70;">Nhấn nút bên dưới để mình bắt đầu quan sát nhé.</p>
+                        <button class="btn btn-primary-cute btn-cute btn-sm px-4 py-2" onclick="toggleMainWebcam()">
+                            <i class="fa-solid fa-star me-1"></i> Kích Hoạt Ngay
+                        </button>
                     </div>
                 </div>
 
-                <div class="ai-ribbon d-flex justify-content-between align-items-center text-white">
+                <div class="ai-ribbon d-flex justify-content-between align-items-center">
                     <div class="d-flex align-items-center flex-grow-1" style="min-width: 0; margin-right: 10px;">
-                        <span class="badge bg-success me-2 px-2 py-1 rounded-1 fw-bold flex-shrink-0"
+                        <span class="badge badge-status-normal me-2 px-2 py-1 rounded-pill fw-bold flex-shrink-0"
                             id="liveBadgeStatus">CHỜ</span>
-                        <span class="text-light text-truncate fw-medium d-block" id="liveDescription"
-                            style="font-size: 0.85rem;">Chưa có dữ liệu phân tích...</span>
+                        <span class="text-truncate fw-bold d-block" id="liveDescription"
+                            style="font-size: 0.85rem; color: #5a4a42;">Chưa có dữ liệu phân tích...</span>
                     </div>
-                    <div class="text-end text-muted small fw-mono flex-shrink-0" style="font-size: 0.75rem;"><i
+                    <div class="text-end small fw-bold flex-shrink-0" style="font-size: 0.75rem; color: #d47a53;"><i
                             class="fa-regular fa-clock me-1"></i><span id="liveTimestamp">--:--:--</span></div>
                 </div>
             </div>
@@ -301,81 +290,84 @@
             <!-- THÔNG SỐ BLOCK -->
             <div class="row g-2 mb-2 flex-shrink-0">
                 <div class="col-6">
-                    <div class="os-stat-card text-center py-1 px-2">
-                        <div class="text-muted fw-medium" style="font-size: 0.72rem;">Worker Threads</div>
-                        <div class="fw-bold text-dark fs-6" id="statWorkers">3</div>
+                    <div class="os-stat-card d-flex align-items-center gap-2">
+                        <div class="d-flex align-items-center justify-content-center" style="width: 36px; height: 36px; border-radius: 12px; background: #fef9c3; color: #ca8a04;">
+                            <i class="fa-solid fa-seedling"></i>
+                        </div>
+                        <div>
+                            <div class="fw-bold text-uppercase" style="font-size: 0.68rem; color: #8c7b70;">Luồng Xử Lý</div>
+                            <div class="fw-bold fs-6" style="color: #5a4a42;" id="statWorkers">5</div>
+                        </div>
                     </div>
                 </div>
                 <div class="col-6">
-                    <div class="os-stat-card text-center py-1 px-2">
-                        <div class="text-muted fw-medium" style="font-size: 0.72rem;">Queue (Hàng đợi)</div>
-                        <div class="fw-bold text-dark fs-6" id="statQueue">0 / 60</div>
+                    <div class="os-stat-card d-flex align-items-center gap-2">
+                        <div class="d-flex align-items-center justify-content-center" style="width: 36px; height: 36px; border-radius: 12px; background: #e0f2fe; color: #0284c7;">
+                            <i class="fa-solid fa-layer-group"></i>
+                        </div>
+                        <div>
+                            <div class="fw-bold text-uppercase" style="font-size: 0.68rem; color: #8c7b70;">Hàng Đợi</div>
+                            <div class="fw-bold fs-6" style="color: #5a4a42;" id="statQueue">0 / 300</div>
+                        </div>
                     </div>
                 </div>
                 <div class="col-12">
-                    <div class="os-stat-card d-flex justify-content-between align-items-center px-3 py-1">
-                        <div>
-                            <div class="text-muted fw-medium" style="font-size: 0.72rem;">Khóa API (Round-Robin)</div>
-                            <div class="fw-bold text-success" style="font-size: 0.88rem;" id="statKeys">2 Keys Active
+                    <div class="os-stat-card d-flex justify-content-between align-items-center px-3 py-2">
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="d-flex align-items-center justify-content-center" style="width: 36px; height: 36px; border-radius: 12px; background: #fce7f3; color: #db2777;">
+                                <i class="fa-solid fa-heart"></i>
+                            </div>
+                            <div>
+                                <div class="fw-bold text-uppercase" style="font-size: 0.68rem; color: #8c7b70;">Chìa Khóa API (Round-Robin)</div>
+                                <div class="fw-bold" style="font-size: 0.88rem; color: #5a4a42;" id="statKeys">-- Keys Active</div>
                             </div>
                         </div>
-                        <div class="bg-warning bg-opacity-10 p-1 px-2 rounded-circle">
-                            <i class="fa-solid fa-key text-warning" style="font-size: 0.9rem;"></i>
-                        </div>
+                        <i class="fa-solid fa-key text-warning fs-5"></i>
                     </div>
                 </div>
             </div>
 
             <!-- BẢNG PHÂN PHỐI TÀI NGUYÊN PIPELINE -->
-            <div class="card border-0 shadow-sm rounded-3 overflow-hidden mb-0 flex-grow-1 d-flex flex-column">
-                <div
-                    class="card-header bg-white py-1 px-3 d-flex justify-content-between align-items-center border-bottom">
-                    <h6 class="mb-0 fw-bold text-dark" style="font-size: 0.8rem;"><i
-                            class="fa-solid fa-microchip text-primary me-1"></i>Tài Nguyên Pipeline</h6>
-                    <span class="badge bg-secondary bg-opacity-10 text-secondary" style="font-size: 0.65rem;"
-                        id="pipelineStateBadge">IDLE</span>
+            <div class="card overflow-hidden mb-0 flex-grow-1 d-flex flex-column">
+                <div class="viewport-header py-2 px-3">
+                    <span style="font-size: 0.85rem;"><i class="fa-solid fa-wand-magic-sparkles me-1"></i> Tài Nguyên Pipeline</span>
+                    <span class="badge bg-white text-secondary rounded-pill" style="font-size: 0.68rem;" id="pipelineStateBadge">IDLE</span>
                 </div>
-                <div class="card-body p-0 bg-dark text-white d-flex align-items-center flex-grow-1">
-                    <table class="table table-dark table-borderless table-hover mb-0 text-center align-middle"
-                        style="font-size: 0.7rem; table-layout: fixed; width: 100%;">
-                        <thead class="border-bottom border-secondary border-opacity-50 text-muted">
+                <div class="card-body p-0 d-flex align-items-center flex-grow-1" style="background: #fffafa;">
+                    <table class="table table-borderless table-hover mb-0 text-center align-middle"
+                        style="font-size: 0.74rem; table-layout: fixed; width: 100%; color: #5a4a42;">
+                        <thead style="border-bottom: 1px dashed #f0d8c0; color: #8c7b70;">
                             <tr>
-                                <th class="text-start ps-2 py-1" style="width: 38%;">PIPELINE</th>
+                                <th class="text-start ps-3 py-1" style="width: 38%;">PIPELINE</th>
                                 <th class="py-1" style="width: 18%;">CPU</th>
                                 <th class="py-1" style="width: 20%;">RAM</th>
-                                <th class="py-1 pe-1" style="width: 24%;">B.THÔNG</th>
+                                <th class="py-1 pe-2" style="width: 24%;">B.THÔNG</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr>
-                                <td class="text-start ps-2 text-info fw-medium py-1 text-truncate"><i
-                                        class="fa-solid fa-1 me-1"></i>Extract WebRTC</td>
-                                <td id="resCpu1" class="font-monospace py-1 text-truncate">0.0%</td>
-                                <td id="resRam1" class="font-monospace py-1 text-truncate">0 MB</td>
-                                <td id="resBw1" class="font-monospace py-1 pe-1 text-truncate">0 Kbps</td>
+                                <td class="text-start ps-3 fw-bold py-1 text-truncate" style="color: #0284c7;"><i class="fa-solid fa-1 me-1"></i>Extract WebRTC</td>
+                                <td id="resCpu1" class="fw-bold py-1 text-truncate">0.0%</td>
+                                <td id="resRam1" class="fw-bold py-1 text-truncate">0 MB</td>
+                                <td id="resBw1" class="fw-bold py-1 pe-2 text-truncate">0 Kbps</td>
                             </tr>
                             <tr>
-                                <td class="text-start ps-2 text-warning fw-medium py-1 text-truncate"><i
-                                        class="fa-solid fa-2 me-1"></i>Decode Frame</td>
-                                <td id="resCpu2" class="font-monospace py-1 text-truncate">0.0%</td>
-                                <td id="resRam2" class="font-monospace py-1 text-truncate">0 MB</td>
-                                <td id="resBw2" class="font-monospace py-1 pe-1 text-light opacity-75 text-truncate">
-                                    Server</td>
+                                <td class="text-start ps-3 fw-bold py-1 text-truncate" style="color: #ca8a04;"><i class="fa-solid fa-2 me-1"></i>Decode Frame</td>
+                                <td id="resCpu2" class="fw-bold py-1 text-truncate">0.0%</td>
+                                <td id="resRam2" class="fw-bold py-1 text-truncate">0 MB</td>
+                                <td id="resBw2" class="py-1 pe-2 text-muted text-truncate">Server</td>
                             </tr>
                             <tr>
-                                <td class="text-start ps-2 text-success fw-medium py-1 text-truncate"><i
-                                        class="fa-solid fa-3 me-1"></i>Resize JPEG</td>
-                                <td id="resCpu3" class="font-monospace py-1 text-truncate">0.0%</td>
-                                <td id="resRam3" class="font-monospace py-1 text-truncate">0 MB</td>
-                                <td id="resBw3" class="font-monospace py-1 pe-1 text-light opacity-75 text-truncate">
-                                    Server</td>
+                                <td class="text-start ps-3 fw-bold py-1 text-truncate" style="color: #16a34a;"><i class="fa-solid fa-3 me-1"></i>Resize JPEG</td>
+                                <td id="resCpu3" class="fw-bold py-1 text-truncate">0.0%</td>
+                                <td id="resRam3" class="fw-bold py-1 text-truncate">0 MB</td>
+                                <td id="resBw3" class="py-1 pe-2 text-muted text-truncate">Server</td>
                             </tr>
                             <tr>
-                                <td class="text-start ps-2 text-primary fw-medium py-1 text-truncate"><i
-                                        class="fa-solid fa-4 me-1"></i>Phân tích AI</td>
-                                <td id="resCpu4" class="font-monospace py-1 text-truncate">0.0%</td>
-                                <td id="resRam4" class="font-monospace py-1 text-truncate">0 MB</td>
-                                <td id="resBw4" class="font-monospace py-1 pe-1 text-truncate">0 Kbps</td>
+                                <td class="text-start ps-3 fw-bold py-1 text-truncate" style="color: #d47a53;"><i class="fa-solid fa-4 me-1"></i>Phân tích AI</td>
+                                <td id="resCpu4" class="fw-bold py-1 text-truncate">0.0%</td>
+                                <td id="resRam4" class="fw-bold py-1 text-truncate">0 MB</td>
+                                <td id="resBw4" class="fw-bold py-1 pe-2 text-truncate">0 Kbps</td>
                             </tr>
                         </tbody>
                     </table>
@@ -387,32 +379,29 @@
     <!-- KHỐI LỊCH SỬ TỰ CO GIÃN LẤP ĐẦY PHẦN CÒN LẠI -->
     <div class="row mx-0 flex-grow-1" style="min-height: 0;">
         <div class="col-12 px-0 h-100">
-            <div class="card history-card shadow-sm bg-white">
-                <div
-                    class="card-header bg-white border-bottom py-1 px-3 d-flex justify-content-between align-items-center flex-shrink-0">
-                    <h6 class="mb-0 fw-bold text-dark" style="font-size: 0.85rem;"><i
-                            class="fa-solid fa-clipboard-list text-primary me-2"></i>Lịch Sử Hành Vi & Phân Bổ Tài
-                        Nguyên Tiến Trình</h6>
-                    <button class="btn btn-sm btn-outline-danger py-0 px-2" style="font-size: 0.75rem;"
+            <div class="card history-card">
+                <div class="viewport-header py-2 px-3 flex-shrink-0">
+                    <span style="font-size: 0.88rem;"><i class="fa-solid fa-history me-2"></i>Nhật Ký Hành Vi & Phân Bổ Tài Nguyên</span>
+                    <button class="btn btn-sm btn-outline-danger btn-cute py-0 px-3" style="font-size: 0.75rem;"
                         onclick="clearLogs()" title="Xóa toàn bộ dữ liệu phiên này">
-                        <i class="fa-solid fa-trash-can me-1"></i> Xóa Lịch Sử
+                        Xóa hết
                     </button>
                 </div>
                 <div class="card-body p-0 table-responsive flex-grow-1" style="overflow-y: auto; min-height: 0;">
-                    <table class="table table-custom table-hover align-middle mb-0 text-center"
+                    <table class="table table-custom table-borderless table-hover align-middle mb-0 text-center"
                         style="table-layout: fixed; width: 100%; min-width: 760px;">
                         <thead class="sticky-top">
                             <tr>
-                                <th style="width: 10%; min-width: 75px;">Thời Gian</th>
-                                <th style="width: 12%; min-width: 90px;">Trạng Thái</th>
-                                <th class="text-start" style="width: 44%;">Nhận Diện Hành Vi</th>
+                                <th style="width: 10%; min-width: 75px;">Giờ</th>
+                                <th style="width: 12%; min-width: 90px;">Nhận Định</th>
+                                <th class="text-start" style="width: 44%;">Mô Tả Hành Vi</th>
                                 <th style="width: 25%; min-width: 200px;">Tài Nguyên HĐH</th>
-                                <th style="width: 9%; min-width: 65px; white-space: nowrap;">Thao Tác</th>
+                                <th style="width: 9%; min-width: 65px; white-space: nowrap;">Video</th>
                             </tr>
                         </thead>
                         <tbody id="historyTableBody">
                             <tr>
-                                <td colspan="5" class="py-3 text-muted">Hệ thống đang chờ dữ liệu...</td>
+                                <td colspan="5" class="py-3 text-muted">Chưa có ai ở đây cả~</td>
                             </tr>
                         </tbody>
                     </table>
@@ -425,78 +414,83 @@
 <!-- MODAL XEM LẠI VIDEO -->
 <div class="modal fade" id="playbackModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
-        <div class="modal-content rounded-4 border-0 shadow-lg">
-            <div class="modal-header border-bottom pb-3 bg-dark text-white rounded-top-4">
-                <h6 class="modal-title fw-bold"><i class="fa-solid fa-film text-info me-2"></i>Xem Lại Video Minh Chứng
-                    (Circular Buffer 15 Frames)</h6>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        <div class="modal-content overflow-hidden" style="border-radius: 20px; border: none;">
+            <div class="viewport-header">
+                <h6 class="modal-title fw-bold mb-0" style="color: #d47a53;"><i class="fa-solid fa-film me-2"></i>Xem Lại Video Minh Chứng (15 Frames)</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body p-4 bg-light text-center">
-                <p class="small text-muted mb-3"><i class="fa-solid fa-circle-info me-1"></i>Đoạn video clip thực tế
-                    được trích xuất từ bộ đệm RAM tại thời điểm Worker Thread phân tích.</p>
-                <div class="d-inline-block rounded overflow-hidden shadow-sm border border-secondary border-opacity-25 w-100"
-                    style="background:#000;">
-                    <video id="playbackVideo" controls autoplay class="img-fluid w-100"
-                        style="max-height: 400px; object-fit: contain;"></video>
+            <div class="modal-body p-4 text-center" style="background: #fdfbf7;">
+                <p class="small fw-semibold mb-3" style="color: #8c7b70;"><i class="fa-solid fa-circle-info me-1"></i>Đoạn video clip được trích xuất từ bộ đệm RAM tại thời điểm phân tích.</p>
+                <div class="d-inline-block rounded-4 overflow-hidden shadow-sm w-100" style="background:#000; border: 2px dashed #f0d8c0;">
+                    <video id="playbackVideo" controls autoplay class="img-fluid w-100" style="max-height: 400px; object-fit: contain;"></video>
                 </div>
             </div>
-            <div class="modal-footer pt-3 pb-3 d-flex justify-content-between align-items-center">
-                <div class="fw-bold text-dark px-2 font-monospace" id="playbackTimestamp">--:--:--</div>
-                <button type="button" class="btn btn-secondary fw-medium px-4" data-bs-dismiss="modal"
+            <div class="modal-footer border-0 d-flex justify-content-between align-items-center" style="background: #fdfbf7;">
+                <div class="fw-bold px-2" style="color: #d47a53;" id="playbackTimestamp">--:--:--</div>
+                <button type="button" class="btn btn-light btn-cute px-4" data-bs-dismiss="modal"
                     onclick="document.getElementById('playbackVideo').pause()">Đóng</button>
             </div>
         </div>
     </div>
 </div>
 
-<!-- MODAL XÁC THỰC PIN -->
+<!-- =========================================================
+     BƯỚC 1: BOX NHẬP PASS (MÃ PIN) ĐỒNG BỘ THEO RTSP
+     ========================================================= -->
 <div class="modal fade" id="pinAuthModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-sm modal-dialog-centered">
-        <div class="modal-content rounded-4 border-0 shadow">
-            <div class="modal-header border-bottom pb-2">
-                <h6 class="modal-title fw-bold text-dark"><i class="fa-solid fa-lock text-warning me-2"></i>Bảo Mật</h6>
+        <div class="modal-content overflow-hidden" style="border-radius: 20px; border: none;">
+            <div class="modal-header border-0" style="background: #ffecd2; border-bottom: 2px dashed #f0d8c0 !important;">
+                <h6 class="modal-title fw-bold mb-0" style="color: #d47a53;"><i class="fa-solid fa-lock me-2"></i>Xác Thực Quản Trị</h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body py-3">
-                <input type="password" id="authPinInput" class="form-control" placeholder="Mã PIN..."
+            <div class="modal-body p-4 text-center" style="background: #fdfbf7;">
+                <p class="small fw-bold mb-3" style="color: #8c7b70;">Nhập mật khẩu (PIN) để mở cấu hình API:</p>
+                <input type="password" id="authPinInput" class="form-control text-center fw-bold mb-2" style="border-radius: 12px; font-size: 1.2rem; letter-spacing: 4px;" placeholder="••••••"
                     onkeypress="if(event.key === 'Enter') verifyPinAndOpenConfig()">
+                <div id="realtimePinError" class="text-danger small fw-bold mt-2" style="display: none;">Sai mật khẩu!</div>
             </div>
-            <div class="modal-footer pt-2"><button type="button" class="btn btn-primary w-100 fw-bold"
-                    onclick="verifyPinAndOpenConfig()">Vào Cấu Hình</button></div>
+            <div class="modal-footer border-0 pt-0" style="background: #fdfbf7;">
+                <button type="button" class="btn btn-primary-cute btn-cute w-100 py-2" onclick="verifyPinAndOpenConfig()">
+                    <i class="fa-solid fa-unlock-keyhole me-1"></i> Mở Cấu Hình
+                </button>
+            </div>
         </div>
     </div>
 </div>
 
-<!-- MODAL CẤU HÌNH AI -->
+<!-- =========================================================
+     BƯỚC 2: MODAL CẤU HÌNH AI REALTIME (LƯU MYSQL)
+     ========================================================= -->
 <div class="modal fade" id="configAiModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content rounded-4 border-0 shadow">
-            <div class="modal-header border-bottom pb-2">
-                <h6 class="modal-title fw-bold">Cấu Hình AI</h6><button type="button" class="btn-close"
-                    data-bs-dismiss="modal"></button>
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content overflow-hidden" style="border-radius: 20px; border: none;">
+            <div class="modal-header border-0" style="background: #ffecd2; border-bottom: 2px dashed #f0d8c0 !important;">
+                <h6 class="modal-title fw-bold mb-0" style="color: #d47a53;"><i class="fa-solid fa-key me-2"></i>Cấu Hình API Key & Worker Realtime (MySQL)</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body py-3">
+            <div class="modal-body p-4" style="background: #fdfbf7;">
                 <input type="hidden" id="hiddenConfigPin">
-                <div class="mb-3">
-                    <label class="form-label fw-semibold small text-muted mb-1">API Keys</label>
-                    <div id="apiKeysContainer"></div>
-                    <button class="btn btn-sm btn-outline-primary mt-2" onclick="addApiKeyInput()">+ Thêm Key</button>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <label class="form-label fw-bold small mb-0" style="color: #8c7b70;">Danh sách API Keys OpenRouter:</label>
+                    <button class="btn btn-sm btn-primary-cute btn-cute px-3 py-1" type="button" onclick="addApiKeyInput()">+ Thêm Token</button>
                 </div>
-                <div class="mb-2">
-                    <label class="form-label fw-semibold small text-muted">AI Model</label>
-                    <input type="text" id="modalModelName" class="form-control form-control-sm font-monospace">
-                </div>
-                <div class="mb-2">
-                    <label class="form-label fw-semibold small text-muted">Worker Threads (Số luồng chạy song
-                        song)</label>
-                    <input type="number" id="modalConcurrentJobs" class="form-control form-control-sm font-monospace"
-                        min="1" max="20" value="5">
-                    <small class="text-muted" style="font-size: 0.75rem;">Tăng số này để gọi nhiều API Key cùng lúc,
-                        giúp xử lý nhanh hơn.</small>
+                <div id="apiKeysContainer" class="mb-3"></div>
+                <div class="row g-3 p-3 rounded-4 mx-0" style="background: #fffafa; border: 1px dashed #ffb7b2;">
+                    <div class="col-md-8">
+                        <label class="form-label fw-bold small mb-1" style="color: #8c7b70;">AI Model:</label>
+                        <input type="text" id="modalModelName" class="form-control form-control-sm" style="border-radius: 10px;" placeholder="VD: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small mb-1" style="color: #8c7b70;">Số luồng Worker (Jobs):</label>
+                        <input type="number" id="modalConcurrentJobs" class="form-control form-control-sm" style="border-radius: 10px;" min="1" max="20" value="5">
+                    </div>
                 </div>
             </div>
-            <div class="modal-footer"><button type="button" class="btn btn-primary btn-sm fw-bold px-3"
-                    onclick="saveAiConfig()">Lưu</button></div>
+            <div class="modal-footer border-0" style="background: #fdfbf7;">
+                <button type="button" class="btn btn-light btn-cute" data-bs-dismiss="modal">Đóng</button>
+                <button type="button" class="btn btn-primary-cute btn-cute px-4" onclick="saveAiConfig()">Lưu Cấu Hình</button>
+            </div>
         </div>
     </div>
 </div>
@@ -515,11 +509,16 @@
         }
         document.getElementById('flipBtnText').innerText = isCameraMirrored ? 'Gương' : 'Gốc';
     }
-    function toggleFlipCamera() { isCameraMirrored = !isCameraMirrored; localStorage.setItem('realtime_camera_mirrored', isCameraMirrored); updateCameraMirrorUI(); }
+    function toggleFlipCamera() {
+        isCameraMirrored = !isCameraMirrored;
+        localStorage.setItem('realtime_camera_mirrored', isCameraMirrored);
+        updateCameraMirrorUI();
+    }
 
     let webStream = null, webAiInterval = null, isWebcamRunning = false;
     let CAPTURE_INTERVAL_MS = 1000;
     let latestAiCpu = "4.2%", latestAiRam = "18 MB", latestAiBw = "140 Kbps";
+    let playbackModalInstance = null;
 
     async function toggleMainWebcam() {
         const headerStatus = document.getElementById('headerConnectionStatus');
@@ -531,13 +530,13 @@
             document.getElementById('webVideo').classList.add('d-none');
             document.getElementById('cameraPlaceholder').classList.remove('d-none');
             document.getElementById('btnToggleWebcam').innerHTML = '<i class="fa-solid fa-video me-1"></i> Bật Camera AI';
-            document.getElementById('btnToggleWebcam').className = 'btn btn-success btn-sm fw-bold px-3 py-1 shadow-sm';
+            document.getElementById('btnToggleWebcam').className = 'btn btn-primary-cute btn-sm btn-cute px-3 py-1 shadow-sm';
             document.getElementById('overlayStatusBadge').innerText = 'ĐÃ TẮT';
-            document.getElementById('overlayStatusBadge').className = 'badge bg-secondary camera-status-pill';
+            document.getElementById('overlayStatusBadge').className = 'badge bg-light text-secondary border camera-status-pill';
 
-            headerStatus.className = 'badge bg-secondary rounded-pill fw-medium d-flex align-items-center px-2 py-1 shadow-sm';
+            headerStatus.className = 'badge bg-light text-secondary border rounded-pill fw-bold d-flex align-items-center px-3 py-1';
             headerStatus.innerHTML = '<i class="fa-solid fa-pause me-1"></i> Chờ kết nối';
-            pipelineBadge.className = 'badge bg-secondary bg-opacity-10 text-secondary';
+            pipelineBadge.className = 'badge bg-white text-secondary rounded-pill';
             pipelineBadge.innerText = 'IDLE';
             simulateResourceIdle();
             return;
@@ -550,18 +549,20 @@
             videoEl.srcObject = webStream;
             document.getElementById('cameraPlaceholder').classList.add('d-none');
             document.getElementById('btnToggleWebcam').innerHTML = '<i class="fa-solid fa-video-slash me-1"></i> Dừng Phân Tích';
-            document.getElementById('btnToggleWebcam').className = 'btn btn-danger btn-sm fw-bold px-3 py-1 shadow-sm';
+            document.getElementById('btnToggleWebcam').className = 'btn btn-danger btn-sm btn-cute px-3 py-1 shadow-sm';
             document.getElementById('overlayStatusBadge').innerText = 'LIVE (AI ON)';
-            document.getElementById('overlayStatusBadge').className = 'badge bg-danger camera-status-pill';
+            document.getElementById('overlayStatusBadge').className = 'badge badge-status-danger camera-status-pill';
 
-            headerStatus.className = 'badge bg-danger rounded-pill fw-medium d-flex align-items-center px-2 py-1 shadow-sm';
-            headerStatus.innerHTML = '<i class="fa-solid fa-video me-1 pulse-dot"></i> Đang Live';
-            pipelineBadge.className = 'badge bg-success bg-opacity-10 text-success border border-success';
+            headerStatus.className = 'badge badge-status-danger rounded-pill fw-bold d-flex align-items-center px-3 py-1 shadow-sm';
+            headerStatus.innerHTML = '<i class="fa-solid fa-video me-1"></i> Đang Live';
+            pipelineBadge.className = 'badge badge-status-normal rounded-pill';
             pipelineBadge.innerText = 'RUNNING';
 
             setTimeout(captureAndSendFrame, 800);
             webAiInterval = setInterval(captureAndSendFrame, CAPTURE_INTERVAL_MS);
-        } catch (err) { alert('Lỗi mở Camera: ' + err.message); }
+        } catch (err) {
+            alert('Lỗi mở Camera: ' + err.message);
+        }
     }
 
     function captureAndSendFrame() {
@@ -630,7 +631,7 @@
     }
 
     async function clearLogs() {
-        if (confirm("Bạn có chắc muốn xóa toàn bộ lịch sử hành vi của phiên này? (Toàn bộ file video cũng sẽ bị xóa khỏi Server)")) {
+        if (confirm("Bạn muốn xóa hết nhật ký của phiên này luôn hả?")) {
             await fetch(`/api/realtime/clear_logs?client_id=${currentClientId}`, { method: 'POST' });
             fetchLogs();
         }
@@ -643,12 +644,12 @@
 
         let tbodyHtml = '';
         if (data.logs.length === 0) {
-            tbodyHtml = '<tr><td colspan="5" class="py-3 text-muted">Hệ thống đang chờ dữ liệu...</td></tr>';
+            tbodyHtml = '<tr><td colspan="5" class="py-3 text-muted">Chưa có ai ở đây cả~</td></tr>';
             document.getElementById('liveBadgeStatus').innerText = 'CHỜ';
-            document.getElementById('liveBadgeStatus').className = 'badge bg-success me-2 px-2 py-1 rounded-1 fw-bold flex-shrink-0';
+            document.getElementById('liveBadgeStatus').className = 'badge badge-status-normal me-2 px-2 py-1 rounded-pill fw-bold flex-shrink-0';
             document.getElementById('liveDescription').innerText = 'Chưa có dữ liệu phân tích...';
             document.getElementById('liveTimestamp').innerText = '--:--:--';
-            document.getElementById('mainWebcamCard').className = 'webcam-main-card shadow-sm flex-grow-1 border-slate-800';
+            document.getElementById('mainWebcamCard').className = 'webcam-main-card flex-grow-1';
         } else {
             data.logs.forEach(log => {
                 let badgeClass = 'badge-soft-success';
@@ -656,17 +657,17 @@
                 else if (log.status === 'NGUY HIỂM') badgeClass = 'badge-soft-danger';
 
                 let btnDisabled = log.image_path ? '' : 'disabled';
-                let btnColor = log.image_path ? 'btn-outline-primary' : 'btn-outline-secondary opacity-75';
+                let btnColor = log.image_path ? 'btn-primary-cute' : 'btn-light text-muted opacity-75';
                 let osMetricsText = log.os_metrics || 'CPU: 6.4% | RAM: 22.5MB | Trễ: 850ms (W-1)';
 
                 tbodyHtml += `
                     <tr>
-                        <td class="fw-semibold text-secondary font-monospace" style="font-size: 0.72rem; white-space: nowrap;">${log.timestamp}</td>
+                        <td class="fw-bold" style="font-size: 0.75rem; color: #8c7b70; white-space: nowrap;">${log.timestamp}</td>
                         <td><span class="badge ${badgeClass} px-2 py-1 rounded-pill" style="font-size:0.7rem; white-space: nowrap;">${log.status}</span></td>
-                        <td class="text-start fw-medium text-dark" style="white-space: normal; word-wrap: break-word; word-break: break-word; font-size: 0.78rem;">${log.description}</td>
-                        <td style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><span class="os-metric-pill" title="${osMetricsText}"><i class="fa-solid fa-microchip text-primary me-1"></i>${osMetricsText}</span></td>
+                        <td class="text-start fw-semibold" style="white-space: normal; word-wrap: break-word; word-break: break-word; font-size: 0.8rem; color: #5a4a42;">${log.description}</td>
+                        <td style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><span class="os-metric-pill" title="${osMetricsText}"><i class="fa-solid fa-seedling me-1" style="color: #d47a53;"></i>${osMetricsText}</span></td>
                         <td style="white-space: nowrap;">
-                            <button class="btn btn-sm ${btnColor} py-0 px-2 fw-bold rounded-pill" style="font-size: 0.72rem;" ${btnDisabled} onclick="playBehaviorVideo('${log.image_path}', '${log.timestamp}')">
+                            <button class="btn btn-sm ${btnColor} btn-cute py-0 px-2" style="font-size: 0.72rem;" ${btnDisabled} onclick="playBehaviorVideo('${log.image_path}', '${log.timestamp}')">
                                 Xem
                             </button>
                         </td>
@@ -686,11 +687,8 @@
                     document.getElementById('liveDescription').innerText = myLatestLog.description;
                     document.getElementById('liveTimestamp').innerText = myLatestLog.timestamp;
 
-                    document.getElementById('mainWebcamCard').className = 'webcam-main-card shadow-sm flex-grow-1 ' +
-                        (myLatestLog.status === 'CẢNH BÁO' ? 'border-warning' : (myLatestLog.status === 'NGUY HIỂM' ? 'border-danger' : 'border-slate-800'));
-
-                    document.getElementById('liveBadgeStatus').className = 'badge me-2 px-2 py-1 rounded-1 fw-bold flex-shrink-0 ' +
-                        (myLatestLog.status === 'CẢNH BÁO' ? 'bg-warning text-dark' : (myLatestLog.status === 'NGUY HIỂM' ? 'bg-danger text-white' : 'bg-success text-white'));
+                    document.getElementById('liveBadgeStatus').className = 'badge me-2 px-2 py-1 rounded-pill fw-bold flex-shrink-0 ' +
+                        (myLatestLog.status === 'CẢNH BÁO' ? 'badge-status-warning' : (myLatestLog.status === 'NGUY HIỂM' ? 'badge-status-danger' : 'badge-status-normal'));
                 }
             }
         }
@@ -702,34 +700,64 @@
         const data = await res.json();
         if (!data.success) return;
         document.getElementById('statWorkers').innerText = data.active_workers;
-        document.getElementById('statQueue').innerText = `${data.queue_size} / 60`;
+        document.getElementById('statQueue').innerText = `${data.queue_size} / 300`;
+        if (typeof data.active_keys_count === 'number') {
+            document.getElementById('statKeys').innerText = `${data.active_keys_count} Keys Active`;
+        }
     }
 
-    let pinModalInstance = null, configModalInstance = null, playbackModalInstance = null;
-    function openPinModal() { document.getElementById('authPinInput').value = ''; new bootstrap.Modal(document.getElementById('pinAuthModal')).show(); }
+    // BƯỚC 1: Mở Box nhập Pass giống RTSP
+    function openPinModal() {
+        document.getElementById('authPinInput').value = '';
+        document.getElementById('realtimePinError').style.display = 'none';
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('pinAuthModal')).show();
+        setTimeout(() => document.getElementById('authPinInput').focus(), 300);
+    }
+
     function addApiKeyInput(val = '') {
-        const div = document.createElement('div'); div.className = 'input-group input-group-sm mb-2';
-        div.innerHTML = `<input type="text" class="form-control font-monospace api-key-input" value="${val}"><button type="button" class="btn btn-outline-danger" onclick="this.parentElement.remove()">X</button>`;
+        const div = document.createElement('div');
+        div.className = 'row g-2 mb-2 align-items-center bg-white p-2 rounded-4 border mx-0';
+        div.innerHTML = `
+            <button type="button" class="btn btn-sm btn-outline-danger btn-cute col-auto" onclick="this.parentElement.remove()">Xóa</button>
+            <div class="col">
+                <input type="text" class="form-control form-control-sm api-key-input" style="border-radius: 10px;" placeholder="Nhập API Key (sk-or-v1-...)" value="${val}">
+            </div>`;
         document.getElementById('apiKeysContainer').appendChild(div);
     }
 
+    // BƯỚC 2: Xác thực PIN qua /verify-pin, đúng mới mở Modal Cấu hình API Key
     async function verifyPinAndOpenConfig() {
         const pin = document.getElementById('authPinInput').value.trim();
-        const res = await fetch('/api/realtime/verify_pin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin }) });
+        const errEl = document.getElementById('realtimePinError');
+        if (!pin) {
+            errEl.innerText = 'Vui lòng nhập mật khẩu!';
+            errEl.style.display = 'block';
+            return;
+        }
+        const res = await fetch('/verify-pin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pin })
+        });
         const data = await res.json();
         if (data.success) {
-            bootstrap.Modal.getInstance(document.getElementById('pinAuthModal')).hide();
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('pinAuthModal')).hide();
             document.getElementById('hiddenConfigPin').value = pin;
             const confData = await (await fetch('/api/realtime/config')).json();
             document.getElementById('apiKeysContainer').innerHTML = '';
-            (confData.keys_full && confData.keys_full.length ? confData.keys_full : confData.key_stats?.keys_preview || []).forEach(k => addApiKeyInput(k));
+            (confData.keys_full && confData.keys_full.length ? confData.keys_full : []).forEach(k => addApiKeyInput(k));
             if (!document.getElementById('apiKeysContainer').children.length) addApiKeyInput();
 
             document.getElementById('modalModelName').value = confData.model || '';
             document.getElementById('modalConcurrentJobs').value = confData.concurrent_jobs || 5;
 
-            new bootstrap.Modal(document.getElementById('configAiModal')).show();
-        } else alert(data.message);
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('configAiModal')).show();
+        } else {
+            errEl.innerText = 'Mã PIN không chính xác!';
+            errEl.style.display = 'block';
+            document.getElementById('authPinInput').value = '';
+            document.getElementById('authPinInput').focus();
+        }
     }
 
     async function saveAiConfig() {
@@ -744,9 +772,13 @@
             body: JSON.stringify({ pin, api_keys, model, concurrent_jobs })
         });
 
-        if ((await res.json()).success) {
-            alert("Lưu thành công!");
-            bootstrap.Modal.getInstance(document.getElementById('configAiModal')).hide();
+        const resData = await res.json();
+        if (resData.success) {
+            alert("Đã lưu cấu hình API Key Realtime vào MySQL thành công!");
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('configAiModal')).hide();
+            fetchSessionStats();
+        } else {
+            alert("Lỗi: " + (resData.message || "Không lưu được cấu hình"));
         }
     }
 

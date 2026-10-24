@@ -3,7 +3,7 @@
 
 {% block content %}
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@400;600;700&display=swap');
+    @import url('[https://fonts.googleapis.com/css2?family=Quicksand:wght@400;600;700&display=swap](https://fonts.googleapis.com/css2?family=Quicksand:wght@400;600;700&display=swap)');
 
     body {
         font-family: 'Quicksand', sans-serif;
@@ -152,10 +152,9 @@
                 <i class="fa-solid fa-paw me-2"></i> Phân Tích Hình Ảnh
             </h4>
         </div>
-        <div class="d-flex gap-2">
-            <button class="btn btn-sm btn-outline-secondary btn-cute" data-bs-toggle="modal"
-                data-bs-target="#apiKeyModal" onclick="loadApiKeys()">
-                <i class="fa-solid fa-key text-warning"></i> Key
+        <div class="d-flex gap-2 align-items-center">
+            <button class="btn btn-primary-cute btn-sm btn-cute px-3 py-2 shadow-sm" type="button" onclick="openImageConfigWithPin()">
+                <i class="fa-solid fa-key me-1"></i> Admin Cấu Hình
             </button>
             <span class="badge bg-success bg-opacity-25 text-success border border-success border-opacity-25 px-3 py-2"
                 style="border-radius: 12px;">
@@ -164,28 +163,50 @@
         </div>
     </div>
 
-    <!-- Modal Cấu Hình -->
-    <div class="modal fade" id="apiKeyModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content" style="border-radius: 20px; border: none;">
-                <div class="modal-header bg-light border-0" style="border-radius: 20px 20px 0 0;">
-                    <h5 class="modal-title fw-bold" style="color: #d47a53;"><i class="fa-solid fa-bone me-2"></i>Thiết
-                        Lập Chìa Khóa</h5>
+    <!-- =========================================================
+         BƯỚC 1: BOX NHẬP PASS (MÃ PIN) ĐỒNG BỘ THEO RTSP
+         ========================================================= -->
+    <div class="modal fade" id="imagePinModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-sm modal-dialog-centered">
+            <div class="modal-content overflow-hidden" style="border-radius: 20px; border: none;">
+                <div class="modal-header border-0" style="background: #ffecd2; border-bottom: 2px dashed #f0d8c0 !important;">
+                    <h6 class="modal-title fw-bold mb-0" style="color: #d47a53;"><i class="fa-solid fa-lock me-2"></i>Xác Thực Quản Trị</h6>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body p-4">
-                    <label class="form-label fw-bold text-secondary">Mật khẩu hệ thống (PIN):</label>
-                    <input type="password" id="apiPinCode" class="form-control mb-3"
-                        placeholder="Nhập PIN lấy từ app.py...">
-
-                    <label class="form-label fw-bold text-secondary">Danh sách API Key (mỗi dòng 1 key):</label>
-                    <textarea class="form-control text-muted" id="apiKeysInput" rows="4" style="border-radius: 12px;"
-                        placeholder="sk-or-v1-..."></textarea>
+                <div class="modal-body p-4 text-center" style="background: #fdfbf7;">
+                    <p class="small fw-bold mb-3" style="color: #8c7b70;">Nhập mật khẩu (PIN) để mở cấu hình API:</p>
+                    <input type="password" id="imagePinInput" class="form-control text-center fw-bold mb-2" placeholder="••••••" style="border-radius: 12px; font-size: 1.2rem; letter-spacing: 4px;" onkeypress="if(event.key === 'Enter') verifyImagePinStep1()">
+                    <div id="imagePinError" class="text-danger small fw-bold mt-2" style="display: none;">Sai mật khẩu!</div>
                 </div>
-                <div class="modal-footer border-0">
+                <div class="modal-footer border-0 pt-0" style="background: #fdfbf7;">
+                    <button type="button" class="btn btn-primary-cute btn-cute w-100 py-2" onclick="verifyImagePinStep1()">
+                        <i class="fa-solid fa-unlock-keyhole me-1"></i> Mở Cấu Hình
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- =========================================================
+         BƯỚC 2: MODAL CẤU HÌNH API KEY HÌNH ẢNH (LƯU MYSQL)
+         ========================================================= -->
+    <div class="modal fade" id="apiKeyModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content overflow-hidden" style="border-radius: 20px; border: none;">
+                <div class="modal-header border-0" style="background: #ffecd2; border-bottom: 2px dashed #f0d8c0 !important;">
+                    <h6 class="modal-title fw-bold mb-0" style="color: #d47a53;"><i class="fa-solid fa-key me-2"></i>Cấu Hình API Key Phân Tích Ảnh (MySQL)</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4" style="background: #fdfbf7;">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <label class="fw-bold small" style="color: #8c7b70;">Danh sách API Key OpenRouter (Round-Robin):</label>
+                        <button type="button" class="btn btn-sm btn-primary-cute btn-cute px-3 py-1" onclick="addImageApiRow()">+ Thêm Token</button>
+                    </div>
+                    <div id="imageApiListContainer" class="mb-2"></div>
+                </div>
+                <div class="modal-footer border-0" style="background: #fdfbf7;">
                     <button type="button" class="btn btn-light btn-cute" data-bs-dismiss="modal">Đóng</button>
-                    <button type="button" class="btn btn-primary-cute btn-cute px-4" onclick="saveApiKeys()">Lưu
-                        Lại</button>
+                    <button type="button" class="btn btn-primary-cute btn-cute px-4" onclick="saveApiKeys()">Lưu Cấu Hình</button>
                 </div>
             </div>
         </div>
@@ -347,32 +368,79 @@
 
 <script>
     let selectedFileObject = null;
+    let imageApiList = [];
+    let verifiedImagePin = '';
 
-    async function loadApiKeys() {
-        try {
-            const res = await fetch('/api/image/config');
-            const data = await res.json();
-            if (data.success && data.api_keys) {
-                document.getElementById('apiKeysInput').value = data.api_keys.join('\n');
-            }
-        } catch (e) { console.error("Lỗi:", e); }
+    // BƯỚC 1: Mở Box nhập Pass giống RTSP
+    function openImageConfigWithPin() {
+        document.getElementById('imagePinInput').value = '';
+        document.getElementById('imagePinError').style.display = 'none';
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('imagePinModal')).show();
+        setTimeout(() => document.getElementById('imagePinInput').focus(), 300);
     }
 
-    async function saveApiKeys() {
-        const pin = document.getElementById('apiPinCode').value;
-        const lines = document.getElementById('apiKeysInput').value.split('\n');
-        const keys = lines.map(k => k.trim()).filter(k => k);
+    // Xác thực Pass ở Bước 1 -> Nếu đúng mới mở Bước 2
+    function verifyImagePinStep1() {
+        const pin = document.getElementById('imagePinInput').value.trim();
+        const errEl = document.getElementById('imagePinError');
+        if (!pin) {
+            errEl.innerText = 'Vui lòng nhập mật khẩu!';
+            errEl.style.display = 'block';
+            return;
+        }
+        fetch('/verify-pin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pin: pin })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                verifiedImagePin = pin;
+                bootstrap.Modal.getOrCreateInstance(document.getElementById('imagePinModal')).hide();
+                fetch('/api/image/config')
+                    .then(r => r.json())
+                    .then(d => {
+                        imageApiList = (d.api_keys && d.api_keys.length) ? d.api_keys : [''];
+                        renderImageApiRows();
+                        bootstrap.Modal.getOrCreateInstance(document.getElementById('apiKeyModal')).show();
+                    });
+            } else {
+                errEl.innerText = 'Mã PIN không chính xác!';
+                errEl.style.display = 'block';
+                document.getElementById('imagePinInput').value = '';
+                document.getElementById('imagePinInput').focus();
+            }
+        });
+    }
 
+    function renderImageApiRows() {
+        const container = document.getElementById('imageApiListContainer');
+        container.innerHTML = imageApiList.map((key, i) => `
+            <div class="row g-2 mb-2 align-items-center bg-white p-2 rounded-4 border mx-0">
+                <button type="button" class="btn btn-sm btn-outline-danger btn-cute col-auto" onclick="removeImageApiRow(${i})">Xóa</button>
+                <div class="col">
+                    <input type="text" class="form-control form-control-sm" style="border-radius: 10px;" placeholder="Nhập API Key (sk-or-v1-...)" value="${key || ''}" onchange="updateImageApiField(${i}, this.value)">
+                </div>
+            </div>`).join('');
+    }
+
+    function addImageApiRow() { imageApiList.push(''); renderImageApiRows(); }
+    function removeImageApiRow(i) { imageApiList.splice(i, 1); renderImageApiRows(); }
+    function updateImageApiField(i, val) { imageApiList[i] = val; }
+
+    async function saveApiKeys() {
+        const keys = imageApiList.map(k => (k || '').trim()).filter(k => k);
         try {
             const res = await fetch('/api/image/config', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ api_keys: keys, pin_code: pin })
+                body: JSON.stringify({ api_keys: keys, pin_code: verifiedImagePin })
             });
             const data = await res.json();
             if (data.success) {
-                alert('Lưu thành công rồi nha!');
-                document.querySelector('#apiKeyModal .btn-close').click();
+                alert('Đã lưu cấu hình API Key Ảnh vào MySQL thành công!');
+                bootstrap.Modal.getOrCreateInstance(document.getElementById('apiKeyModal')).hide();
             } else {
                 alert('Oops: ' + data.message);
             }
@@ -385,7 +453,6 @@
         const file = event.target.files[0];
         if (!file) return;
 
-        // GIỚI HẠN DUNG LƯỢNG 10MB (10 * 1024 * 1024 bytes)
         if (file.size > 10485760) {
             alert("Bức ảnh này to quá (Hơn 10MB)! Hệ thống sẽ bị nghẹn mất. Bạn chọn ảnh nhẹ hơn nhé!");
             clearSelectedImage();

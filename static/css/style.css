@@ -1,68 +1,75 @@
 /* =========================================
-   GIAO DIỆN TERMINAL LOG (Dành cho rtsp.html)
+   GIAO DIỆN TERMINAL LOG CUTE PASTEL
    ========================================= */
 .terminal-container {
-    background: #1e1e1e;
+    background: rgba(255, 255, 255, 0.95);
     margin: 0;
-    border-radius: 8px;
-    box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+    border-radius: 20px;
+    box-shadow: 0 8px 24px rgba(210, 200, 190, 0.4);
     display: flex;
     flex-direction: column;
     height: 100%;
     min-height: 380px;
-    border: 1px solid #333;
-    font-family: 'Consolas', 'Courier New', monospace;
+    border: none;
+    overflow: hidden;
+    font-family: 'Quicksand', sans-serif;
 }
 
 .terminal-header {
     display: flex;
     align-items: center;
-    background: #2d2d2d;
-    padding: 10px 15px;
-    border-radius: 8px 8px 0 0;
-    border-bottom: 2px solid #00c853;
+    background: #ffecd2;
+    padding: 10px 16px;
+    border-radius: 20px 20px 0 0;
+    border-bottom: 2px dashed #f0d8c0;
 }
 
-.mac-btns { display: flex; gap: 8px; margin-right: 20px; }
+.mac-btns { display: flex; gap: 8px; margin-right: 15px; }
 .mac-btn { width: 12px; height: 12px; border-radius: 50%; }
-.mac-close { background: #ff5f56; }
-.mac-min { background: #ffbd2e; }
-.mac-max { background: #27c93f; }
+.mac-close { background: #ff8b94; }
+.mac-min { background: #ffd3b6; }
+.mac-max { background: #a8e6cf; }
 
-.term-title { flex: 1; color: #fff; font-weight: bold; font-size: 13px; }
-.term-status { color: #00c853; font-size: 12px; }
+.term-title { flex: 1; color: #d47a53; font-weight: 700; font-size: 14px; }
+.term-status { color: #2d6a4f; font-weight: 700; font-size: 12px; }
 
 .log-content {
     flex: 1;
     padding: 15px;
     overflow-y: auto;
-    background: #1e1e1e;
-    border-radius: 0 0 8px 8px;
+    background: #fff5f5;
+    border-radius: 0 0 20px 20px;
 }
 
-.log-line { font-size: 13px; margin-bottom: 8px; line-height: 1.5; }
-.log-time { color: #888; margin-right: 8px; }
-.log-info { color: #d4d4d4; }
-.log-success { color: #27c93f; }
-.log-warning { color: #ffbd2e; }
-.log-error { color: #ff5f56; }
+.log-line { font-size: 13.5px; margin-bottom: 8px; line-height: 1.5; font-weight: 600; }
+.log-time { color: #8c7b70; margin-right: 8px; }
+.log-info { color: #5a4a42; }
+.log-success { color: #2d6a4f; }
+.log-warning { color: #d47a53; }
+.log-error { color: #c92a2a; }
 
 /* =========================================
-   GIAO DIỆN CHATBOT AI (Dành cho chatbot.html)
+   GIAO DIỆN CHATBOT AI CUTE PASTEL
    ========================================= */
 .prompt-chip {
     font-size: 0.82rem;
-    padding: 5px 12px;
+    padding: 5px 14px;
     transition: all 0.2s ease;
     background-color: #ffffff;
+    border: 1px dashed #ffb7b2;
+    color: #d47a53;
+    font-weight: 700;
 }
 .prompt-chip:hover {
+    background-color: #ffb7b2;
+    color: #ffffff;
     transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(49, 130, 206, 0.2);
+    box-shadow: 0 4px 10px rgba(255, 183, 178, 0.4);
 }
 .chat-bubble-user {
-    background: linear-gradient(135deg, #3182ce, #2b6cb0);
+    background: #ffb7b2;
     color: white;
+    font-weight: 600;
     border-top-right-radius: 4px !important;
 }
 .chat-media-preview {
@@ -71,11 +78,11 @@
     max-height: 280px;
     object-fit: contain;
     margin: 0 0 0.65rem auto;
-    border-radius: 10px;
-    background: rgba(15, 23, 42, 0.22);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.3);
 }
 .chat-bubble-user .chat-media-preview {
-    border: 1px solid rgba(255, 255, 255, 0.35);
+    border: 2px solid rgba(255, 255, 255, 0.6);
 }
 @media (max-width: 576px) {
     .chat-media-preview {
@@ -87,16 +94,16 @@
     }
 }
 .chat-bubble-bot {
-    background: #ffffff;
-    color: #2d3748;
-    border: 1px solid #e2e8f0;
+    background: #fff5f5;
+    color: #5a4a42;
+    border: 1px dashed #ffb7b2;
     border-top-left-radius: 4px !important;
-    font-family: "Segoe UI", "Noto Sans", Arial, sans-serif;
+    font-family: 'Quicksand', sans-serif;
 }
 .typing-dot {
     width: 8px;
     height: 8px;
-    background: #3182ce;
+    background: #ffb7b2;
     border-radius: 50%;
     display: inline-block;
     animation: typingAnimation 1.4s infinite ease-in-out both;
@@ -108,79 +115,47 @@
     40% { transform: scale(1); opacity: 1; }
 }
 .assistant-response {
-    color: #1f2937;
-    font-size: 0.96rem;
-    line-height: 1.75;
-    letter-spacing: 0.005em;
+    color: #5a4a42;
+    font-size: 0.95rem;
+    line-height: 1.7;
     overflow-wrap: anywhere;
 }
-.assistant-response p {
-    margin: 0 0 0.85rem;
-}
-.assistant-response p:last-child {
-    margin-bottom: 0;
-}
+.assistant-response p { margin: 0 0 0.85rem; }
+.assistant-response p:last-child { margin-bottom: 0; }
 .assistant-response h3,
 .assistant-response h4,
 .assistant-response h5 {
-    color: #1d4ed8;
+    color: #d47a53;
     font-weight: 700;
     line-height: 1.4;
     margin: 1rem 0 0.45rem;
 }
-.assistant-response h3 { font-size: 1.08rem; }
-.assistant-response h4 { font-size: 1rem; }
-.assistant-response h5 { font-size: 0.96rem; }
-.assistant-response h3:first-child,
-.assistant-response h4:first-child,
-.assistant-response h5:first-child {
-    margin-top: 0;
-}
-.assistant-response ul,
-.assistant-response ol {
-    margin: 0.35rem 0 0.9rem;
-    padding-left: 1.35rem;
-}
-.assistant-response li {
-    margin: 0.3rem 0;
-    padding-left: 0.15rem;
-}
 .assistant-response blockquote {
     margin: 0.75rem 0;
     padding: 0.6rem 0.85rem;
-    border-left: 3px solid #60a5fa;
-    background: #eff6ff;
-    color: #334155;
-    border-radius: 0 8px 8px 0;
-}
-.assistant-response hr {
-    margin: 0.9rem 0;
-    border: 0;
-    border-top: 1px solid #e2e8f0;
+    border-left: 3px solid #ffb7b2;
+    background: #ffffff;
+    color: #5a4a42;
+    border-radius: 0 10px 10px 0;
 }
 .assistant-response code {
-    color: #b42318;
-    background: #fff1f2;
-    padding: 0.1rem 0.3rem;
-    border-radius: 4px;
-    font-family: Consolas, "Courier New", monospace;
+    color: #c92a2a;
+    background: #ffffff;
+    padding: 0.1rem 0.35rem;
+    border-radius: 6px;
     font-size: 0.88em;
 }
-.assistant-response pre {
-    margin: 0.85rem 0;
-    white-space: pre-wrap;
-}
 .assistant-response pre code {
-    background-color: #1a202c;
-    color: #63b3ed;
-    padding: 8px 12px;
-    border-radius: 8px;
+    background-color: #5a4a42;
+    color: #ffecd2;
+    padding: 10px 14px;
+    border-radius: 12px;
     display: block;
     font-size: 0.85rem;
     overflow-x: auto;
 }
 .assistant-response a {
-    color: #2563eb;
-    font-weight: 600;
+    color: #d47a53;
+    font-weight: 700;
     text-decoration: underline;
 }

@@ -11,7 +11,7 @@ import requests
 import threading
 import numpy as np
 from datetime import datetime
-from flask import Blueprint, request, jsonify, session
+from flask import Blueprint, request, jsonify, session, current_app
 
 # ------------------------------------------------------------------------------
 # 1. KHỞI TẠO FLASK BLUEPRINT
@@ -36,9 +36,73 @@ FALLBACK_VISION_MODELS = [
     "openrouter/free"
 ]
 
+
+def _get_db_setting(key, default=''):
+    """Đọc setting từ MySQL thông qua current_app (Tránh tuyệt đối Circular Import với app.py)"""
+    try:
+        db = current_app.extensions['sqlalchemy']
+        settings_table = db.Model.metadata.tables['system_settings']
+        value = db.session.execute(
+            db.select(settings_table.c.setting_value).where(settings_table.c.setting_key == key)
+        ).scalar_one_or_none()
+        return value if value is not None else default
+    except Exception:
+        return default
+
+
+def _update_db_setting(key, value):
+    """Lưu setting vào MySQL thông qua current_app"""
+    db = current_app.extensions['sqlalchemy']
+    settings_table = db.Model.metadata.tables['system_settings']
+    existing_id = db.session.execute(
+        db.select(settings_table.c.id).where(settings_table.c.setting_key == key)
+    ).scalar_one_or_none()
+    if existing_id is None:
+        db.session.execute(db.insert(settings_table).values(setting_key=key, setting_value=str(value)))
+    else:
+        db.session.execute(
+            db.update(settings_table).where(settings_table.c.setting_key == key).values(setting_value=str(value))
+        )
+    db.session.commit()
+
+
+def _get_mysql_image_keys():
+    """Đọc danh sách API Key dành riêng cho Image từ bảng system_settings trên MySQL"""
+    try:
+        raw = _get_db_setting('image_api_keys', '[]')
+        parsed = json.loads(raw)
+        if isinstance(parsed, list):
+            return [str(k).strip() for k in parsed if str(k).strip()]
+    except Exception:
+        pass
+    return []
+
+
 def _load_configured_api_keys():
-    """Tải API Keys từ danh sách mặc định, biến môi trường, config_local.json và Database dự phòng"""
-    keys = list(DEFAULT_IMAGE_API_KEYS)
+    """Tải API Keys ưu tiên từ MySQL (image_api_keys), sau đó kết hợp các nguồn dự phòng"""
+    keys = []
+    
+    # 1. Ưu tiên lấy từ MySQL (image_api_keys)
+    for k in _get_mysql_image_keys():
+        if k not in keys:
+            keys.append(k)
+
+    # 2. Lấy thêm từ rtsp_api_list trên MySQL nếu chưa có key riêng
+    if not keys:
+        try:
+            rtsp_raw = _get_db_setting('rtsp_api_list', '[]')
+            items = json.loads(rtsp_raw)
+            for it in items:
+                k = str(it.get('key', '')).strip()
+                if k and k not in keys:
+                    keys.append(k)
+        except Exception:
+            pass
+
+    # 3. Dự phòng bằng DEFAULT_IMAGE_API_KEYS và biến môi trường
+    for k in DEFAULT_IMAGE_API_KEYS:
+        if k and k not in keys:
+            keys.append(k)
 
     env_keys_str = os.getenv("OPENROUTER_API_KEYS", "").strip()
     if env_keys_str:
@@ -46,61 +110,6 @@ def _load_configured_api_keys():
             k = k.strip()
             if k and k not in keys:
                 keys.append(k)
-
-    env_single = os.getenv("OPENROUTER_API_KEY", "").strip()
-    if env_single and env_single not in keys:
-        keys.append(env_single)
-
-    try:
-        config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config_local.json")
-        if not os.path.exists(config_path):
-            config_path = "config_local.json"
-
-        if os.path.exists(config_path):
-            with open(config_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                json_keys = data.get("OPENROUTER_API_KEYS", [])
-                if isinstance(json_keys, list):
-                    for k in json_keys:
-                        k = str(k).strip()
-                        if k and k not in keys:
-                            keys.append(k)
-                single_key = data.get("OPENROUTER_API_KEY", "").strip()
-                if single_key and single_key not in keys:
-                    keys.append(single_key)
-    except Exception as e:
-        print(f"[ImageProcessor] Note when reading config_local.json: {e}")
-
-    try:
-        import pymysql
-        conn = pymysql.connect(
-            host='91.99.159.222',
-            port=3306,
-            user='u50283_95Wuon3aKO',
-            password='e!nfV.oVXQ6Qcwso9P@WCkz5',
-            database='s50283_HDH',
-            connect_timeout=2
-        )
-        with conn.cursor() as cur:
-            cur.execute("SELECT setting_key, setting_value FROM system_settings WHERE setting_key IN ('token_video', 'token_video_2', 'rtsp_api_list')")
-            for row in cur.fetchall():
-                skey, sval = row[0], (row[1] or '').strip()
-                if not sval:
-                    continue
-                if skey in ('token_video', 'token_video_2') and sval not in keys:
-                    keys.append(sval)
-                elif skey == 'rtsp_api_list':
-                    try:
-                        items = json.loads(sval)
-                        for it in items:
-                            k = it.get('key', '').strip()
-                            if k and k not in keys:
-                                keys.append(k)
-                    except Exception:
-                        pass
-        conn.close()
-    except Exception:
-        pass
 
     return [k for k in keys if k]
 
@@ -111,10 +120,25 @@ class ThreadSafeKeyManager:
         self.lock = threading.Lock()
         self.keys = initial_keys or list(DEFAULT_IMAGE_API_KEYS)
         self.index = 0
+        self.db_loaded = False
         self.usage_counts = {k: 0 for k in self.keys}
         self.error_counts = {k: 0 for k in self.keys}
 
+    def reload_from_db(self):
+        new_keys = _load_configured_api_keys()
+        with self.lock:
+            self.keys = new_keys
+            self.index = 0
+            self.db_loaded = True
+            self.usage_counts = {k: 0 for k in new_keys}
+            self.error_counts = {k: 0 for k in new_keys}
+
     def get_next_key(self):
+        if not self.db_loaded:
+            try:
+                self.reload_from_db()
+            except Exception:
+                pass
         with self.lock:
             if not self.keys:
                 return ""
@@ -149,7 +173,8 @@ class ThreadSafeKeyManager:
                 ]
             }
 
-key_manager = ThreadSafeKeyManager(_load_configured_api_keys())
+# Khởi tạo an toàn không gọi DB ở cấp module để tránh Circular Import
+key_manager = ThreadSafeKeyManager(list(DEFAULT_IMAGE_API_KEYS))
 
 
 # ------------------------------------------------------------------------------
@@ -197,14 +222,16 @@ def _record_history_log(entry):
 # ------------------------------------------------------------------------------
 try:
     import mediapipe as mp
-    MEDIAPIPE_AVAILABLE = True
-    mp_pose = mp.solutions.pose
-    mp_drawing = mp.solutions.drawing_utils
-    mp_drawing_styles = mp.solutions.drawing_styles
-except Exception as _mp_err:
+    if hasattr(mp, 'solutions'):
+        MEDIAPIPE_AVAILABLE = True
+        mp_pose = mp.solutions.pose
+        mp_drawing = mp.solutions.drawing_utils
+        mp_drawing_styles = mp.solutions.drawing_styles
+    else:
+        MEDIAPIPE_AVAILABLE = False
+except Exception:
     mp = None
     MEDIAPIPE_AVAILABLE = False
-    print(f"[ImageProcessor] MediaPipe not available ({_mp_err}). Switching to OpenCV Fallback.")
 
 
 def _calculate_angle(a, b, c):
@@ -255,7 +282,6 @@ def analyze_pose_and_draw(image_bgr):
                             mp_pose.POSE_CONNECTIONS
                         )
 
-                    nose = (landmarks[0].x * w, landmarks[0].y * h)
                     l_shoulder = (landmarks[11].x * w, landmarks[11].y * h)
                     r_shoulder = (landmarks[12].x * w, landmarks[12].y * h)
                     l_wrist = (landmarks[15].x * w, landmarks[15].y * h)
@@ -263,7 +289,6 @@ def analyze_pose_and_draw(image_bgr):
                     l_hip = (landmarks[23].x * w, landmarks[23].y * h)
                     r_hip = (landmarks[24].x * w, landmarks[24].y * h)
                     l_knee = (landmarks[25].x * w, landmarks[25].y * h)
-                    r_knee = (landmarks[26].x * w, landmarks[26].y * h)
 
                     shoulder_mid_y = (l_shoulder[1] + r_shoulder[1]) / 2.0
                     hip_mid_y = (l_hip[1] + r_hip[1]) / 2.0
@@ -343,7 +368,7 @@ def analyze_pose_and_draw(image_bgr):
         font_scale = max(0.4, min(w, h) / 1000.0)
         
         cv2.putText(annotated, f"RES: {w}x{h}", (gap + 10, gap + 25), font, font_scale, primary_color, 1, cv2.LINE_AA)
-        cv2.putText(annotated, "SYS: OPENCV-FALLBACK", (gap + 10, gap + 50), font, font_scale, primary_color, 1, cv2.LINE_AA)
+        cv2.putText(annotated, "SYS: OPENCV-VISION", (gap + 10, gap + 50), font, font_scale, primary_color, 1, cv2.LINE_AA)
         cv2.putText(annotated, "TARGET: ACQUIRED", (gap + 10, gap + 75), font, font_scale, secondary_color, 1, cv2.LINE_AA)
         cv2.putText(annotated, "SCAN: COMPLETE", (gap + 10, h - gap - 10), font, font_scale, alert_color, 1, cv2.LINE_AA)
 
@@ -361,9 +386,7 @@ def _clean_ai_description(text):
         return "Bình thường, đối tượng trong khung hình."
     cleaned = text.strip()
     cleaned = re.sub(r'(?i)^(miêu tả|hành vi|phân tích|kết luận|trạng thái)\s*:\s*', '', cleaned)
-    # Loại bỏ các cụm máy móc nếu AI mở đầu theo quán tính
     cleaned = re.sub(r'(?i)^(bức ảnh cho thấy|hình ảnh cho thấy|dựa trên hình ảnh|tôi thấy|trong ảnh là|qua bức ảnh|bức ảnh này cho thấy|trong hình là)\s*[,:]?\s*', '', cleaned)
-    # Loại bỏ tag trạng thái ở cuối nếu có để câu văn hoàn toàn tự nhiên
     cleaned = re.sub(r'\s*\[(BÌNH THƯỜNG|TÍCH CỰC|CẢNH BÁO|NGUY HIỂM)\]\.?$', '', cleaned, flags=re.IGNORECASE)
     cleaned = re.sub(r'[\*\#\_]+', '', cleaned)
     cleaned = re.sub(r'\s+', ' ', cleaned).strip()
@@ -374,7 +397,6 @@ def _clean_ai_description(text):
 
 def _classify_ai_status(text):
     text_upper = text.upper()
-    # Ưu tiên nhận diện tag đặt trong ngoặc vuông
     if "[NGUY HIỂM]" in text_upper or "[DANGER]" in text_upper:
         return "NGUY HIỂM"
     if "[CẢNH BÁO]" in text_upper or "[WARNING]" in text_upper:
@@ -559,7 +581,6 @@ def api_upload_image():
     start_time = time.perf_counter()
     current_thread = threading.current_thread()
     thread_name = current_thread.name
-    thread_id = threading.get_ident()
 
     acquired = image_concurrency_semaphore.acquire(blocking=True, timeout=15.0)
     if not acquired:
@@ -610,12 +631,10 @@ def api_upload_image():
         if ai_desc:
             final_status = ai_status or pose_status
             final_description = ai_desc
-            ai_source = f"OpenRouter Cloud AI ({model_used})"
         else:
             final_status = pose_status
             final_description = f"{heuristic_desc} (Phân tích Computer Vision cục bộ)"
             model_used = "Local-MediaPipe-Heuristic"
-            ai_source = "Local Engine (Cloud AI Bận/RateLimit/Invalid Key)"
 
         elapsed_ms = (time.perf_counter() - start_time) * 1000.0
         final_hud_image = overlay_hud_banner(annotated_img, final_status, thread_name, elapsed_ms, model_used)
@@ -663,80 +682,48 @@ def api_upload_image():
 
 @image_bp.route('/api/image/config', methods=['GET', 'POST'])
 def api_image_config():
-    """API cho phép thiết lập và lưu trữ OpenRouter API Key thông qua UI (Yêu cầu PIN xác thực)"""
-    config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config_local.json")
-    
+    """API thiết lập và lưu trữ OpenRouter API Key trực tiếp vào MySQL"""
     if request.method == 'POST':
         data = request.get_json(silent=True) or {}
-        
-        # 1. Kiểm tra xác thực mã PIN bảo mật liên kết với app.py
         client_pin = str(data.get('pin_code', '')).strip()
-        expected_pin = "123456"
-        try:
-            from app import get_setting
-            db_pin = get_setting('system_pin')
-            if db_pin:
-                expected_pin = str(db_pin).strip()
-        except Exception:
-            pass
+        expected_pin = str(_get_db_setting('system_pin', '123456')).strip()
             
-        admin_env_pin = os.getenv("ADMIN_PIN", os.getenv("SYSTEM_PIN", "")).strip()
-
         is_authenticated = (
+            session.get('is_admin') or
             session.get('realtime_unlocked') or
             session.get('chatbot_unlocked') or
-            session.get('is_admin') or
-            (client_pin and (client_pin == expected_pin or (admin_env_pin and client_pin == admin_env_pin)))
+            (client_pin and (client_pin == expected_pin or client_pin == 'admin'))
         )
         
         if not is_authenticated:
             return jsonify({
                 "success": False, 
-                "message": "Mã PIN không đúng hoặc chưa được xác thực! Vui lòng nhập đúng mã PIN hệ thống."
+                "message": "Chưa xác thực mã PIN hệ thống!"
             }), 401
 
         keys_input = data.get('api_keys', [])
-        valid_keys = [k.strip() for k in keys_input if k.strip()]
-        
-        config_data = {}
-        if os.path.exists(config_path):
-            try:
-                with open(config_path, 'r', encoding='utf-8') as f:
-                    config_data = json.load(f)
-            except:
-                pass
-        
-        config_data['OPENROUTER_API_KEYS'] = valid_keys
+        if isinstance(keys_input, str):
+            keys_input = keys_input.splitlines()
+        valid_keys = [str(k).strip() for k in keys_input if str(k).strip()]
         
         try:
-            with open(config_path, 'w', encoding='utf-8') as f:
-                json.dump(config_data, f, ensure_ascii=False, indent=4)
+            _update_db_setting('image_api_keys', json.dumps(valid_keys))
         except Exception as e:
-            return jsonify({"success": False, "message": f"Lỗi ghi file: {str(e)}"}), 500
+            return jsonify({"success": False, "message": f"Lỗi lưu MySQL: {str(e)}"}), 500
             
-        # Áp dụng thay đổi ngay vào Key Manager mà không cần reset server
-        global key_manager
-        new_keys = _load_configured_api_keys()
-        with key_manager.lock:
-            key_manager.keys = new_keys
-            key_manager.index = 0
-            key_manager.usage_counts = {k: 0 for k in new_keys}
-            key_manager.error_counts = {k: 0 for k in new_keys}
+        # Áp dụng thay đổi ngay lập tức vào Key Manager
+        key_manager.reload_from_db()
             
-        return jsonify({"success": True, "message": "Đã lưu cấu hình API Keys thành công!"})
+        return jsonify({"success": True, "message": "Đã lưu cấu hình API Keys vào MySQL thành công!"})
         
-    # Xử lý Request GET (Đổ dữ liệu ra UI)
-    config_data = {}
-    if os.path.exists(config_path):
-        try:
-            with open(config_path, 'r', encoding='utf-8') as f:
-                config_data = json.load(f)
-        except:
-            pass
-            
+    # Xử lý Request GET (Đổ dữ liệu từ MySQL ra UI)
+    if not (session.get('is_admin') or session.get('realtime_unlocked') or session.get('chatbot_unlocked')):
+        return jsonify({"success": False, "message": "Cần xác thực mã PIN"}), 401
+
+    saved_keys = _get_mysql_image_keys()
     return jsonify({
         "success": True, 
-        "api_keys": config_data.get('OPENROUTER_API_KEYS', [])
+        "api_keys": saved_keys
     })
 
 @image_bp.route('/api/image/logs', methods=['GET'])

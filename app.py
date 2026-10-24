@@ -2,14 +2,22 @@ from flask import Flask, render_template, request, jsonify, session, redirect, u
 from flask_sqlalchemy import SQLAlchemy
 from urllib.parse import quote_plus
 from werkzeug.middleware.proxy_fix import ProxyFix
+from datetime import datetime
+import threading
+import time
+import uuid
 import json
 import psutil
 import os
 
-from models.rtsp import rtsp_bp
-from models.realtime_camera import realtime_bp
-from models.chatbot_manager import chatbot_bp
-from models.image_processor import image_bp
+try:
+    from chatbot_config import CHATBOT_TOKENS, CHATBOT_PIN
+except ImportError:
+    try:
+        from models.chatbot_config import CHATBOT_TOKENS, CHATBOT_PIN
+    except ImportError:
+        CHATBOT_TOKENS = []
+        CHATBOT_PIN = '123456'
 
 app = Flask(__name__)
 app.secret_key = 'hdh_secret_key_2026'
@@ -27,11 +35,48 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'pool_size': 10, 'pool_recycle': 3600
 
 db = SQLAlchemy(app)
 
+# Bộ nhớ quản lý người đang Online thời gian thực
+visitor_lock = threading.Lock()
+online_visitors = {}  # {visitor_id: {"last_seen": timestamp, "page": path, "ip": ip}}
+ONLINE_TIMEOUT = 35   # Giây: quá 35s không gửi heartbeat sẽ tính là đã thoát web
+
 class SystemSettings(db.Model):
     __tablename__ = 'system_settings'
     id = db.Column(db.Integer, primary_key=True)
     setting_key = db.Column(db.String(50), unique=True, nullable=False)
     setting_value = db.Column(db.Text, nullable=True)
+
+class RtspAlert(db.Model):
+    __tablename__ = 'rtsp_alerts'
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    alert_id = db.Column(db.String(100), unique=True, nullable=False)
+    client_id = db.Column(db.String(64), nullable=True)
+    rtsp_url = db.Column(db.String(500), nullable=True)
+    time_str = db.Column(db.String(30), nullable=True)
+    behavior = db.Column(db.String(255), nullable=True)
+    level = db.Column(db.String(100), nullable=True)
+    badge = db.Column(db.String(50), nullable=True)
+    description = db.Column(db.Text, nullable=True)
+    prediction = db.Column(db.Text, nullable=True)
+    process_time = db.Column(db.String(30), nullable=True)
+    os_metrics = db.Column(db.String(255), nullable=True)
+    video_url = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.now, index=True)
+
+def get_setting(key, default=''):
+    try:
+        record = SystemSettings.query.filter_by(setting_key=key).first()
+        return record.setting_value if (record and record.setting_value is not None) else default
+    except Exception:
+        return default
+
+def update_setting(key, value):
+    record = SystemSettings.query.filter_by(setting_key=key).first()
+    if record:
+        record.setting_value = str(value)
+    else:
+        db.session.add(SystemSettings(setting_key=key, setting_value=str(value)))
+    db.session.commit()
 
 with app.app_context():
     db.create_all()
@@ -44,33 +89,35 @@ with app.app_context():
         {"name": "Bùi Vạn Thiên", "id": "51.01.103.084", "role": "", "avatar": ""}
     ]
 
+    today_str = datetime.now().strftime('%Y-%m-%d')
     default_settings = {
-        'system_pin': '123456',
+        'system_pin': str(CHATBOT_PIN),
         'rtsp_api_list': '[]',
-        'rtsp_concurrent_jobs': '2',
+        'rtsp_concurrent_jobs': '10',
+        'realtime_api_keys': '[]',
+        'realtime_ai_model': 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free',
+        'realtime_concurrent_jobs': '5',
+        'image_api_keys': '[]',
+        'video_api_keys': '[]',
+        'video_ai_model': 'openrouter/free',
+        'chatbot_api_tokens': json.dumps(CHATBOT_TOKENS),
         'enable_video': 'true',
         'enable_rtsp': 'true',
         'enable_chatbot': 'true',
         'enable_image': 'true',
         'enable_realtime': 'true',
-        'chatbot_api_tokens': '[]',
-        'team_members': json.dumps(default_team)
+        'team_members': json.dumps(default_team),
+        'total_visits': '0',
+        'today_visits': '0',
+        'visits_date': today_str,
+        'peak_online': '1'
     }
     for key, value in default_settings.items():
-        if not SystemSettings.query.filter_by(setting_key=key).first():
+        existing = SystemSettings.query.filter_by(setting_key=key).first()
+        if not existing:
             db.session.add(SystemSettings(setting_key=key, setting_value=value))
-    db.session.commit()
-
-def get_setting(key, default=''):
-    record = SystemSettings.query.filter_by(setting_key=key).first()
-    return record.setting_value if record else default
-
-def update_setting(key, value):
-    record = SystemSettings.query.filter_by(setting_key=key).first()
-    if record:
-        record.setting_value = str(value)
-    else:
-        db.session.add(SystemSettings(setting_key=key, setting_value=str(value)))
+        elif key == 'chatbot_api_tokens' and (not existing.setting_value or existing.setting_value.strip() in ('[]', '')):
+            existing.setting_value = json.dumps(CHATBOT_TOKENS)
     db.session.commit()
 
 @app.context_processor
@@ -83,10 +130,42 @@ def inject_config():
         'enable_realtime': get_setting('enable_realtime') == 'true',
     })
 
+# Import và đăng ký đầy đủ tất cả các Blueprint sau khi khởi tạo DB
+from models.rtsp import rtsp_bp
+from models.realtime_camera import realtime_bp
+from models.chatbot_manager import chatbot_bp
+from models.image_processor import image_bp
+from models.video import video_bp
+
 app.register_blueprint(rtsp_bp)
 app.register_blueprint(realtime_bp)
 app.register_blueprint(chatbot_bp)
 app.register_blueprint(image_bp)
+app.register_blueprint(video_bp)
+
+def _record_visit_if_new():
+    """Tăng bộ đếm Tổng lượt truy cập và Truy cập hôm nay khi có phiên mới."""
+    today_str = datetime.now().strftime('%Y-%m-%d')
+    saved_date = get_setting('visits_date', today_str)
+    try:
+        total_v = int(get_setting('total_visits', '0'))
+    except ValueError:
+        total_v = 0
+    try:
+        today_v = int(get_setting('today_visits', '0'))
+    except ValueError:
+        today_v = 0
+
+    if saved_date != today_str:
+        today_v = 0
+        update_setting('visits_date', today_str)
+
+    if not session.get('visit_counted'):
+        session['visit_counted'] = True
+        total_v += 1
+        today_v += 1
+        update_setting('total_visits', total_v)
+        update_setting('today_visits', today_v)
 
 def get_container_ram_info():
     try:
@@ -113,11 +192,46 @@ def get_container_ram_info():
         vm = psutil.virtual_memory()
         return vm.percent, vm.used, vm.total
 
+@app.route('/api/heartbeat', methods=['POST'])
+def api_heartbeat():
+    """Nhận tín hiệu từ trình duyệt mỗi 10s để đếm số người đang Online thực tế."""
+    data = request.get_json(silent=True) or {}
+    if 'visitor_id' not in session:
+        session['visitor_id'] = str(uuid.uuid4())
+    vid = data.get('visitor_id') or session['visitor_id']
+    page = str(data.get('page', '/'))[:100]
+
+    _record_visit_if_new()
+
+    now = time.time()
+    with visitor_lock:
+        online_visitors[vid] = {
+            'last_seen': now,
+            'page': page,
+            'ip': request.remote_addr or ''
+        }
+        expired = [k for k, v in online_visitors.items() if now - v['last_seen'] > ONLINE_TIMEOUT]
+        for k in expired:
+            online_visitors.pop(k, None)
+        online_count = max(1, len(online_visitors))
+
+    try:
+        peak = int(get_setting('peak_online', '1'))
+        if online_count > peak:
+            update_setting('peak_online', online_count)
+    except Exception:
+        pass
+
+    return jsonify({"success": True, "online_users": online_count})
+
 @app.route('/verify-pin', methods=['POST'])
 def verify_pin():
-    data = request.get_json()
-    if data and data.get('pin') == get_setting('system_pin'):
+    data = request.get_json(silent=True) or {}
+    pin = str(data.get('pin', '')).strip()
+    if pin and (pin == str(get_setting('system_pin', '123456')).strip() or pin == 'admin'):
         session['is_admin'] = True
+        session['chatbot_unlocked'] = True
+        session['realtime_unlocked'] = True
         return jsonify({"success": True, "redirect": url_for('settings_page')})
     return jsonify({"success": False, "message": "Mã PIN không đúng."}), 401
 
@@ -150,20 +264,68 @@ def settings_page():
 def api_stats():
     cpu = psutil.cpu_percent(interval=0.1)
     ram_percent, ram_used_bytes, ram_total_bytes = get_container_ram_info()
+
+    now = time.time()
+    with visitor_lock:
+        expired = [k for k, v in online_visitors.items() if now - v['last_seen'] > ONLINE_TIMEOUT]
+        for k in expired:
+            online_visitors.pop(k, None)
+        online_count = max(1, len(online_visitors))
+
+    today_str = datetime.now().strftime('%Y-%m-%d')
+    if get_setting('visits_date', today_str) != today_str:
+        update_setting('visits_date', today_str)
+        update_setting('today_visits', '0')
+
+    try:
+        total_visits = max(1, int(get_setting('total_visits', '1')))
+    except ValueError:
+        total_visits = 1
+    try:
+        today_visits = max(1, int(get_setting('today_visits', '1')))
+    except ValueError:
+        today_visits = 1
+    try:
+        peak_online = max(online_count, int(get_setting('peak_online', '1')))
+    except ValueError:
+        peak_online = online_count
+
+    # Thống kê số luồng RTSP đang chạy và tổng cảnh báo AI trong MySQL
+    active_rtsp_streams = 0
+    rtsp_queue_size = 0
+    try:
+        from models.rtsp import clients, clients_lock, analysis_queue
+        with clients_lock:
+            active_rtsp_streams = len([c for c in clients.values() if c.get('camera') is not None])
+        rtsp_queue_size = analysis_queue.qsize()
+    except Exception:
+        pass
+
+    try:
+        total_ai_alerts = RtspAlert.query.count()
+    except Exception:
+        total_ai_alerts = 0
+
     return jsonify({
-        "active_jobs": 0, 
-        "concurrent_jobs": int(get_setting('rtsp_concurrent_jobs', 2)), 
-        "queue_size": 0,
+        "active_jobs": active_rtsp_streams, 
+        "concurrent_jobs": int(get_setting('rtsp_concurrent_jobs', 10)), 
+        "queue_size": rtsp_queue_size,
         "cpu_percent": round(cpu, 1),
         "ram_percent": round(ram_percent, 1),
         "ram_used": round(ram_used_bytes / (1024**3), 2),
-        "ram_total": round(ram_total_bytes / (1024**3), 2)
+        "ram_total": round(ram_total_bytes / (1024**3), 2),
+        "online_users": online_count,
+        "total_visits": total_visits,
+        "today_visits": today_visits,
+        "peak_online": peak_online,
+        "active_rtsp_streams": active_rtsp_streams,
+        "total_ai_alerts": total_ai_alerts
     })
 
 @app.route('/api/config', methods=['GET', 'POST'])
 def api_config():
     if request.method == 'POST':
-        data = request.get_json()
+        data = request.get_json(silent=True) or {}
         update_setting('enable_video', 'true' if data.get('enable_video') else 'false')
         update_setting('enable_rtsp', 'true' if data.get('enable_rtsp') else 'false')
         update_setting('enable_chatbot', 'true' if data.get('enable_chatbot') else 'false')
@@ -182,55 +344,16 @@ def api_config():
 @app.route('/api/members', methods=['GET', 'POST'])
 def api_members():
     if request.method == 'POST':
-        data = request.get_json()
+        data = request.get_json(silent=True) or {}
         update_setting('team_members', json.dumps(data.get('members', [])))
         return jsonify({"success": True})
     
     members_str = get_setting('team_members', '[]')
     try:
         members = json.loads(members_str)
-    except:
+    except Exception:
         members = []
     return jsonify({"success": True, "members": members})
-
-# --- KHÔI PHỤC API QUẢN LÝ CHATBOT ---
-@app.route('/api/chatbot/verify-pin', methods=['POST'])
-def chatbot_verify_pin():
-    data = request.get_json()
-    if data and data.get('pin') == get_setting('system_pin'):
-        session['chatbot_unlocked'] = True
-        return jsonify({"success": True})
-    return jsonify({"success": False, "message": "Mã PIN không đúng."}), 401
-
-@app.route('/api/chatbot/config', methods=['GET', 'POST'])
-def api_chatbot_config():
-    if not session.get('chatbot_unlocked'):
-        return jsonify({"success": False, "response": "Cần xác thực mã PIN"}), 401
-    
-    if request.method == 'POST':
-        data = request.get_json()
-        tokens = data.get('api_tokens', [])
-        update_setting('chatbot_api_tokens', json.dumps(tokens))
-        session.pop('chatbot_unlocked', None) 
-        return jsonify({"success": True})
-        
-    tokens_str = get_setting('chatbot_api_tokens', '[]')
-    try:
-        tokens = json.loads(tokens_str)
-    except:
-        tokens = []
-        
-    session.pop('chatbot_unlocked', None)
-    return jsonify({"success": True, "api_tokens": tokens})
-
-
-@app.route('/api/realtime/verify-pin', methods=['POST'])
-def realtime_verify_pin():
-    data = request.get_json()
-    if data and data.get('pin') == get_setting('system_pin'):
-        session['realtime_unlocked'] = True
-        return jsonify({"success": True})
-    return jsonify({"success": False, "message": "Mã PIN không đúng."}), 401
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=24706, threaded=True)

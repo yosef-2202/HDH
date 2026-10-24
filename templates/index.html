@@ -2,33 +2,131 @@
 {% block title %}Tổng quan - Hệ Thống AI{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex justify-content-between align-items-center mb-4 px-2">
     <div>
-        <h3 class="fw-bold mb-1 text-dark fs-4 fs-md-3">Bảng điều khiển</h3>
-        <p class="text-muted small mb-0">Giám sát tài nguyên máy chủ</p>
+        <h4 class="fw-bold mb-1" style="color: #d47a53;">
+            <i class="fa-solid fa-paw me-2"></i> Bảng Điều Khiển Tổng Quan
+        </h4>
+        <p class="small mb-0 fw-semibold" style="color: #8c7b70;">Giám sát lưu lượng người dùng & tài nguyên máy chủ thời gian thực</p>
     </div>
-    <span class="badge bg-success-subtle text-success border border-success px-3 py-2 rounded-pill shadow-sm d-flex align-items-center">
-        <span class="spinner-grow spinner-grow-sm me-2 text-success" role="status" aria-hidden="true" style="width: 0.8rem; height: 0.8rem;"></span> <span class="d-none d-sm-inline">Server hoạt động</span>
+    <span class="badge bg-success bg-opacity-25 text-success border border-success border-opacity-25 px-3 py-2 d-flex align-items-center" style="border-radius: 12px;">
+        <span class="spinner-grow spinner-grow-sm me-2 text-success" role="status" aria-hidden="true" style="width: 0.75rem; height: 0.75rem;"></span>
+        <i class="fa-solid fa-cat me-1"></i> <span class="d-none d-sm-inline">Server sẵn sàng rồi!!!</span>
     </span>
 </div>
 
+<!-- THỐNG KÊ NGƯỜI DÙNG TRUY CẬP & HOẠT ĐỘNG REALTIME -->
+<div class="row mb-4 g-3">
+    <!-- 1. Người đang Online -->
+    <div class="col-6 col-xl-3">
+        <div class="card custom-card h-100 p-3" style="border-left: 5px solid #22c55e !important;">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <div class="small fw-bold text-uppercase mb-1" style="color: #8c7b70; font-size: 0.75rem;">Đang Online</div>
+                    <h3 class="fw-bold mb-1" style="color: #16a34a;">
+                        <span id="stat-online-users">1</span>
+                        <span class="fs-6 fw-semibold" style="color: #8c7b70;">người</span>
+                    </h3>
+                    <div class="small fw-semibold d-flex align-items-center gap-1" style="color: #16a34a; font-size: 0.76rem;">
+                        <span class="spinner-grow spinner-grow-sm text-success" style="width: 7px; height: 7px;"></span>
+                        Cao nhất: <span id="stat-peak-online">1</span>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center justify-content-center flex-shrink-0" style="width: 46px; height: 46px; border-radius: 14px; background: #dcfce7; color: #16a34a; font-size: 1.3rem;">
+                    <i class="fa-solid fa-user-check"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. Truy cập hôm nay -->
+    <div class="col-6 col-xl-3">
+        <div class="card custom-card h-100 p-3" style="border-left: 5px solid #ffb7b2 !important;">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <div class="small fw-bold text-uppercase mb-1" style="color: #8c7b70; font-size: 0.75rem;">Truy Cập Hôm Nay</div>
+                    <h3 class="fw-bold mb-1" style="color: #d47a53;">
+                        <span id="stat-today-visits">1</span>
+                        <span class="fs-6 fw-semibold" style="color: #8c7b70;">lượt</span>
+                    </h3>
+                    <div class="small fw-semibold" style="color: #8c7b70; font-size: 0.76rem;">
+                        <i class="fa-regular fa-calendar-check me-1" style="color: #d47a53;"></i>Trong ngày
+                    </div>
+                </div>
+                <div class="d-flex align-items-center justify-content-center flex-shrink-0" style="width: 46px; height: 46px; border-radius: 14px; background: #fff0f0; color: #d47a53; font-size: 1.3rem;">
+                    <i class="fa-solid fa- footprints fa-shoe-prints"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. Tổng lượt truy cập -->
+    <div class="col-6 col-xl-3">
+        <div class="card custom-card h-100 p-3" style="border-left: 5px solid #38bdf8 !important;">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <div class="small fw-bold text-uppercase mb-1" style="color: #8c7b70; font-size: 0.75rem;">Tổng Lượt Vào Web</div>
+                    <h3 class="fw-bold mb-1" style="color: #0284c7;">
+                        <span id="stat-total-visits">1</span>
+                        <span class="fs-6 fw-semibold" style="color: #8c7b70;">lượt</span>
+                    </h3>
+                    <div class="small fw-semibold" style="color: #8c7b70; font-size: 0.76rem;">
+                        <i class="fa-solid fa-database me-1" style="color: #0284c7;"></i>Lưu trên MySQL
+                    </div>
+                </div>
+                <div class="d-flex align-items-center justify-content-center flex-shrink-0" style="width: 46px; height: 46px; border-radius: 14px; background: #e0f2fe; color: #0284c7; font-size: 1.3rem;">
+                    <i class="fa-solid fa-globe"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. Luồng RTSP & Sự kiện AI đã học -->
+    <div class="col-6 col-xl-3">
+        <div class="card custom-card h-100 p-3" style="border-left: 5px solid #f59e0b !important;">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <div class="small fw-bold text-uppercase mb-1" style="color: #8c7b70; font-size: 0.75rem;">Dữ Liệu AI (MySQL)</div>
+                    <h3 class="fw-bold mb-1" style="color: #d97706;">
+                        <span id="stat-ai-alerts">0</span>
+                        <span class="fs-6 fw-semibold" style="color: #8c7b70;">bản ghi</span>
+                    </h3>
+                    <div class="small fw-semibold" style="color: #8c7b70; font-size: 0.76rem;">
+                        <i class="fa-solid fa-video me-1" style="color: #d97706;"></i>Luồng RTSP: <span id="stat-rtsp-streams" class="fw-bold">0</span>/10
+                    </div>
+                </div>
+                <div class="d-flex align-items-center justify-content-center flex-shrink-0" style="width: 46px; height: 46px; border-radius: 14px; background: #fef3c7; color: #d97706; font-size: 1.3rem;">
+                    <i class="fa-solid fa-brain"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- STATS CARDS REALTIME (CPU & RAM) -->
-<div class="row mb-5 g-4">
+<div class="row mb-4 g-3">
     <!-- CPU Usage -->
     <div class="col-12 col-md-6">
-        <div class="card custom-card h-100 border-0 shadow-sm" style="border-radius: 1rem;">
+        <div class="card custom-card h-100">
+            <div class="viewport-header" style="border-radius: 20px 20px 0 0;">
+                <span><i class="fa-solid fa-microchip me-2"></i> Tải CPU (Usage)</span>
+                <span class="badge bg-white text-secondary rounded-pill px-2 py-1">Realtime</span>
+            </div>
             <div class="card-body p-4">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <div class="d-flex align-items-center gap-3">
-                        <div class="bg-primary-subtle p-3 rounded-4 text-primary">
-                            <i class="fa-solid fa-microchip fs-3"></i>
+                        <div class="d-flex align-items-center justify-content-center" style="width: 48px; height: 48px; border-radius: 14px; background: #e0f2fe; color: #0284c7; font-size: 1.4rem;">
+                            <i class="fa-solid fa-bolt"></i>
                         </div>
-                        <h6 class="fw-bold mb-0 text-secondary text-uppercase fs-6">Tải CPU (Usage)</h6>
+                        <div>
+                            <div class="small fw-bold text-uppercase" style="color: #8c7b70;">Hiệu suất xử lý</div>
+                            <div class="fw-bold" style="color: #5a4a42;">Vi xử lý trung tâm</div>
+                        </div>
                     </div>
                     <h3 class="fw-bold text-primary mb-0"><span id="stat-cpu-text">0</span>%</h3>
                 </div>
-                <div class="progress mt-4" style="height: 12px; border-radius: 10px; background-color: #f1f5f9;">
-                    <div id="stat-cpu-bar" class="progress-bar bg-primary progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%; transition: width 0.5s ease, background-color 0.3s ease;"></div>
+                <div class="progress mt-3" style="height: 14px; border-radius: 10px; background-color: #fff5f5; border: 1px dashed #ffb7b2;">
+                    <div id="stat-cpu-bar" class="progress-bar bg-primary progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%; border-radius: 10px; transition: width 0.5s ease, background-color 0.3s ease;"></div>
                 </div>
             </div>
         </div>
@@ -36,22 +134,29 @@
 
     <!-- RAM Usage -->
     <div class="col-12 col-md-6">
-        <div class="card custom-card h-100 border-0 shadow-sm" style="border-radius: 1rem;">
+        <div class="card custom-card h-100">
+            <div class="viewport-header" style="border-radius: 20px 20px 0 0;">
+                <span><i class="fa-solid fa-memory me-2"></i> Bộ Nhớ (RAM)</span>
+                <span class="badge bg-white text-secondary rounded-pill px-2 py-1">Realtime</span>
+            </div>
             <div class="card-body p-4">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <div class="d-flex align-items-center gap-3">
-                        <div class="bg-success-subtle p-3 rounded-4 text-success">
-                            <i class="fa-solid fa-memory fs-3"></i>
+                        <div class="d-flex align-items-center justify-content-center" style="width: 48px; height: 48px; border-radius: 14px; background: #dcfce7; color: #16a34a; font-size: 1.4rem;">
+                            <i class="fa-solid fa-leaf"></i>
                         </div>
-                        <h6 class="fw-bold mb-0 text-secondary text-uppercase fs-6">Bộ nhớ (RAM)</h6>
+                        <div>
+                            <div class="small fw-bold text-uppercase" style="color: #8c7b70;">Dung lượng khả dụng</div>
+                            <div class="fw-bold" style="color: #5a4a42;">Bộ nhớ đệm hệ thống</div>
+                        </div>
                     </div>
                     <h3 class="fw-bold text-success mb-0"><span id="stat-ram-text">0</span>%</h3>
                 </div>
-                <div class="progress mt-4" style="height: 12px; border-radius: 10px; background-color: #f1f5f9;">
-                    <div id="stat-ram-bar" class="progress-bar bg-success progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%; transition: width 0.5s ease, background-color 0.3s ease;"></div>
+                <div class="progress mt-3" style="height: 14px; border-radius: 10px; background-color: #fff5f5; border: 1px dashed #ffb7b2;">
+                    <div id="stat-ram-bar" class="progress-bar bg-success progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%; border-radius: 10px; transition: width 0.5s ease, background-color 0.3s ease;"></div>
                 </div>
-                <div class="mt-3 text-end text-muted small fw-bold">
-                    Đang dùng: <span id="stat-ram-used">0</span> GB / Tổng: <span id="stat-ram-total">0</span> GB
+                <div class="mt-3 text-end small fw-bold" style="color: #8c7b70;">
+                    Đang dùng: <span id="stat-ram-used" style="color: #d47a53;">0</span> GB / Tổng: <span id="stat-ram-total" style="color: #5a4a42;">0</span> GB
                 </div>
             </div>
         </div>
@@ -59,13 +164,16 @@
 </div>
 
 <!-- THÀNH VIÊN ĐỘNG -->
-<h5 class="fw-bold text-dark mb-4 border-bottom pb-3"><i class="fa-solid fa-users text-primary me-2"></i>Thành viên phát triển</h5>
-<div id="members-container" class="row row-cols-2 row-cols-sm-3 row-cols-md-3 row-cols-lg-5 g-3 mb-4">
-    <!-- Thẻ thành viên sẽ được nạp tự động bằng JS ở đây -->
+<div class="card p-3 mb-4">
+    <div class="d-flex align-items-center mb-3 pb-2" style="border-bottom: 2px dashed #f0d8c0;">
+        <h5 class="fw-bold mb-0" style="color: #d47a53;"><i class="fa-solid fa-users me-2"></i>Thành Viên Phát Triển</h5>
+    </div>
+    <div id="members-container" class="row row-cols-2 row-cols-sm-3 row-cols-md-3 row-cols-lg-5 g-3">
+        <!-- Thẻ thành viên sẽ được nạp tự động bằng JS ở đây -->
+    </div>
 </div>
 
 <script>
-    // Hàm gọi API lấy thông số phần cứng
     function fetchSystemStats() {
         fetch('/api/stats')
             .then(res => res.json())
@@ -73,14 +181,12 @@
                 let cpu = parseFloat(data.cpu_percent) || 0;
                 let ram = parseFloat(data.ram_percent) || 0;
                 
-                // Cập nhật giao diện CPU
                 document.getElementById('stat-cpu-text').innerText = cpu.toFixed(1);
                 let cpuBar = document.getElementById('stat-cpu-bar');
                 cpuBar.style.width = cpu + '%';
                 cpuBar.className = `progress-bar progress-bar-striped progress-bar-animated ${cpu >= 85 ? 'bg-danger' : (cpu >= 60 ? 'bg-warning' : 'bg-primary')}`;
                 document.getElementById('stat-cpu-text').parentElement.className = `fw-bold mb-0 ${cpu >= 85 ? 'text-danger' : (cpu >= 60 ? 'text-warning' : 'text-primary')}`;
 
-                // Cập nhật giao diện RAM
                 document.getElementById('stat-ram-text').innerText = ram.toFixed(1);
                 let ramBar = document.getElementById('stat-ram-bar');
                 ramBar.style.width = ram + '%';
@@ -89,16 +195,34 @@
 
                 document.getElementById('stat-ram-used').innerText = data.ram_used;
                 document.getElementById('stat-ram-total').innerText = data.ram_total;
+
+                // Cập nhật thống kê người dùng & hoạt động hệ thống
+                if (data.online_users !== undefined) {
+                    document.getElementById('stat-online-users').innerText = Number(data.online_users).toLocaleString('vi-VN');
+                }
+                if (data.peak_online !== undefined) {
+                    document.getElementById('stat-peak-online').innerText = Number(data.peak_online).toLocaleString('vi-VN');
+                }
+                if (data.today_visits !== undefined) {
+                    document.getElementById('stat-today-visits').innerText = Number(data.today_visits).toLocaleString('vi-VN');
+                }
+                if (data.total_visits !== undefined) {
+                    document.getElementById('stat-total-visits').innerText = Number(data.total_visits).toLocaleString('vi-VN');
+                }
+                if (data.total_ai_alerts !== undefined) {
+                    document.getElementById('stat-ai-alerts').innerText = Number(data.total_ai_alerts).toLocaleString('vi-VN');
+                }
+                if (data.active_rtsp_streams !== undefined) {
+                    document.getElementById('stat-rtsp-streams').innerText = data.active_rtsp_streams;
+                }
             })
             .catch(err => console.error("Lỗi lấy dữ liệu:", err));
     }
     
-    // Khởi chạy ngay và lặp lại sau mỗi 2 giây
     fetchSystemStats();
     setInterval(fetchSystemStats, 2000);
 
-    // Render danh sách thành viên với tính năng khôi phục mặc định nếu bị trống
-    const bgColors = ["3182ce", "38a169", "d69e2e", "e53e3e", "805ad5"];
+    const bgColors = ["ffb7b2", "a8e6cf", "ffd3b6", "ffaaa5", "d47a53"];
     
     fetch('/api/members')
         .then(res => res.json())
@@ -108,7 +232,6 @@
                 memberList = data.members;
             }
 
-            // TỰ ĐỘNG KHÔI PHỤC 5 THÀNH VIÊN NẾU DATABASE BỊ RỖNG
             if (memberList.length === 0) {
                 memberList = [
                     {name: "Đỗ Cao Thúy Vi", id: "49.01.103.093", role: "Nhóm Trưởng", avatar: ""},
@@ -118,7 +241,6 @@
                     {name: "Bùi Vạn Thiên", id: "51.01.103.084", role: "", avatar: ""}
                 ];
                 
-                // Lưu ngược 5 thành viên này vào Database để sửa lỗi
                 fetch('/api/members', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -126,22 +248,18 @@
                 });
             }
 
-            // Hiển thị danh sách ra màn hình
             const container = document.getElementById('members-container');
             container.innerHTML = '';
             memberList.forEach((member, index) => {
-                let roleBadge = member.role ? `<span class="badge bg-danger-subtle text-danger border border-danger px-2 py-1 rounded-pill mt-1" style="font-size: 0.7rem;">${member.role}</span>` : '';
+                let roleBadge = member.role ? `<span class="badge badge-status-positive px-2 py-1 rounded-pill mt-2" style="font-size: 0.72rem;"><i class="fa-solid fa-star me-1"></i>${member.role}</span>` : '';
                 let avatarUrl = member.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name)}&background=${bgColors[index % bgColors.length]}&color=fff&size=70`;
                 
                 container.innerHTML += `
                     <div class="col">
-                        <div class="card custom-card text-center py-4 h-100 border-0 shadow-sm rounded-4">
-                            <div class="card-body px-2">
-                                <img src="${avatarUrl}" class="rounded-circle mb-3 shadow" style="width:70px; height:70px; object-fit:cover;">
-                                <h6 class="fw-bold mb-1 fs-6">${member.name}</h6>
-                                <p class="text-muted small mb-0">${member.id}</p>
-                                ${roleBadge}
-                            </div>
+                        <div class="p-3 text-center h-100" style="background: #fffafa; border-radius: 18px; border: 1px dashed #ffb7b2;">
+                            <img src="${avatarUrl}" class="rounded-circle mb-3 shadow-sm" style="width:70px; height:70px; object-fit:cover; border: 3px solid #ffecd2;">
+                            <h6 class="fw-bold mb-1 fs-6" style="color: #5a4a42;">${member.name}</h6>
+                            <p class="small mb-0 fw-semibold" style="color: #8c7b70;">${member.id}</p>${roleBadge}
                         </div>
                     </div>
                 `;
