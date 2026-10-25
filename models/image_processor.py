@@ -12,7 +12,11 @@ import threading
 import numpy as np
 from datetime import datetime
 from flask import Blueprint, request, jsonify, session, current_app
-from models.session_limiter import get_limiter
+from models.session_limiter import (
+    get_limiter,
+    build_temp_filename,
+    cleanup_session_temp_files,
+)
 
 # ------------------------------------------------------------------------------
 # 1. KHỞI TẠO FLASK BLUEPRINT
@@ -636,6 +640,14 @@ def api_upload_image():
 
         elapsed_ms = (time.perf_counter() - start_time) * 1000.0
         final_hud_image = overlay_hud_banner(annotated_img, final_status, thread_name, elapsed_ms, model_used)
+
+        # Lưu vào static/temp theo đúng chuẩn: img_<tên_phiên>_<số_phiên>.jpg
+        temp_img_id, temp_img_path = build_temp_filename('img', client_id, '.jpg')
+        try:
+            cv2.imwrite(temp_img_path, final_hud_image, [int(cv2.IMWRITE_JPEG_QUALITY), 82])
+        except Exception:
+            pass
+
         result_b64 = _encode_image_to_base64(final_hud_image)
 
         total_time_ms = round((time.perf_counter() - start_time) * 1000.0, 2)
@@ -649,7 +661,7 @@ def api_upload_image():
         }
 
         log_entry = {
-            "id": str(uuid.uuid4())[:8],
+            "id": temp_img_id,
             "filename": original_filename,
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "status": final_status,
@@ -663,6 +675,7 @@ def api_upload_image():
         return jsonify({
             "success": True,
             "result_image": result_b64,
+            "temp_image_url": f"/static/temp/{temp_img_id}.jpg",
             "status": final_status,
             "description": final_description,
             "pose_details": pose_meta,
@@ -735,6 +748,9 @@ def api_image_logs():
 
 @image_bp.route('/api/image/clear-logs', methods=['POST'])
 def api_clear_image_logs():
+    client_id = request.headers.get('X-Client-ID') or (request.get_json(silent=True) or {}).get('client_id', '')
+    if client_id:
+        cleanup_session_temp_files('img', client_id)
     with critical_section_lock:
         image_processing_history.clear()
     return jsonify({"success": True})

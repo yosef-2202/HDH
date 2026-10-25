@@ -7,27 +7,125 @@
     .viewport-body {
         background: #fffafa;
         min-height: 380px;
-        height: clamp(350px, 50vh, 500px);
+        height: clamp(340px, 52vh, 520px);
         display: flex;
         align-items: center;
         justify-content: center;
         position: relative;
+        overflow: hidden;
+        border-radius: 0 0 20px 20px;
     }
     .viewport-body video {
-        width: 100%; height: 100%; object-fit: contain; border-radius: 0 0 20px 20px;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        border-radius: 0 0 20px 20px;
+        background: #000;
     }
-    .cute-placeholder { text-align: center; color: #d1c4b8; }
+    .cute-placeholder { text-align: center; color: #d1c4b8; padding: 15px; }
     .table-results th {
-        background: #ffecd2; color: #d47a53; font-weight: 700; border-bottom: 2px dashed #f0d8c0 !important; white-space: nowrap;
+        background: #ffecd2;
+        color: #d47a53;
+        font-weight: 700;
+        border-bottom: 2px dashed #f0d8c0 !important;
+        white-space: nowrap;
+        padding: 10px 12px;
     }
-    .table-results td { vertical-align: middle; font-size: 0.88rem; color: #5a4a42; }
+    .table-results td {
+        vertical-align: middle;
+        font-size: 0.88rem;
+        color: #5a4a42;
+        padding: 10px 12px;
+    }
+    .col-detail-cell {
+        min-width: 240px;
+        max-width: 420px;
+        white-space: normal;
+        line-height: 1.45;
+        text-align: left !important;
+    }
+    .col-behavior-cell {
+        min-width: 120px;
+        white-space: nowrap;
+    }
     .os-stat-card {
         background: rgba(255, 255, 255, 0.95); border-radius: 18px; border: none; padding: 10px 14px; box-shadow: 0 6px 18px rgba(210, 200, 190, 0.35);
+    }
+
+    /* KHUNG TIẾN TRÌNH HIỂN THỊ RÕ RÀNG TRÊN CẢ ĐIỆN THOẠI & PC */
+    .mobile-progress-banner {
+        display: none;
+        background: linear-gradient(135deg, #fffdf9 0%, #fff0ea 100%);
+        border: 2px dashed #ffb7b2;
+        border-radius: 18px;
+        padding: 14px 18px;
+        margin-bottom: 14px;
+        box-shadow: 0 8px 20px rgba(212, 122, 83, 0.15);
+    }
+    .mobile-progress-banner.active {
+        display: block;
+    }
+    .video-overlay-loader {
+        display: none;
+        position: absolute;
+        inset: 0;
+        z-index: 25;
+        background: rgba(255, 250, 250, 0.94);
+        backdrop-filter: blur(5px);
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        padding: 20px;
+        text-align: center;
+        border-radius: 0 0 20px 20px;
+    }
+    .video-overlay-loader.active {
+        display: flex !important;
+    }
+
+    /* HIỆU ỨNG MEME MÈO VẪY TAY ĐÁNG YÊU KHI ĐANG LOAD VIDEO */
+    .waving-cat-meme-box {
+        position: relative;
+        width: 135px;
+        height: 135px;
+        margin-bottom: 12px;
+        border-radius: 24px;
+        background: #fff5ee;
+        border: 3px dashed #ffb7b2;
+        box-shadow: 0 8px 20px rgba(212, 122, 83, 0.18);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        animation: catFloat 2s ease-in-out infinite;
+    }
+    .waving-cat-meme-box img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    .cat-paw-wave {
+        display: inline-block;
+        font-size: 1.5rem;
+        animation: pawWaveAnim 0.6s ease-in-out infinite alternate;
+        transform-origin: bottom center;
+    }
+    .svg-paw-wave {
+        animation: pawWaveAnim 0.55s ease-in-out infinite alternate;
+        transform-origin: 78px 65px;
+    }
+    @keyframes pawWaveAnim {
+        0% { transform: rotate(-18deg) translateY(0); }
+        100% { transform: rotate(24deg) translateY(-3px); }
+    }
+    @keyframes catFloat {
+        0%, 100% { transform: translateY(0px); }
+        50% { transform: translateY(-6px); }
     }
 </style>
 
 <div class="video-page-container">
-    <div class="d-flex justify-content-between align-items-center mb-3 px-2">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 px-2 gap-2">
         <div>
             <h4 class="fw-bold mb-0" style="color: #d47a53;">
                 <i class="fa-solid fa-paw me-2"></i> Phân Tích Video AI (Giới hạn tối đa 50MB)
@@ -48,20 +146,34 @@
         <div class="row align-items-center g-2">
             <div class="col-12 col-md-8">
                 <label for="videoFileInput" class="form-label fw-bold" style="color: #8c7b70;">
-                    <i class="fa-solid fa-film me-1"></i> Tải video lên (Định dạng MP4, tối đa 50MB):
+                    <i class="fa-solid fa-film me-1"></i> Tải video lên (MP4, MOV, WEBM - tối đa 50MB):
                 </label>
                 <div class="input-group">
-                    <input type="file" id="videoFileInput" accept="video/*" class="form-control form-control-sm py-2" style="border-radius: 12px 0 0 12px;" onchange="previewVideo(event)">
-                    <button class="btn btn-light border" type="button" onclick="clearSelectedVideo()" style="border-radius: 0 12px 12px 0;" title="Hủy file">
+                    <input type="file" id="videoFileInput" accept="video/mp4,video/quicktime,video/webm,video/x-matroska,video/*" class="form-control form-control-sm py-2" style="border-radius: 12px 0 0 12px;" onchange="previewVideo(event)">
+                    <button class="btn btn-light border px-3" type="button" onclick="clearSelectedVideo()" style="border-radius: 0 12px 12px 0;" title="Hủy file">
                         <i class="fa-solid fa-xmark text-danger"></i>
                     </button>
                 </div>
             </div>
-            <div class="col-12 col-md-4 d-flex align-items-end pt-md-4">
-                <button type="button" class="btn btn-primary-cute btn-cute w-100 py-2" id="btnAnalyzeVideo" onclick="executeVideoAnalysis()" disabled>
+            <div class="col-12 col-md-4 d-flex align-items-end pt-2 pt-md-4">
+                <button type="button" class="btn btn-primary-cute btn-cute w-100 py-2 shadow-sm" id="btnAnalyzeVideo" onclick="executeVideoAnalysis()" disabled>
                     <i class="fa-solid fa-star me-1"></i> Khám Phá Video
                 </button>
             </div>
+        </div>
+    </div>
+
+    <!-- THANH TIẾN TRÌNH NỔI BẬT (LUÔN NHÌN THẤY RÕ TRÊN ĐIỆN THOẠI & PC) -->
+    <div id="topProgressBanner" class="mobile-progress-banner">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <div class="d-flex align-items-center gap-2">
+                <span class="cat-paw-wave">🐱👋</span>
+                <span class="fw-bold small" style="color: #d47a53;" id="topLoadingText">Đang chuẩn bị tải video lên máy chủ...</span>
+            </div>
+            <span class="badge rounded-pill px-3 py-1 fw-bold" style="background: #ffb7b2; color: #fff; font-size: 0.82rem;" id="topPercentBadge">0%</span>
+        </div>
+        <div class="progress" style="height: 16px; border-radius: 10px; background: #ffffff; border: 1px solid #f0d8c0; overflow: hidden;">
+            <div id="topProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-warning fw-bold" role="progressbar" style="width: 0%; font-size: 0.72rem; color: #5a4a42; transition: width 0.3s ease;">0%</div>
         </div>
     </div>
 
@@ -97,9 +209,9 @@
         </div>
     </div>
 
-    <!-- BỐ CỤC CHÍNH: 2 CỘT -->
+    <!-- BỐ CỤC CHÍNH: VIDEO (5 PHẦN) - KẾT QUẢ TỪ AI MỞ RỘNG (7 PHẦN) -->
     <div class="row g-3">
-        <div class="col-12 col-lg-7">
+        <div class="col-12 col-lg-5">
             <div class="custom-glass-card h-100 d-flex flex-column">
                 <div class="viewport-header">
                     <span class="fw-bold" style="color: #d47a53;"><i class="fa-solid fa-play-circle me-2"></i> Video Của Bạn</span>
@@ -111,34 +223,70 @@
                         <h6>Đợi bạn chọn video dưới 50MB cho mình xem nè!</h6>
                     </div>
                     
-                    <div class="text-center position-absolute w-100 h-100 d-flex flex-column justify-content-center align-items-center" id="videoLoadingIndicator" style="display: none !important; z-index: 5; background: rgba(255, 250, 250, 0.9); border-radius: 0 0 20px 20px;">
-                        <div class="spinner-grow text-warning mb-3" style="width: 3rem; height: 3rem;" role="status"></div>
-                        <h6 class="fw-bold mb-3" style="color: #d47a53;" id="loadingText">Chờ xíu!!! Đang tải video lên máy chủ...</h6>
+                    <!-- LỚP OVERLAY MEME MÈO VẪY TAY KHI ĐANG LOAD -->
+                    <div class="video-overlay-loader" id="videoLoadingIndicator">
+                        <div class="waving-cat-meme-box">
+                            <img src="https://media.tenor.com/mJ7Tkj3KIn0AAAAi/cat-wave.gif" 
+                                 alt="Meo Vay Tay Meme"
+                                 onerror="this.style.display='none'; document.getElementById('fallbackSvgCat').style.display='block';">
+                            <!-- Mèo Meme Vẫy Tay Vector dự phòng nếu mạng chặn GIF -->
+                            <svg id="fallbackSvgCat" style="display:none; width: 110px; height: 110px;" viewBox="0 0 100 100">
+                                <!-- Tai mèo -->
+                                <polygon points="22,42 18,16 40,30" fill="#ffbfa3" stroke="#5a4a42" stroke-width="2.5" stroke-linejoin="round"/>
+                                <polygon points="78,42 82,16 60,30" fill="#ffbfa3" stroke="#5a4a42" stroke-width="2.5" stroke-linejoin="round"/>
+                                <!-- Mặt & Thân mèo -->
+                                <ellipse cx="50" cy="56" rx="30" ry="26" fill="#fff" stroke="#5a4a42" stroke-width="2.5"/>
+                                <!-- Má hồng -->
+                                <ellipse cx="31" cy="57" rx="5" ry="3" fill="#ffb7b2"/>
+                                <ellipse cx="69" cy="57" rx="5" ry="3" fill="#ffb7b2"/>
+                                <!-- Mắt long lanh -->
+                                <circle cx="38" cy="50" r="3.8" fill="#5a4a42"/>
+                                <circle cx="62" cy="50" r="3.8" fill="#5a4a42"/>
+                                <circle cx="36.8" cy="48.8" r="1.3" fill="#fff"/>
+                                <circle cx="60.8" cy="48.8" r="1.3" fill="#fff"/>
+                                <!-- Mũi & Miệng cười :3 -->
+                                <polygon points="48,54 52,54 50,57" fill="#ff8b94"/>
+                                <path d="M 43 59 Q 46.5 63 50 59 Q 53.5 63 57 59" fill="none" stroke="#5a4a42" stroke-width="2.2" stroke-linecap="round"/>
+                                <!-- Tay mèo vẫy vẫy liên tục -->
+                                <g class="svg-paw-wave">
+                                    <ellipse cx="82" cy="52" rx="8" ry="13" transform="rotate(20 82 52)" fill="#fff" stroke="#5a4a42" stroke-width="2.5"/>
+                                    <circle cx="84" cy="46" r="2.8" fill="#ffb7b2"/>
+                                    <circle cx="80" cy="42" r="1.5" fill="#ffb7b2"/>
+                                    <circle cx="85" cy="41" r="1.5" fill="#ffb7b2"/>
+                                    <circle cx="89" cy="44" r="1.5" fill="#ffb7b2"/>
+                                </g>
+                            </svg>
+                        </div>
+                        <div class="badge rounded-pill mb-2 px-3 py-1" style="background: #ffecd2; color: #d47a53; font-size: 0.78rem;">
+                            <span class="cat-paw-wave" style="font-size: 0.95rem;">🐾</span> Mèo AI đang chăm chỉ soi từng khung hình...
+                        </div>
+                        <h6 class="fw-bold mb-2" style="color: #d47a53;" id="loadingText">Chờ xíu nha~ Đang tải video lên máy chủ...</h6>
                         <div class="progress w-75" style="height: 18px; border-radius: 10px; background: #fff5f5; border: 1px dashed #ffb7b2;">
-                            <div id="analyzeProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-warning fw-bold" role="progressbar" style="width: 0%; font-size: 0.75rem;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                            <div id="analyzeProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-warning fw-bold" role="progressbar" style="width: 0%; font-size: 0.75rem; color: #5a4a42;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
                         </div>
                     </div>
 
-                    <video id="mainVideoPlayer" controls style="display: none;"></video>
+                    <video id="mainVideoPlayer" controls playsinline webkit-playsinline preload="metadata" style="display: none;"></video>
                 </div>
             </div>
         </div>
 
-        <div class="col-12 col-lg-5">
+        <!-- CỘT KẾT QUẢ TỪ AI ĐƯỢC MỞ RỘNG (col-lg-7) -->
+        <div class="col-12 col-lg-7" id="resultSectionCard">
             <div class="custom-glass-card h-100 d-flex flex-column">
                 <div class="viewport-header">
-                    <span class="fw-bold" style="color: #d47a53;"><i class="fa-solid fa-wand-magic-sparkles me-2"></i> Kết Quả Từ AI</span>
+                    <span class="fw-bold" style="color: #d47a53;"><i class="fa-solid fa-wand-magic-sparkles me-2"></i> Kết Quả Từ AI (Tiếng Việt)</span>
                     <button class="btn btn-sm btn-outline-danger btn-cute py-0 px-2" onclick="clearResults()">Xóa hết</button>
                 </div>
-                <div class="table-responsive flex-grow-1" style="max-height: clamp(350px, 50vh, 500px); overflow-y: auto;">
+                <div class="table-responsive flex-grow-1" style="max-height: clamp(380px, 52vh, 520px); overflow-y: auto;">
                     <table class="table table-borderless table-hover text-center table-results mb-0">
                         <thead class="sticky-top">
                             <tr>
-                                <th>Mã ID</th>
-                                <th>Mốc Video</th>
-                                <th>Hành Vi</th>
-                                <th>Chi Tiết</th>
-                                <th>Nhận Định</th>
+                                <th style="width: 11%;">Mã ID</th>
+                                <th style="width: 13%;">Mốc Video</th>
+                                <th style="width: 20%;">Hành Vi</th>
+                                <th style="width: 42%;">Chi Tiết</th>
+                                <th style="width: 14%;">Nhận Định</th>
                             </tr>
                         </thead>
                         <tbody id="resultTableBody">
@@ -175,7 +323,7 @@
             </div>
             <div class="modal-body p-4 text-center" style="background: #fdfbf7;">
                 <p class="small fw-bold mb-3" style="color: #8c7b70;">Nhập mật khẩu (PIN) để mở cấu hình API:</p>
-                <input type="password" id="videoPinInput" class="form-control text-center fw-bold mb-2" placeholder="••••••" style="border-radius: 12px; font-size: 1.2rem; letter-spacing: 4px;" onkeypress="if(event.key === 'Enter') verifyVideoPinStep1()">
+                <input type="password" inputmode="numeric" id="videoPinInput" class="form-control text-center fw-bold mb-2" placeholder="••••••" style="border-radius: 12px; font-size: 1.2rem; letter-spacing: 4px;" onkeypress="if(event.key === 'Enter') verifyVideoPinStep1()">
                 <div id="videoPinError" class="text-danger small fw-bold mt-2" style="display: none;">Sai mật khẩu!</div>
             </div>
             <div class="modal-footer border-0 pt-0" style="background: #fdfbf7;">
@@ -213,6 +361,9 @@
     let selectedVideoFile = null;
     let videoApiList = [];
     let verifiedVideoPin = '';
+    let activeSSE = null;
+    let fallbackPollTimer = null;
+    let renderedLogCount = 0;
 
     window.SystemLog = {
         add: function(message, type = 'info') {
@@ -233,6 +384,36 @@
         },
         clear: function() { document.getElementById('terminalOutput').innerHTML = ''; }
     };
+
+    function setProgressUI(percent, message, isVisible = true) {
+        const pct = Math.max(0, Math.min(100, Math.round(percent || 0)));
+        const topBanner = document.getElementById('topProgressBanner');
+        const overlay = document.getElementById('videoLoadingIndicator');
+        const topBar = document.getElementById('topProgressBar');
+        const overlayBar = document.getElementById('analyzeProgressBar');
+        const topBadge = document.getElementById('topPercentBadge');
+        const topText = document.getElementById('topLoadingText');
+        const overlayText = document.getElementById('loadingText');
+
+        if (isVisible) {
+            topBanner.classList.add('active');
+            overlay.classList.add('active');
+        } else {
+            topBanner.classList.remove('active');
+            overlay.classList.remove('active');
+        }
+
+        topBar.style.width = pct + '%';
+        topBar.innerText = pct + '%';
+        overlayBar.style.width = pct + '%';
+        overlayBar.innerText = pct + '%';
+        topBadge.innerText = pct + '%';
+
+        if (message) {
+            topText.innerText = message;
+            overlayText.innerText = message;
+        }
+    }
 
     function openVideoConfigWithPin() {
         document.getElementById('videoPinInput').value = '';
@@ -283,7 +464,6 @@
         const file = event.target.files[0];
         if (!file) return;
 
-        // Giới hạn cứng 50 MB ngay trên giao diện trình duyệt
         const maxSize = 50 * 1024 * 1024;
         if (file.size > maxSize) {
             alert(`Tệp video quá lớn (${(file.size / (1024*1024)).toFixed(1)} MB)! Vui lòng chọn video dưới 50 MB để hệ thống xử lý ổn định.`);
@@ -296,7 +476,7 @@
         videoPlayer.src = URL.createObjectURL(file);
         document.getElementById('videoPlaceholder').style.display = 'none';
         videoPlayer.style.display = 'block';
-        document.getElementById('videoStatusBadge').textContent = 'Đã nhận video';
+        document.getElementById('videoStatusBadge').textContent = `${(file.size / (1024*1024)).toFixed(1)} MB`;
         document.getElementById('videoStatusBadge').className = 'badge bg-success';
         document.getElementById('btnAnalyzeVideo').disabled = false;
         SystemLog.add(`Đã nhận video: ${file.name} (${(file.size / (1024*1024)).toFixed(2)} MB)`, "info");
@@ -306,49 +486,58 @@
         document.getElementById('videoFileInput').value = '';
         selectedVideoFile = null;
         const videoPlayer = document.getElementById('mainVideoPlayer');
-        videoPlayer.src = ''; videoPlayer.style.display = 'none';
+        videoPlayer.pause();
+        videoPlayer.src = '';
+        videoPlayer.style.display = 'none';
         document.getElementById('videoPlaceholder').style.display = 'block';
         document.getElementById('videoStatusBadge').textContent = 'Trống';
+        document.getElementById('videoStatusBadge').className = 'badge bg-light text-secondary';
         document.getElementById('btnAnalyzeVideo').disabled = true;
+        setProgressUI(0, '', false);
     }
 
     function clearResults() {
+        renderedLogCount = 0;
         document.getElementById('resultTableBody').innerHTML = `<tr><td colspan="5" class="text-center text-muted py-5">Chưa có ai ở đây cả~</td></tr>`;
     }
 
-    let activeSSE = null;
+    function stopActiveStreams() {
+        if (activeSSE) {
+            activeSSE.close();
+            activeSSE = null;
+        }
+        if (fallbackPollTimer) {
+            clearInterval(fallbackPollTimer);
+            fallbackPollTimer = null;
+        }
+    }
 
-    async function executeVideoAnalysis() {
-        if (!selectedVideoFile) return;
+    function finishAnalysisUI() {
+        stopActiveStreams();
         const btn = document.getElementById('btnAnalyzeVideo');
-        const loader = document.getElementById('videoLoadingIndicator');
-        const progressBar = document.getElementById('analyzeProgressBar');
-        const loadingText = document.getElementById('loadingText');
-        const tableBody = document.getElementById('resultTableBody');
         const badgeState = document.getElementById('pipelineStateBadge');
+        setProgressUI(100, 'Meow~ Phân tích video hoàn tất rồi nè!', true);
+        badgeState.className = 'badge bg-white text-secondary rounded-pill';
+        badgeState.innerText = 'IDLE';
+        SystemLog.add("Phân tích video hoàn tất!", "success");
 
-        if (activeSSE) { activeSSE.close(); activeSSE = null; }
+        setTimeout(() => {
+            setProgressUI(100, '', false);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-star me-1"></i> Khám Phá Video';
+            if (window.innerWidth < 992) {
+                document.getElementById('resultSectionCard')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }, 900);
+    }
 
-        btn.disabled = true;
-        loader.style.setProperty('display', 'flex', 'important');
-        badgeState.className = 'badge badge-status-normal rounded-pill';
-        badgeState.innerText = 'RUNNING';
-        progressBar.style.width = '10%'; progressBar.innerText = '10%';
-        loadingText.innerText = 'Đang tải video dưới 50MB lên máy chủ...';
-        tableBody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-5">Đang khởi tạo engine phân tích AI...</td></tr>`;
-        SystemLog.add("Bắt đầu tải video lên server...", "warning");
+    function startMonitoringSession(sessionId) {
+        const tableBody = document.getElementById('resultTableBody');
+        stopActiveStreams();
 
-        const formData = new FormData();
-        formData.append('video', selectedVideoFile);
-
+        // 1. Luồng SSE chính
         try {
-            const res = await fetch('/api/video/analyze', { method: 'POST', body: formData });
-            const data = await res.json();
-            if (!res.ok || !data.success) throw new Error(data.message || 'Lỗi tải video');
-
-            SystemLog.add("Tải lên thành công! Đang quét frame...", "info");
-            activeSSE = new EventSource(`/api/video/stream/${data.session_id}`);
-
+            activeSSE = new EventSource(`/api/video/stream/${sessionId}`);
             activeSSE.onmessage = (event) => {
                 const payload = JSON.parse(event.data);
                 if (payload.type === 'metrics') {
@@ -357,40 +546,149 @@
                     document.getElementById('vidBw').innerText = payload.bw;
                 }
                 if (payload.type === 'init' || payload.type === 'progress') {
-                    progressBar.style.width = (payload.progress || 30) + '%';
-                    progressBar.innerText = (payload.progress || 30) + '%';
+                    setProgressUI(payload.progress || 45, payload.stage_text || 'Đang phân tích khung hình video...');
                 }
                 if (payload.type === 'log') {
+                    renderedLogCount++;
                     appendResultRow(payload, tableBody);
                     SystemLog.add(`Phát hiện: ${payload.person_id} - ${payload.behavior}`, "warning");
                 }
                 if (payload.type === 'complete') {
-                    progressBar.style.width = '100%'; progressBar.innerText = '100%';
-                    badgeState.className = 'badge bg-white text-secondary rounded-pill';
-                    badgeState.innerText = 'IDLE';
-                    setTimeout(() => { loader.style.setProperty('display', 'none', 'important'); btn.disabled = false; }, 1000);
-                    SystemLog.add("Phân tích video hoàn tất.", "success");
-                    activeSSE.close(); activeSSE = null;
+                    finishAnalysisUI();
                 }
             };
-        } catch (e) {
-            alert('Lỗi: ' + e.message);
-            loader.style.setProperty('display', 'none', 'important');
+        } catch (e) {}
+
+        // 2. Luồng Polling dự phòng mỗi 1.2s (Đảm bảo 100% điện thoại luôn nhảy % và nhận kết quả)
+        fallbackPollTimer = setInterval(async () => {
+            try {
+                const r = await fetch(`/api/video/status/${sessionId}`);
+                if (!r.ok) return;
+                const st = await r.json();
+                if (!st.success) return;
+
+                if (st.metrics) {
+                    document.getElementById('vidCpu').innerText = st.metrics.cpu;
+                    document.getElementById('vidRam').innerText = st.metrics.ram;
+                    document.getElementById('vidBw').innerText = st.metrics.bw;
+                }
+                setProgressUI(st.progress || 45, st.stage_text || 'Đang xử lý video trên máy chủ...');
+
+                if (Array.isArray(st.logs) && st.logs.length > renderedLogCount) {
+                    const newLogs = st.logs.slice(renderedLogCount);
+                    renderedLogCount = st.logs.length;
+                    newLogs.forEach(item => {
+                        appendResultRow(item, tableBody);
+                        SystemLog.add(`Phát hiện: ${item.person_id} - ${item.behavior}`, "warning");
+                    });
+                }
+
+                if (st.completed) {
+                    finishAnalysisUI();
+                }
+            } catch (err) {}
+        }, 1200);
+    }
+
+    function executeVideoAnalysis() {
+        if (!selectedVideoFile) return;
+        const btn = document.getElementById('btnAnalyzeVideo');
+        const tableBody = document.getElementById('resultTableBody');
+        const badgeState = document.getElementById('pipelineStateBadge');
+        const videoPlayer = document.getElementById('mainVideoPlayer');
+
+        stopActiveStreams();
+        renderedLogCount = 0;
+
+        // Tạm dừng trình phát video trên điện thoại để không che lớp tiến trình
+        try { videoPlayer.pause(); } catch (e) {}
+
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i> Đang xử lý...';
+        badgeState.className = 'badge badge-status-normal rounded-pill';
+        badgeState.innerText = 'RUNNING';
+
+        setProgressUI(2, 'Đang tải video từ thiết bị lên máy chủ (0%)...', true);
+        tableBody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-5"><i class="fa-solid fa-cat fa-bounce me-2"></i>Mèo AI đang tải và phân tích video cho bạn...</td></tr>`;
+        SystemLog.add("Bắt đầu tải video lên server...", "warning");
+
+        const formData = new FormData();
+        formData.append('video', selectedVideoFile);
+        if (typeof GLOBAL_CLIENT_ID !== 'undefined') {
+            formData.append('client_id', GLOBAL_CLIENT_ID);
+        }
+
+        // Dùng XMLHttpRequest để lấy % tiến độ Upload thực tế trên điện thoại (1% -> 40%)
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/video/analyze', true);
+        if (typeof GLOBAL_CLIENT_ID !== 'undefined') {
+            xhr.setRequestHeader('X-Client-ID', GLOBAL_CLIENT_ID);
+        }
+
+        xhr.upload.onprogress = function(e) {
+            if (e.lengthComputable) {
+                const uploadRatio = e.loaded / e.total;
+                const mappedPct = Math.max(3, Math.min(40, Math.round(uploadRatio * 40)));
+                const uploadedMb = (e.loaded / (1024 * 1024)).toFixed(1);
+                const totalMb = (e.total / (1024 * 1024)).toFixed(1);
+                setProgressUI(mappedPct, `Đang tải video lên máy chủ (${uploadedMb}/${totalMb} MB)...`, true);
+            }
+        };
+
+        xhr.onload = function() {
+            let data = {};
+            try { data = JSON.parse(xhr.responseText || '{}'); } catch (e) {}
+
+            if (xhr.status === 429 && (data.waiting || data.status === 'WAITING')) {
+                setProgressUI(0, '', false);
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-star me-1"></i> Khám Phá Video';
+                if (typeof showQueueWaitingModal === 'function') {
+                    showQueueWaitingModal(data, () => executeVideoAnalysis());
+                }
+                return;
+            }
+
+            if (xhr.status >= 200 && xhr.status < 300 && data.success) {
+                setProgressUI(42, 'Tải lên hoàn tất! Đang quét khung hình OpenCV...', true);
+                SystemLog.add("Tải lên thành công! Bắt đầu quét frame và gọi AI...", "info");
+                startMonitoringSession(data.session_id);
+            } else {
+                const errMsg = data.message || 'Không thể tải video lên máy chủ.';
+                alert('Lỗi: ' + errMsg);
+                SystemLog.add('Lỗi: ' + errMsg, 'error');
+                setProgressUI(0, '', false);
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-star me-1"></i> Khám Phá Video';
+                badgeState.className = 'badge bg-white text-secondary rounded-pill';
+                badgeState.innerText = 'IDLE';
+            }
+        };
+
+        xhr.onerror = function() {
+            alert('Lỗi kết nối mạng khi tải video lên máy chủ!');
+            setProgressUI(0, '', false);
             btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-star me-1"></i> Khám Phá Video';
             badgeState.className = 'badge bg-white text-secondary rounded-pill';
             badgeState.innerText = 'IDLE';
-        }
+        };
+
+        xhr.send(formData);
     }
 
     function appendResultRow(payload, tableBody) {
-        if (tableBody.children.length === 1 && tableBody.children[0].innerText.includes('Đang khởi')) tableBody.innerHTML = '';
+        if (tableBody.children.length === 1 && (tableBody.children[0].innerText.includes('Đang') || tableBody.children[0].innerText.includes('Mèo AI') || tableBody.children[0].innerText.includes('Chưa có'))) {
+            tableBody.innerHTML = '';
+        }
         const tr = document.createElement('tr');
+        const badgeColor = payload.status_code === 'danger' ? 'bg-danger' : (payload.status_code === 'warning' ? 'bg-warning text-dark' : 'bg-success');
         tr.innerHTML = `
-            <td class="fw-bold">${payload.person_id}</td>
-            <td><span class="badge bg-light text-dark border">${payload.video_ts}</span></td>
-            <td class="fw-bold text-danger">${payload.behavior}</td>
-            <td class="text-start">${payload.detail}</td>
-            <td><span class="badge ${payload.status_code === 'danger' ? 'bg-danger' : 'bg-success'}">${payload.status}</span></td>
+            <td class="fw-bold text-nowrap">${payload.person_id}</td>
+            <td class="text-nowrap"><span class="badge bg-light text-dark border">${payload.video_ts}</span></td>
+            <td class="fw-bold text-danger col-behavior-cell">${payload.behavior}</td>
+            <td class="col-detail-cell">${payload.detail}</td>
+            <td class="text-nowrap"><span class="badge ${badgeColor}">${payload.status}</span></td>
         `;
         tableBody.appendChild(tr);
     }

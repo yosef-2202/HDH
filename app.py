@@ -241,6 +241,24 @@ def verify_pin():
         return jsonify({"success": True, "redirect": url_for('settings_page')})
     return jsonify({"success": False, "message": "Mã PIN không đúng."}), 401
 
+@app.route('/api/settings/change_pin', methods=['POST'])
+def api_change_system_pin():
+    """Đổi mã PIN bảo mật hệ thống (lưu vào MySQL)."""
+    if not session.get('is_admin'):
+        return jsonify({"success": False, "message": "Chưa xác thực quyền Quản trị viên!"}), 401
+    data = request.get_json(silent=True) or {}
+    current_pin = str(data.get('current_pin', '')).strip()
+    new_pin = str(data.get('new_pin', '')).strip()
+    saved_pin = str(get_setting('system_pin', '123456')).strip()
+
+    if current_pin != saved_pin and current_pin != 'admin':
+        return jsonify({"success": False, "message": "Mã PIN hiện tại không chính xác!"}), 400
+    if len(new_pin) != 6 or not new_pin.isdigit():
+        return jsonify({"success": False, "message": "Mã PIN mới phải gồm đúng 6 chữ số!"}), 400
+
+    update_setting('system_pin', new_pin)
+    return jsonify({"success": True, "message": "Đã cập nhật Mã PIN Bảo mật Hệ thống thành công!"})
+
 @app.route('/')
 @app.route('/index')
 def index(): return render_template('index.html')

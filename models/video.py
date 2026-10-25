@@ -7,6 +7,7 @@ import threading
 import uuid
 import base64
 import time
+import re
 import cv2
 import numpy as np
 import requests
@@ -30,6 +31,12 @@ hog_detector.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
 _video_key_lock = threading.Lock()
 _video_key_turn = 0
 current_process = psutil.Process(os.getpid())
+
+# Bộ nhớ lưu trạng thái tiến trình cho cả SSE lẫn Polling trên điện thoại
+_sse_queues: dict[str, queue.Queue] = {}
+_job_states: dict[str, dict] = {}
+_sse_lock = threading.Lock()
+
 
 def get_video_credentials():
     global _video_key_turn
@@ -70,18 +77,49 @@ def get_video_credentials():
     return selected_key, model_name, keys
 
 
-_sse_queues: dict[str, queue.Queue] = {}
-_sse_lock = threading.Lock()
-
 def _get_q(sid: str) -> queue.Queue:
     with _sse_lock:
         if sid not in _sse_queues:
             _sse_queues[sid] = queue.Queue(maxsize=1000)
+        if sid not in _job_states:
+            _job_states[sid] = {
+                "progress": 5,
+                "stage_text": "Đang khởi tạo trình phân tích video...",
+                "metrics": {"cpu": "0.0%", "ram": "0 MB", "bw": "0 KB"},
+                "logs": [],
+                "completed": False,
+                "error": None,
+                "updated_at": time.time()
+            }
         return _sse_queues[sid]
 
+
 def _push_q(sid: str, payload: dict):
+    q = _get_q(sid)
+    with _sse_lock:
+        st = _job_states.get(sid)
+        if st is not None:
+            st["updated_at"] = time.time()
+            ptype = payload.get("type")
+            if ptype in ("init", "progress"):
+                if "progress" in payload:
+                    st["progress"] = payload["progress"]
+                if "stage_text" in payload:
+                    st["stage_text"] = payload["stage_text"]
+            elif ptype == "metrics":
+                st["metrics"] = {
+                    "cpu": payload.get("cpu", "0.0%"),
+                    "ram": payload.get("ram", "0 MB"),
+                    "bw": payload.get("bw", "0 KB")
+                }
+            elif ptype == "log":
+                st["logs"].append(payload)
+            elif ptype == "complete":
+                st["progress"] = 100
+                st["stage_text"] = "Phân tích video hoàn tất!"
+                st["completed"] = True
     try:
-        _get_q(sid).put_nowait(payload)
+        q.put_nowait(payload)
     except queue.Full:
         pass
 
@@ -98,23 +136,98 @@ def _frame_to_base64_uri(frame_bgr):
     return f"data:image/jpeg;base64,{img_str}"
 
 
+def _ensure_vietnamese_text(text: str, is_behavior: bool = False) -> str:
+    """Đảm bảo văn bản trả về từ AI hoàn toàn bằng tiếng Việt, dịch nhanh các cụm từ tiếng Anh phổ biến."""
+    t = (text or "").strip()
+    if not t:
+        return "Hoạt động bình thường" if is_behavior else "Không phát hiện dấu hiệu bất thường."
+
+    # Từ điển quy đổi nhanh cho cột Hành Vi & Chi Tiết nếu model free trả về tiếng Anh
+    behavior_dict = {
+        "fighting": "Đánh nhau / Xô xát",
+        "confrontation": "Đối đầu / Căng thẳng",
+        "threatening": "Đe dọa / Khiêu khích",
+        "standing/guarding": "Đứng canh / Chặn cửa",
+        "standing": "Đứng quan sát",
+        "guarding": "Đứng canh giữ",
+        "walking": "Đang đi bộ",
+        "running": "Đang chạy",
+        "sitting": "Đang ngồi",
+        "talking": "Đang trò chuyện",
+        "arguing": "Tranh cãi",
+        "attacking": "Tấn công",
+        "kicking": "Đá / Tấn công",
+        "punching": "Đấm / Xô xát",
+        "watching": "Đứng xem / Quan sát",
+        "bystander": "Người đứng xem",
+        "entering": "Đi vào khu vực",
+        "leaving": "Rời khỏi khu vực",
+        "suspicious": "Hành vi đáng ngờ",
+        "normal": "Hoạt động bình thường",
+    }
+
+    low = t.lower().strip()
+    if is_behavior and low in behavior_dict:
+        return behavior_dict[low]
+
+    # Thay thế các cụm từ tiếng Anh thường gặp trong câu mô tả
+    replacements = [
+        (r"\bfighting\b", "xô xát/đánh nhau"),
+        (r"\bconfrontation\b", "đối đầu căng thẳng"),
+        (r"\bthreatening\b", "đe dọa"),
+        (r"\bstanding/guarding\b", "đứng canh/chặn lối"),
+        (r"\bstanding in front of the doorway\b", "đứng trước cửa ra vào"),
+        (r"\bstanding in front of\b", "đứng phía trước"),
+        (r"\bstanding\b", "đang đứng"),
+        (r"\bguarding\b", "đứng canh"),
+        (r"\bwalking\b", "đang đi bộ"),
+        (r"\brunning\b", "đang chạy"),
+        (r"\bsitting\b", "đang ngồi"),
+        (r"\bkicking\b", "đang tung cú đá"),
+        (r"\bpunching\b", "đang vung tay đánh"),
+        (r"\bthe person in the green shirt\b", "Người mặc áo xanh lá"),
+        (r"\bthe person in the pink shirt\b", "Người mặc áo hồng"),
+        (r"\bthe person in the black shirt\b", "Người mặc áo đen"),
+        (r"\bthe person in the white shirt\b", "Người mặc áo trắng"),
+        (r"\bthe person in black\b", "người mặc đồ đen"),
+        (r"\bthe person in white\b", "người mặc đồ trắng"),
+        (r"\bthe person in pink\b", "người mặc đồ hồng"),
+        (r"\bthe person in green\b", "người mặc đồ xanh"),
+        (r"\bwearing a helmet\b", "đội mũ bảo hiểm"),
+        (r"\bfacing\b", "hướng mặt về phía"),
+        (r"\bwho is inside\b", "đang ở bên trong"),
+        (r"\bin the doorway\b", "ngay lối cửa ra vào"),
+        (r"\bthe scene\b", "hiện trường"),
+    ]
+    for pattern, vn_str in replacements:
+        t = re.sub(pattern, vn_str, t, flags=re.IGNORECASE)
+
+    return t
+
+
 def _call_openrouter(api_key, contents, model_name="openrouter/free"):
     url = "https://openrouter.ai/api/v1/chat/completions"
-    instruction = """
-    BẮT BUỘC trả về JSON nguyên chất (không bọc trong ```json). Định dạng và ý nghĩa các trường:
+    system_instruction = (
+        "Bạn là chuyên gia AI phân tích video giám sát an ninh tại Việt Nam. "
+        "QUY TẮC TỐI THƯỢNG: BẮT BUỘC viết 100% bằng TIẾNG VIỆT có dấu cho trường 'behavior' và 'detail'. "
+        "TUYỆT ĐỐI KHÔNG dùng tiếng Anh (như Fighting, Standing, Confrontation, The person in...). "
+        "Chỉ trả về duy nhất JSON nguyên chất, không dùng markdown ```json."
+    )
+    user_instruction = """
+    Hãy phân tích các khung hình và trả về JSON theo đúng cấu trúc sau (100% nội dung tiếng Việt):
     {
       "people": [
         {
-          "person_id": "<ID Person_N>",
-          "video_ts": "<Mốc HH:MM:SS>",
-          "behavior": "<Hành quan sát vi được>",
-          "detail": "<Mô bối chi cảnh, phục tiết trang tả>",
-          "status_code": "<normal | warning | danger>"
+          "person_id": "Person_1",
+          "video_ts": "00:00:00",
+          "behavior": "<Hành / TIẾNG VIỆT, Xô bằng bộ, canh cửa... dụ: gọn ngắn nhau, quan sát, vi ví xát Đi Đánh Đứng>",
+          "detail": "<Mô TIẾNG VIỆT bằng bối chi cảnh hành phục, quanh ràng rõ thế, tiết trang tư tả và xung động>",
+          "status_code": "<chỉ chọn 1 trong 3 giá trị: normal | warning | danger>"
         }
       ]
     }
     """
-    content_array = [{"type": "text", "text": instruction}]
+    content_array = [{"type": "text", "text": user_instruction}]
     for item in contents:
         if isinstance(item, str):
             content_array.append({"type": "text", "text": item})
@@ -140,7 +253,10 @@ def _call_openrouter(api_key, contents, model_name="openrouter/free"):
         for target_model in models_to_try:
             payload = {
                 "model": target_model,
-                "messages": [{"role": "user", "content": content_array}],
+                "messages": [
+                    {"role": "system", "content": system_instruction},
+                    {"role": "user", "content": content_array}
+                ],
                 "temperature": 0.2
             }
             try:
@@ -215,37 +331,45 @@ def _clean_behavior_text(text: str) -> str:
         if low.startswith(s):
             t = t[len(s):].strip()
             break
-    return t.strip(' -—–,:;')
+    t = t.strip(' -—–,:;')
+    return _ensure_vietnamese_text(t, is_behavior=True)
 
 
 def _bg_analyze(session_id: str, video_path: str, orig_name: str, client_id: str = ""):
-    q = _get_q(session_id)
+    _get_q(session_id)
     try:
         api_key, model_name, _ = get_video_credentials()
         if not api_key:
-            q.put_nowait({
+            _push_q(session_id, {
                 'type': 'log', 'person_id': 'SYSTEM', 'video_ts': '00:00:00',
-                'behavior': 'Chưa có API Key', 'detail': 'Chưa cấu hình OpenRouter API Key!',
+                'behavior': 'Chưa có API Key', 'detail': 'Chưa cấu hình OpenRouter API Key! Hãy bấm Admin Cấu Hình để thêm Key.',
                 'status': '🚨 Nguy hiểm', 'status_code': 'danger'
             })
             return
 
         cap = cv2.VideoCapture(video_path)
         if not cap.isOpened():
-            q.put_nowait({
+            _push_q(session_id, {
                 'type': 'log', 'person_id': 'SYSTEM', 'video_ts': '00:00:00',
-                'behavior': 'Lỗi Video', 'detail': 'Không thể mở tệp video.',
+                'behavior': 'Lỗi Video', 'detail': 'Không thể giải mã tệp video này. Vui lòng chọn định dạng MP4/WEBM.',
                 'status': '🚨 Nguy hiểm', 'status_code': 'danger'
             })
             return
 
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 1
         fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
-        total_sec = total_frames / fps
+        if fps <= 0 or fps > 240:
+            fps = 25.0
+        total_sec = max(1.0, total_frames / fps)
         step_frames = max(1, int(fps * 1.5))
 
-        q.put_nowait({'type': 'init', 'total_hms': _hms(total_sec), 'total_frames': total_frames})
-        q.put_nowait({'type': 'progress', 'progress': 15})
+        _push_q(session_id, {
+            'type': 'init',
+            'total_hms': _hms(total_sec),
+            'total_frames': total_frames,
+            'progress': 42,
+            'stage_text': 'Đang quét khung hình bằng OpenCV HOG...'
+        })
 
         samples = []
         prev_gray = None
@@ -254,7 +378,8 @@ def _bg_analyze(session_id: str, video_path: str, orig_name: str, client_id: str
 
         while True:
             ok, frame = cap.read()
-            if not ok: break
+            if not ok:
+                break
             if frame_idx % step_frames != 0:
                 frame_idx += 1
                 continue
@@ -267,11 +392,23 @@ def _bg_analyze(session_id: str, video_path: str, orig_name: str, client_id: str
             except Exception:
                 cpu_val, ram_val = 4.5, 45.0
 
-            q.put_nowait({
+            _push_q(session_id, {
                 'type': 'metrics',
                 'cpu': f"{cpu_val}%",
                 'ram': f"{ram_val} MB",
                 'bw': f"{file_kb} KB"
+            })
+
+            # Cập nhật % tiến trình thực tế từ 42% -> 75% trong lúc quét OpenCV
+            if total_frames > 1:
+                scan_pct = min(75, 42 + int((frame_idx / total_frames) * 33))
+            else:
+                scan_pct = min(75, 45 + len(samples) * 5)
+
+            _push_q(session_id, {
+                'type': 'progress',
+                'progress': scan_pct,
+                'stage_text': f'Đang trích xuất & quét khung hình ({_hms(frame_idx / fps)})...'
             })
 
             boxes, prev_gray = _detect_boxes_opencv(frame, prev_gray)
@@ -281,6 +418,15 @@ def _bg_analyze(session_id: str, video_path: str, orig_name: str, client_id: str
                     'video_ts': _hms(frame_idx / fps),
                     'frame': frame.copy(),
                     'box': boxes[0]
+                })
+            elif len(samples) == 0 and frame_idx == 0:
+                # Dự phòng lấy khung hình đầu tiên nếu video tĩnh không có người chuyển động rõ
+                h0, w0 = frame.shape[:2]
+                samples.append({
+                    'frame_idx': 0,
+                    'video_ts': '00:00:00',
+                    'frame': frame.copy(),
+                    'box': (w0 // 6, h0 // 6, w0 * 5 // 6, h0 * 5 // 6)
                 })
             frame_idx += 1
 
@@ -298,17 +444,33 @@ def _bg_analyze(session_id: str, video_path: str, orig_name: str, client_id: str
             contents.append(annotated)
             lines.append(f"- {s['person_id']} tại mốc {s['video_ts']}")
 
-        prompt = "Phân tích các khung hình video an ninh sau:\n" + "\n".join(lines)
+        prompt = (
+            "Phân tích các khung hình video an ninh sau đây. "
+            "LƯU Ý QUAN TRỌNG: Bắt buộc phải viết tất cả nội dung mô tả 'behavior' và 'detail' bằng TIẾNG VIỆT 100%, "
+            "không được viết bằng tiếng Anh:\n" + "\n".join(lines)
+        )
         contents.append(prompt)
+
+        _push_q(session_id, {
+            'type': 'progress',
+            'progress': 82,
+            'stage_text': 'Đang gửi khung hình lên Cloud AI Vision phân tích hành vi...'
+        })
 
         response, last_err = _call_openrouter(api_key, contents, model_name)
         if last_err is not None or response is None:
-            q.put_nowait({
+            _push_q(session_id, {
                 'type': 'log', 'person_id': 'SYSTEM', 'video_ts': '00:00:00',
                 'behavior': 'Lỗi Gọi AI', 'detail': str(last_err),
                 'status': '🚨 Nguy hiểm', 'status_code': 'danger'
             })
             return
+
+        _push_q(session_id, {
+            'type': 'progress',
+            'progress': 94,
+            'stage_text': 'Đang tổng hợp kết quả nhận diện bằng tiếng Việt...'
+        })
 
         try:
             raw_json = response.text
@@ -323,14 +485,22 @@ def _bg_analyze(session_id: str, video_path: str, orig_name: str, client_id: str
 
         status_map = {'normal': '🟢 Bình thường', 'warning': '🟡 Chú ý', 'danger': '🚨 Nguy hiểm'}
         if not people_events:
-            people_events = [{'person_id': 'Person_1', 'video_ts': '00:00:00', 'behavior': 'Quan sát', 'detail': response.text[:200], 'status_code': 'normal'}]
+            people_events = [{
+                'person_id': 'Person_1',
+                'video_ts': '00:00:00',
+                'behavior': 'Quan sát khung cảnh',
+                'detail': _ensure_vietnamese_text(response.text[:250] if response.text else 'Khung hình bình thường, ổn định.'),
+                'status_code': 'normal'
+            }]
 
         for i, ev in enumerate(people_events):
             pid = ev.get('person_id', f'Person_{i+1}')
             ts = ev.get('video_ts', '00:00:00')
             behavior = _clean_behavior_text(ev.get('behavior', 'Hoạt động'))
-            detail = ev.get('detail', 'Phân tích thành công.')
-            sc = ev.get('status_code', 'normal')
+            detail = _ensure_vietnamese_text(ev.get('detail', 'Phân tích thành công.'), is_behavior=False)
+            sc = str(ev.get('status_code', 'normal')).lower().strip()
+            if sc not in status_map:
+                sc = 'normal'
 
             payload = {
                 'type': 'log', 'person_id': pid, 'video_ts': ts,
@@ -340,7 +510,11 @@ def _bg_analyze(session_id: str, video_path: str, orig_name: str, client_id: str
             _push_q(session_id, payload)
 
     except Exception as exc:
-        q.put_nowait({'type': 'log', 'person_id': 'SYSTEM', 'video_ts': '00:00:00', 'behavior': 'Lỗi', 'detail': str(exc), 'status': 'Nguy hiểm', 'status_code': 'danger'})
+        _push_q(session_id, {
+            'type': 'log', 'person_id': 'SYSTEM', 'video_ts': '00:00:00',
+            'behavior': 'Lỗi Xử Lý', 'detail': str(exc),
+            'status': '🚨 Nguy hiểm', 'status_code': 'danger'
+        })
     finally:
         # Xóa ngay file video tạm sau khi OpenCV đã trích xuất và phân tích xong
         try:
@@ -349,16 +523,17 @@ def _bg_analyze(session_id: str, video_path: str, orig_name: str, client_id: str
         except Exception:
             pass
         get_limiter('video').release(client_id or session_id)
-        q.put_nowait({'type': 'complete', 'progress': 100})
+        _push_q(session_id, {'type': 'complete', 'progress': 100})
 
 
 def _sse_gen(session_id: str):
     q = _get_q(session_id)
     while True:
         try:
-            payload = q.get(timeout=30)
+            payload = q.get(timeout=15)
             yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
-            if payload.get('type') == 'complete': break
+            if payload.get('type') == 'complete':
+                break
         except queue.Empty:
             yield 'data: {"type":"ping"}\n\n'
 
@@ -411,8 +586,27 @@ def api_video_upload():
 @video_bp.route('/api/video/stream/<session_id>')
 def api_video_stream(session_id: str):
     resp = Response(stream_with_context(_sse_gen(session_id)), mimetype='text/event-stream')
-    resp.headers['Cache-Control'] = 'no-cache'
+    resp.headers['Cache-Control'] = 'no-cache, no-transform'
+    resp.headers['X-Accel-Buffering'] = 'no'
+    resp.headers['Connection'] = 'keep-alive'
     return resp
+
+
+@video_bp.route('/api/video/status/<session_id>', methods=['GET'])
+def api_video_status(session_id: str):
+    """API Polling dự phòng cho trình duyệt điện thoại khi SSE bị nghẽn mạng."""
+    with _sse_lock:
+        st = _job_states.get(session_id)
+        if not st:
+            return jsonify({'success': False, 'message': 'Không tìm thấy phiên xử lý'}), 404
+        return jsonify({
+            'success': True,
+            'progress': st['progress'],
+            'stage_text': st['stage_text'],
+            'metrics': st['metrics'],
+            'logs': list(st['logs']),
+            'completed': st['completed']
+        })
 
 
 @video_bp.route('/api/video/config', methods=['GET', 'POST'])

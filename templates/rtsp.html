@@ -596,5 +596,13 @@
             document.getElementById('alertTableBody').innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">Chưa có ai ở đây cả~</td></tr>';
         });
     }
+
+    // Tự động giải phóng camera và xóa sạch file temp rtsp_<CLIENT_ID>_* khi đóng tab/thoát trang
+    window.addEventListener('pagehide', () => {
+        navigator.sendBeacon('/api/rtsp/stop', JSON.stringify({ client_id: CLIENT_ID }));
+    });
+    window.addEventListener('beforeunload', () => {
+        navigator.sendBeacon('/api/rtsp/stop', JSON.stringify({ client_id: CLIENT_ID }));
+    });
 </script>
 {% endblock %}

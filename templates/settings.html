@@ -7,16 +7,170 @@
         background-color: #ffb7b2 !important;
         border-color: #ffb7b2 !important;
     }
+    .temp-stat-box {
+        border-radius: 16px;
+        padding: 12px 10px;
+        background: #fffafa;
+        border: 1px dashed #f0d8c0;
+        transition: all 0.2s ease;
+        height: 100%;
+    }
+    .temp-stat-box:hover {
+        transform: translateY(-2px);
+        border-color: #ffb7b2;
+        box-shadow: 0 6px 14px rgba(212, 122, 83, 0.12);
+    }
+    .security-card-box {
+        background: linear-gradient(135deg, #fffafa 0%, #fff3eb 100%);
+        border: 1px dashed #ffb7b2;
+        border-radius: 18px;
+        padding: 18px;
+    }
 </style>
 
-<div class="d-flex justify-content-between align-items-center mb-4 px-2">
-    <h4 class="fw-bold mb-0" style="color: #d47a53;"><i class="fa-solid fa-paw me-2"></i>Cài Đặt Trung Tâm</h4>
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 px-2 gap-2">
+    <div>
+        <h4 class="fw-bold mb-1" style="color: #d47a53;">
+            <i class="fa-solid fa-paw me-2"></i>Cài Đặt Trung Tâm & Bảo Mật
+        </h4>
+        <p class="small mb-0 fw-semibold" style="color: #8c7b70;">
+            Quản lý tính năng, bảo mật mã PIN, tự động thu hồi bộ nhớ đệm Temp theo phiên và cập nhật thành viên
+        </p>
+    </div>
+    <span class="badge badge-status-normal px-3 py-2 rounded-pill shadow-sm">
+        <i class="fa-solid fa-shield-halved me-1"></i> Đã xác thực Quản trị viên
+    </span>
 </div>
 
 <div class="row justify-content-center">
-    <div class="col-12 col-lg-9 mx-auto"> 
+    <div class="col-12 col-xl-10 mx-auto"> 
         
-        <!-- CARD 1: Cấu hình tính năng -->
+        <!-- CARD 1: QUẢN LÝ BỘ NHỚ ĐỆM TEMP THEO NGUỒN & PHIÊN -->
+        <div class="card custom-card mb-4 overflow-hidden">
+            <div class="viewport-header">
+                <h6 class="fw-bold mb-0" style="color: #d47a53;">
+                    <i class="fa-solid fa-broom me-2"></i>Quản Lý Bộ Nhớ Đệm (Temp Files Theo Nguồn & Phiên)
+                </h6>
+                <span class="badge bg-white text-secondary rounded-pill px-3 py-1" style="font-size: 0.75rem;">
+                    <i class="fa-solid fa-bolt text-warning me-1"></i>Tự động xóa khi người dùng thoát Web
+                </span>
+            </div>
+            <div class="p-3 p-md-4">
+                <div class="p-3 rounded-4 mb-3 d-flex flex-wrap justify-content-between align-items-center gap-2" style="background: #fff5f5; border: 1px dashed #ffb7b2;">
+                    <div class="small fw-semibold" style="color: #5a4a42;">
+                        <i class="fa-solid fa-circle-info me-1" style="color: #d47a53;"></i>
+                        Quy chuẩn lưu trữ tự động: <code>&lt;nguồn_tắt&gt;_&lt;tên_phiên&gt;_&lt;số_phiên&gt;</code>
+                        (VD: <code>rtsp_client_a1b2_1.webm</code>, <code>realtime_client_a1b2_2.webm</code>, <code>video_client_a1b2_1.mp4</code>).
+                        Ngay khi người dùng đóng tab hoặc ngắt kết nối, hệ thống sẽ tự động quét và xóa sạch tệp của phiên đó.
+                    </div>
+                </div>
+
+                <div class="row g-2 mb-3 text-center">
+                    <div class="col-6 col-md-2">
+                        <div class="temp-stat-box" style="background: #fff0f0; border-color: #ffb7b2;">
+                            <div class="small fw-bold" style="color: #8c7b70; font-size: 0.7rem;">TỔNG DUNG LƯỢNG</div>
+                            <div class="fw-bold fs-5 my-1" style="color: #d47a53;"><span id="tempTotalFiles">0</span> tệp</div>
+                            <span class="badge bg-white text-dark border rounded-pill" style="font-size: 0.7rem;"><span id="tempTotalMb">0</span> MB</span>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <div class="temp-stat-box">
+                            <div class="small fw-bold" style="color: #8c7b70; font-size: 0.7rem;">RTSP (<code>rtsp_</code>)</div>
+                            <div class="fw-bold fs-5 my-1" style="color: #5a4a42;" id="tempRtspCount">0</div>
+                            <small class="text-muted" style="font-size: 0.7rem;">clip cảnh báo</small>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <div class="temp-stat-box">
+                            <div class="small fw-bold" style="color: #8c7b70; font-size: 0.7rem;">REALTIME (<code>realtime_</code>)</div>
+                            <div class="fw-bold fs-5 my-1" style="color: #5a4a42;" id="tempRealtimeCount">0</div>
+                            <small class="text-muted" style="font-size: 0.7rem;">clip webcam</small>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <div class="temp-stat-box">
+                            <div class="small fw-bold" style="color: #8c7b70; font-size: 0.7rem;">VIDEO (<code>video_</code>)</div>
+                            <div class="fw-bold fs-5 my-1" style="color: #5a4a42;" id="tempVideoCount">0</div>
+                            <small class="text-muted" style="font-size: 0.7rem;">video tải lên</small>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <div class="temp-stat-box">
+                            <div class="small fw-bold" style="color: #8c7b70; font-size: 0.7rem;">ẢNH AI (<code>img_</code>)</div>
+                            <div class="fw-bold fs-5 my-1" style="color: #5a4a42;" id="tempImgCount">0</div>
+                            <small class="text-muted" style="font-size: 0.7rem;">ảnh kết quả</small>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <div class="temp-stat-box">
+                            <div class="small fw-bold" style="color: #8c7b70; font-size: 0.7rem;">CHATBOT / KHÁC</div>
+                            <div class="fw-bold fs-5 my-1" style="color: #5a4a42;" id="tempOtherCount">0</div>
+                            <small class="text-muted" style="font-size: 0.7rem;">tệp đính kèm</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Danh sách các file temp đang tồn tại -->
+                <div class="mb-3">
+                    <div class="small fw-bold mb-1" style="color: #8c7b70;">
+                        <i class="fa-regular fa-folder-open me-1" style="color: #d47a53;"></i>Tệp tạm đang lưu trong <code>static/temp/</code>:
+                    </div>
+                    <div id="recentTempFilesBox" class="p-2 rounded-4 d-flex flex-wrap gap-2 align-items-center" style="background: #fffafa; border: 1px dashed #f0d8c0; min-height: 44px;">
+                        <span class="small text-muted ps-2">Thư mục temp đang trống sạch sẽ~</span>
+                    </div>
+                </div>
+
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 pt-1">
+                    <span id="tempClearStatusMsg" class="small fw-bold" style="color: #16a34a;"></span>
+                    <div class="d-flex flex-wrap gap-2 ms-auto">
+                        <button type="button" class="btn btn-light border btn-cute px-3 py-2" onclick="loadTempStats()">
+                            <i class="fa-solid fa-rotate me-1" style="color: #d47a53;"></i>Làm mới
+                        </button>
+                        <button type="button" id="btnClearAllTemp" class="btn btn-danger btn-cute px-4 py-2 shadow-sm" onclick="clearAllTempFiles()">
+                            <i class="fa-solid fa-trash-can me-2"></i>Xóa Toàn Bộ Temp Cũ
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CARD 2: BẢO MẬT HỆ THỐNG (QUẢN LÝ MÃ PIN TRUNG TÂM) -->
+        <div class="card custom-card mb-4 overflow-hidden">
+            <div class="viewport-header">
+                <h6 class="fw-bold mb-0" style="color: #d47a53;">
+                    <i class="fa-solid fa-shield-halved me-2"></i>Bảo Mật Hệ Thống & Mã PIN Quản Trị
+                </h6>
+                <span class="badge badge-status-positive rounded-pill px-3 py-1" style="font-size: 0.74rem;">
+                    Đồng bộ MySQL
+                </span>
+            </div>
+            <div class="p-3 p-md-4">
+                <div class="security-card-box">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-12 col-md-4">
+                            <label class="form-label small fw-bold mb-1" style="color: #8c7b70;">
+                                <i class="fa-solid fa-lock me-1" style="color: #d47a53;"></i>Mã PIN hiện tại
+                            </label>
+                            <input type="password" id="currentSystemPin" class="form-control" style="border-radius: 12px; letter-spacing: 3px; font-weight: 700;" placeholder="••••••" maxlength="10">
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label class="form-label small fw-bold mb-1" style="color: #8c7b70;">
+                                <i class="fa-solid fa-key me-1" style="color: #d47a53;"></i>Mã PIN mới (6 chữ số)
+                            </label>
+                            <input type="password" inputmode="numeric" id="newSystemPin" class="form-control" style="border-radius: 12px; letter-spacing: 3px; font-weight: 700;" placeholder="Nhập 6 số mới" maxlength="6">
+                        </div>
+                        <div class="col-12 col-md-4 d-grid">
+                            <button type="button" class="btn btn-primary-cute btn-cute py-2 shadow-sm" onclick="changeSystemPin()">
+                                <i class="fa-solid fa-floppy-disk me-2"></i>Cập Nhật Mã PIN
+                            </button>
+                        </div>
+                    </div>
+                    <div id="pinChangeStatus" class="small fw-bold mt-2" style="display: none;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CARD 3: Cấu hình tính năng -->
         <div class="card custom-card mb-4 overflow-hidden">
             <div class="viewport-header">
                 <h6 class="fw-bold mb-0" style="color: #d47a53;">
@@ -64,64 +218,7 @@
             </div>
         </div>
 
-        <!-- CARD 2: QUẢN LÝ BỘ NHỚ ĐỆM (TEMP FILES THEO NGUỒN & PHIÊN) -->
-        <div class="card custom-card mb-4 overflow-hidden">
-            <div class="viewport-header">
-                <h6 class="fw-bold mb-0" style="color: #d47a53;">
-                    <i class="fa-solid fa-broom me-2"></i>Quản Lý Bộ Nhớ Đệm (Temp Files)
-                </h6>
-                <span class="badge bg-white text-secondary rounded-pill px-3 py-1" style="font-size: 0.75rem;">
-                    Tự động xóa khi thoát web
-                </span>
-            </div>
-            <div class="p-3 p-md-4">
-                <p class="small fw-semibold mb-3" style="color: #8c7b70;">
-                    Các tệp tạm được định danh theo chuẩn <code>&lt;nguồn&gt;_&lt;tên_phiên&gt;_&lt;số_phiên&gt;</code> (VD: <code>rtsp_client_abc_1.webm</code>, <code>realtime_client_abc_2.webm</code>) và tự động giải phóng ngay khi người dùng đóng trình duyệt. Bạn cũng có thể dọn toàn bộ tệp tạm cũ thủ công tại đây:
-                </p>
-
-                <div class="row g-2 mb-3 text-center">
-                    <div class="col-6 col-md-3">
-                        <div class="p-2 rounded-4" style="background: #fff5f5; border: 1px dashed #ffb7b2;">
-                            <div class="small fw-bold" style="color: #8c7b70; font-size: 0.72rem;">Tổng Tệp Temp</div>
-                            <div class="fw-bold fs-5" style="color: #d47a53;"><span id="tempTotalFiles">0</span> tệp</div>
-                            <small class="text-muted" style="font-size: 0.72rem;"><span id="tempTotalMb">0</span> MB</small>
-                        </div>
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <div class="p-2 rounded-4" style="background: #fffafa; border: 1px dashed #f0d8c0;">
-                            <div class="small fw-bold" style="color: #8c7b70; font-size: 0.72rem;">Luồng RTSP (<code>rtsp_</code>)</div>
-                            <div class="fw-bold fs-5" style="color: #5a4a42;" id="tempRtspCount">0</div>
-                            <small class="text-muted" style="font-size: 0.72rem;">clip tạm</small>
-                        </div>
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <div class="p-2 rounded-4" style="background: #fffafa; border: 1px dashed #f0d8c0;">
-                            <div class="small fw-bold" style="color: #8c7b70; font-size: 0.72rem;">Realtime (<code>realtime_</code>)</div>
-                            <div class="fw-bold fs-5" style="color: #5a4a42;" id="tempRealtimeCount">0</div>
-                            <small class="text-muted" style="font-size: 0.72rem;">clip tạm</small>
-                        </div>
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <div class="p-2 rounded-4" style="background: #fffafa; border: 1px dashed #f0d8c0;">
-                            <div class="small fw-bold" style="color: #8c7b70; font-size: 0.72rem;">Video / Khác (<code>video_</code>)</div>
-                            <div class="fw-bold fs-5" style="color: #5a4a42;" id="tempVideoCount">0</div>
-                            <small class="text-muted" style="font-size: 0.72rem;">tệp tạm</small>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="d-flex flex-wrap justify-content-end gap-2">
-                    <button type="button" class="btn btn-light border btn-cute px-3 py-2" onclick="loadTempStats()">
-                        <i class="fa-solid fa-rotate me-1" style="color: #d47a53;"></i>Làm mới
-                    </button>
-                    <button type="button" id="btnClearAllTemp" class="btn btn-outline-danger btn-cute px-4 py-2 shadow-sm" onclick="clearAllTempFiles()">
-                        <i class="fa-solid fa-trash-can me-2"></i>Xóa Toàn Bộ Temp Cũ
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- CARD 3: Chỉnh sửa ảnh thành viên -->
+        <!-- CARD 4: Chỉnh sửa ảnh thành viên -->
         <div class="card custom-card overflow-hidden">
             <div class="viewport-header">
                 <h6 class="fw-bold mb-0" style="color: #d47a53;">
@@ -168,7 +265,22 @@
                 const src = data.by_source || {};
                 document.getElementById('tempRtspCount').innerText = src.rtsp || 0;
                 document.getElementById('tempRealtimeCount').innerText = src.realtime || 0;
-                document.getElementById('tempVideoCount').innerText = (src.video || 0) + (src.other || 0);
+                document.getElementById('tempVideoCount').innerText = src.video || 0;
+                document.getElementById('tempImgCount').innerText = src.img || 0;
+                document.getElementById('tempOtherCount').innerText = (src.chat || 0) + (src.other || 0);
+
+                const listBox = document.getElementById('recentTempFilesBox');
+                const files = data.recent_files || [];
+                if (files.length === 0) {
+                    listBox.innerHTML = '<span class="small text-muted ps-2"><i class="fa-solid fa-check-circle text-success me-1"></i>Thư mục temp đang trống sạch sẽ~</span>';
+                } else {
+                    listBox.innerHTML = files.map(f => `
+                        <span class="badge bg-white text-dark border px-2 py-1 rounded-pill" style="font-family: monospace; font-size: 0.74rem;">
+                            <i class="fa-regular fa-file-video me-1" style="color:#d47a53;"></i>${f.name}
+                            <small class="text-muted ms-1">(${f.size_kb} KB)</small>
+                        </span>
+                    `).join('');
+                }
             })
             .catch(() => {});
     }
@@ -176,13 +288,15 @@
     function clearAllTempFiles() {
         if (!confirm('Bạn có chắc chắn muốn xóa toàn bộ các file Temp cũ trên máy chủ không?')) return;
         const btn = document.getElementById('btnClearAllTemp');
+        const msg = document.getElementById('tempClearStatusMsg');
         btn.disabled = true;
         fetch('/api/temp/clear_all', { method: 'POST' })
             .then(res => res.json())
             .then(data => {
                 btn.disabled = false;
                 if (data.success) {
-                    alert(`Đã dọn sạch ${data.deleted_files} tệp tạm (Giải phóng ${data.freed_mb} MB)!`);
+                    msg.style.color = '#16a34a';
+                    msg.innerHTML = `<i class="fa-solid fa-circle-check me-1"></i>Đã xóa sạch ${data.deleted_files} tệp tạm (Giải phóng ${data.freed_mb} MB)!`;
                     loadTempStats();
                 } else {
                     alert('Lỗi: ' + (data.message || 'Không thể xóa tệp tạm'));
@@ -194,7 +308,44 @@
             });
     }
 
+    function changeSystemPin() {
+        const currentPin = document.getElementById('currentSystemPin').value.trim();
+        const newPin = document.getElementById('newSystemPin').value.trim();
+        const statusEl = document.getElementById('pinChangeStatus');
+        statusEl.style.display = 'block';
+
+        if (!currentPin || !newPin) {
+            statusEl.className = 'small fw-bold mt-2 text-danger';
+            statusEl.innerHTML = '<i class="fa-solid fa-circle-exclamation me-1"></i>Vui lòng nhập đầy đủ mã PIN hiện tại và mã PIN mới!';
+            return;
+        }
+        if (!/^\d{6}$/.test(newPin)) {
+            statusEl.className = 'small fw-bold mt-2 text-danger';
+            statusEl.innerHTML = '<i class="fa-solid fa-circle-exclamation me-1"></i>Mã PIN mới phải gồm đúng 6 chữ số!';
+            return;
+        }
+
+        fetch('/api/settings/change_pin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ current_pin: currentPin, new_pin: newPin })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                statusEl.className = 'small fw-bold mt-2 text-success';
+                statusEl.innerHTML = `<i class="fa-solid fa-circle-check me-1"></i>${data.message}`;
+                document.getElementById('currentSystemPin').value = '';
+                document.getElementById('newSystemPin').value = '';
+            } else {
+                statusEl.className = 'small fw-bold mt-2 text-danger';
+                statusEl.innerHTML = `<i class="fa-solid fa-circle-exclamation me-1"></i>${data.message}`;
+            }
+        });
+    }
+
     loadTempStats();
+    setInterval(loadTempStats, 5000);
 
     fetch('/api/config')
         .then(res => res.json())

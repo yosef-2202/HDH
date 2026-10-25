@@ -2,7 +2,6 @@ import base64
 import json
 import os
 import re
-import tempfile
 import time
 import uuid
 from urllib.parse import quote
@@ -11,6 +10,7 @@ import cv2
 import numpy as np
 import requests
 from flask import Blueprint, current_app, jsonify, request, session
+from models.session_limiter import build_temp_filename
 
 chatbot_bp = Blueprint('chatbot_bp', __name__)
 
@@ -347,12 +347,12 @@ def resize_and_encode_frame(frame):
     return 'data:image/jpeg;base64,' + base64.b64encode(encoded.tobytes()).decode('ascii')
 
 
-def extract_video_frames(upload, suffix):
+def extract_video_frames(upload, suffix, client_id='guest'):
+    """Lưu video tạm vào static/temp theo chuẩn chat_<tên_phiên>_<số_phiên>.<ext> rồi xóa tự động."""
     temp_path = None
     try:
-        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as temp_file:
-            temp_path = temp_file.name
-            upload.save(temp_path)
+        _, temp_path = build_temp_filename('chat', client_id, suffix)
+        upload.save(temp_path)
         capture = cv2.VideoCapture(temp_path)
         if not capture.isOpened():
             capture.release()
@@ -370,7 +370,10 @@ def extract_video_frames(upload, suffix):
         return images
     finally:
         if temp_path and os.path.exists(temp_path):
-            os.remove(temp_path)
+            try:
+                os.remove(temp_path)
+            except Exception:
+                pass
 
 
 @chatbot_bp.route('/api/chatbot/verify-pin', methods=['POST'])
@@ -475,6 +478,7 @@ def analyze_media():
         upload = request.files.get('media')
         question = str(request.form.get('question', '')).strip()
         token = _get_media_token(str(request.form.get('model_id', '')))
+        client_id = request.headers.get('X-Client-ID') or request.form.get('client_id') or 'guest'
         if not upload or not upload.filename:
             return jsonify({'success': False, 'response': 'Vui lòng chọn một ảnh hoặc video để phân tích.'}), 400
         if not token:
@@ -504,7 +508,7 @@ def analyze_media():
             frame = cv2.imdecode(np.frombuffer(raw_file, dtype=np.uint8), cv2.IMREAD_COLOR)
             data_urls = [resize_and_encode_frame(frame)]
         else:
-            data_urls = extract_video_frames(upload, suffix)
+            data_urls = extract_video_frames(upload, suffix, client_id)
         data_urls = [data_url for data_url in data_urls if data_url]
         if not data_urls:
             return jsonify({'success': False, 'response': 'Không đọc được ảnh/video. Hãy thử một tệp khác.'}), 400

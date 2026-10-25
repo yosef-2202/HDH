@@ -375,7 +375,7 @@ def generate_frames(rtsp_url, client_id):
                 yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
     finally:
         camera.release()
-        get_limiter('rtsp').release(client_id)
+        get_limiter('rtsp').release(client_id, cleanup_temp=True)
         with clients_lock:
             if client_id in clients and clients[client_id]['camera'] == camera:
                 clients[client_id]['camera'] = None
@@ -445,7 +445,7 @@ def delete_temp(clip_id):
 
 @rtsp_bp.route('/api/rtsp/clear_cache', methods=['POST'])
 def clear_cache():
-    client_id = (request.get_json(silent=True) or {}).get('client_id', '')
+    client_id = (request.get_json(silent=True) or {}).get('client_id', '') or request.headers.get('X-Client-ID', '')
     if client_id:
         cleanup_session_temp_files('rtsp', client_id)
     with clients_lock:
@@ -464,8 +464,10 @@ def clear_cache():
 
 @rtsp_bp.route('/api/rtsp/stop', methods=['POST'])
 def stop_rtsp():
-    client_id = (request.get_json(silent=True) or {}).get('client_id', '')
-    get_limiter('rtsp').release(client_id, cleanup_temp=False)
+    data = request.get_json(force=True, silent=True) or {}
+    client_id = data.get('client_id', '') or request.headers.get('X-Client-ID', '')
+    # Tự động xóa toàn bộ file temp rtsp_<client_id>_* khi dừng hoặc thoát trang
+    get_limiter('rtsp').release(client_id, cleanup_temp=True)
     with clients_lock:
         if client_id in clients and clients[client_id]['camera']:
             clients[client_id]['camera'].release()

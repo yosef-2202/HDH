@@ -52,14 +52,6 @@
             text-align: center;
             border-bottom: 2px dashed #f0d8c0;
         }
-        .user-profile img {
-            width: 65px;
-            height: 65px;
-            border-radius: 50%;
-            border: 3px solid #ffb7b2;
-            padding: 2px;
-            margin-bottom: 10px;
-        }
         
         .nav-link {
             color: #8c7b70;
@@ -154,27 +146,183 @@
         .badge-status-warning { background: #ffaaa5 !important; color: #c92a2a !important; }
         .badge-status-danger { background: #ff8b94 !important; color: #800000 !important; }
 
-        /* Ô NHẬP PIN TỐI ƯU CẢ PC & MOBILE */
+        /* =========================================================
+           GIAO DIỆN MODAL "BẢO MẬT HỆ THỐNG" CAO CẤP & CÂN ĐỐI 100%
+           ========================================================= */
+        .sec-modal-dialog {
+            max-width: 415px !important;
+            margin: 1.75rem auto;
+            padding: 0 12px;
+        }
+        .sec-modal-card {
+            border-radius: 28px !important;
+            border: 1px solid rgba(255, 255, 255, 0.85) !important;
+            background: #ffffff !important;
+            box-shadow: 0 25px 65px rgba(90, 74, 66, 0.28), 0 0 0 1px rgba(240, 216, 192, 0.6) !important;
+            overflow: hidden;
+            position: relative;
+        }
+        .sec-top-banner {
+            background: linear-gradient(135deg, #fff3e6 0%, #ffe0d4 100%);
+            padding: 26px 24px 20px;
+            text-align: center;
+            position: relative;
+            border-bottom: 1px solid rgba(240, 216, 192, 0.7);
+        }
+        .sec-btn-close {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.85);
+            border: 1px solid rgba(212, 122, 83, 0.2);
+            color: #8c7b70;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 0.9rem;
+        }
+        .sec-btn-close:hover {
+            background: #ffffff;
+            color: #d47a53;
+            transform: rotate(90deg);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+        }
+        .sec-icon-wrapper {
+            width: 66px;
+            height: 66px;
+            margin: 0 auto 12px;
+            border-radius: 20px;
+            background: linear-gradient(135deg, #ff9a8b 0%, #d47a53 100%);
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.7rem;
+            box-shadow: 0 12px 24px rgba(212, 122, 83, 0.35), inset 0 2px 4px rgba(255, 255, 255, 0.4);
+            position: relative;
+        }
+        .sec-icon-wrapper .sec-verified-dot {
+            position: absolute;
+            bottom: -4px;
+            right: -4px;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #10b981;
+            color: #fff;
+            font-size: 0.7rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 3px solid #fff3e6;
+        }
+        .sec-title {
+            font-size: 1.22rem;
+            font-weight: 700;
+            color: #4a3a32;
+            margin-bottom: 4px;
+            letter-spacing: -0.2px;
+        }
+        .sec-subtitle {
+            font-size: 0.83rem;
+            font-weight: 600;
+            color: #8c7b70;
+            margin-bottom: 0;
+        }
+        .sec-body {
+            padding: 22px 26px 24px;
+            background: #ffffff;
+        }
+        .sec-label-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .sec-pin-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 9px;
+            width: 100%;
+            margin-bottom: 16px;
+        }
         .otp-input {
-            width: 46px;
+            width: 100% !important;
             height: 54px;
             text-align: center;
-            font-size: 22px !important;
+            font-size: 1.35rem !important;
             font-weight: 700;
-            border-radius: 12px;
-            border: 2px dashed #f0d8c0;
-            background: #fffafa;
-            margin: 0 3px;
+            border-radius: 14px;
+            border: 2px solid #ede2d8;
+            background: #fdfaf7;
             color: #d47a53;
-            transition: all 0.2s;
+            transition: all 0.2s ease;
             padding: 0;
-            touch-action: manipulation;
+            margin: 0 !important;
+            outline: none;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
         }
         .otp-input:focus {
-            border-color: #ffb7b2;
-            border-style: solid;
-            outline: none;
-            box-shadow: 0 0 0 4px rgba(255, 183, 178, 0.25);
+            border-color: #ff9a8b;
+            background: #ffffff;
+            color: #c8643b;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(255, 154, 139, 0.25);
+        }
+        .otp-input.filled {
+            border-color: #d47a53;
+            background: #fff6f2;
+        }
+        .sec-submit-btn {
+            width: 100%;
+            border: none;
+            border-radius: 14px;
+            padding: 12px 18px;
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: #ffffff;
+            background: linear-gradient(135deg, #ff9a8b 0%, #d47a53 100%);
+            box-shadow: 0 8px 20px rgba(212, 122, 83, 0.3);
+            transition: all 0.25s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .sec-submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 24px rgba(212, 122, 83, 0.4);
+            filter: brightness(1.03);
+            color: #ffffff;
+        }
+        .sec-submit-btn:disabled {
+            opacity: 0.7;
+            transform: none;
+        }
+        .sec-error-box {
+            display: none;
+            background: #fff1f2;
+            border: 1px solid #fecdd3;
+            color: #e11d48;
+            border-radius: 12px;
+            padding: 9px 12px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            margin-bottom: 14px;
+            text-align: center;
+        }
+        @keyframes secShake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-7px); }
+            40%, 80% { transform: translateX(7px); }
+        }
+        .sec-shake {
+            animation: secShake 0.4s ease;
         }
         
         .mobile-header {
@@ -213,7 +361,6 @@
             background: #fdfbf7;
             box-shadow: 0 10px 30px rgba(210, 200, 190, 0.5);
         }
-        #pin-error { display: none; }
 
         @media (max-width: 991.98px) {
             body {
@@ -263,11 +410,15 @@
             #chatMessages {
                 padding: 12px !important;
             }
+            .sec-body {
+                padding: 18px 18px 20px;
+            }
+            .sec-pin-grid {
+                gap: 6px;
+            }
             .otp-input {
-                width: 42px;
-                height: 50px;
-                font-size: 20px !important;
-                margin: 0 2px;
+                height: 48px;
+                font-size: 1.2rem !important;
             }
             input, select, textarea, .form-control {
                 font-size: 16px !important;
@@ -282,7 +433,7 @@
         <div class="fw-bold fs-6 text-truncate" style="color: #d47a53;"><i class="fa-solid fa-paw me-2"></i> AI PLATFORM</div>
         <div class="d-flex gap-2 flex-shrink-0">
             <button class="btn btn-sm btn-cute px-2 py-1" style="background: #fff; color: #d47a53;" type="button" onclick="openSystemPinModal()" title="Cài đặt hệ thống">
-                <i class="fa-solid fa-sliders fs-6"></i>
+                <i class="fa-solid fa-shield-halved fs-6"></i>
             </button>
             <button class="btn btn-sm btn-cute px-2 py-1" style="background: #ffb7b2; color: #fff;" type="button" data-bs-toggle="offcanvas" data-bs-target="#sidebar" aria-label="Mở menu điều hướng">
                 <i class="fa-solid fa-bars fs-6"></i>
@@ -322,7 +473,7 @@
                 <div class="nav-section-title">Hệ thống</div>
                 <ul class="nav flex-column pb-4">
                     <li class="nav-item">
-                        <a class="nav-link" style="color: #d47a53;" href="#" onclick="openSystemPinModal(event)"><i class="fa-solid fa-sliders"></i> Cài đặt hệ thống</a>
+                        <a class="nav-link" id="nav-settings" style="color: #d47a53;" href="#" onclick="openSystemPinModal(event)"><i class="fa-solid fa-sliders"></i> Cài đặt hệ thống</a>
                     </li>
                 </ul>
             </div>
@@ -334,29 +485,59 @@
         </main>
     </div>
 
-    <!-- MODAL OTP CHUNG CHO SETTINGS -->
+    <!-- =========================================================
+         MODAL "BẢO MẬT HỆ THỐNG" ĐÃ THIẾT KẾ LẠI CÂN ĐỐI & SANG TRỌNG
+         ========================================================= -->
     <div class="modal fade" id="pinModal" tabindex="-1" aria-hidden="true">
-      <div class="modal-dialog modal-dialog-centered modal-sm">
-        <div class="modal-content pin-modal-content overflow-hidden">
-          <div class="modal-header border-0" style="background: #ffecd2; border-bottom: 2px dashed #f0d8c0 !important;">
-            <h6 class="modal-title fw-bold mb-0" style="color: #d47a53;"><i class="fa-solid fa-bone me-2"></i>Bảo mật hệ thống</h6>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-          </div>
-          <div class="modal-body text-center p-4">
-            <p class="small fw-bold mb-3" style="color: #8c7b70;">Nhập mã PIN quản trị (6 chữ số)</p>
-            <div class="d-flex justify-content-center mb-3" id="otp-container">
-              <input type="tel" inputmode="numeric" pattern="[0-9]*" class="otp-input" maxlength="1" autocomplete="one-time-code">
-              <input type="tel" inputmode="numeric" pattern="[0-9]*" class="otp-input" maxlength="1">
-              <input type="tel" inputmode="numeric" pattern="[0-9]*" class="otp-input" maxlength="1">
-              <input type="tel" inputmode="numeric" pattern="[0-9]*" class="otp-input" maxlength="1">
-              <input type="tel" inputmode="numeric" pattern="[0-9]*" class="otp-input" maxlength="1">
-              <input type="tel" inputmode="numeric" pattern="[0-9]*" class="otp-input" maxlength="1">
+      <div class="modal-dialog modal-dialog-centered sec-modal-dialog">
+        <div class="modal-content sec-modal-card" id="securityModalCard">
+          
+          <div class="sec-top-banner">
+            <button type="button" class="sec-btn-close" data-bs-dismiss="modal" aria-label="Đóng">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+            <div class="sec-icon-wrapper">
+              <i class="fa-solid fa-shield-halved"></i>
+              <span class="sec-verified-dot"><i class="fa-solid fa-lock"></i></span>
             </div>
-            <div id="pin-error" class="text-danger small fw-bold mt-2 mb-2"><i class="fa-solid fa-circle-exclamation me-1"></i> Mã PIN không chính xác!</div>
-            <button type="button" class="btn btn-primary-cute btn-cute w-100 py-2 mt-2" onclick="submitOtpPin()">
-              <i class="fa-solid fa-unlock-keyhole me-1"></i> Xác Nhận
+            <div class="sec-title">Bảo Mật Hệ Thống</div>
+            <p class="sec-subtitle">Xác thực quyền Quản trị viên để mở khóa Cài đặt</p>
+          </div>
+
+          <div class="sec-body">
+            <div class="sec-label-row">
+              <span class="small fw-bold" style="color: #7a6a60; font-size: 0.78rem;">
+                <i class="fa-solid fa-key me-1" style="color: #d47a53;"></i>Nhập mã PIN (6 chữ số)
+              </span>
+              <div class="d-flex align-items-center gap-3">
+                <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none fw-bold" style="color: #9c8c82; font-size: 0.75rem;" onclick="clearOtpInputs()">
+                  Xóa
+                </button>
+                <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none fw-bold" style="color: #d47a53; font-size: 0.75rem;" onclick="togglePinMask()">
+                  <i class="fa-regular fa-eye me-1" id="togglePinEyeIcon"></i><span id="togglePinEyeText">Hiện số</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="sec-pin-grid" id="otp-container">
+              <input type="password" inputmode="numeric" pattern="[0-9]*" class="otp-input" maxlength="1" autocomplete="one-time-code">
+              <input type="password" inputmode="numeric" pattern="[0-9]*" class="otp-input" maxlength="1">
+              <input type="password" inputmode="numeric" pattern="[0-9]*" class="otp-input" maxlength="1">
+              <input type="password" inputmode="numeric" pattern="[0-9]*" class="otp-input" maxlength="1">
+              <input type="password" inputmode="numeric" pattern="[0-9]*" class="otp-input" maxlength="1">
+              <input type="password" inputmode="numeric" pattern="[0-9]*" class="otp-input" maxlength="1">
+            </div>
+
+            <div id="pin-error" class="sec-error-box">
+              <i class="fa-solid fa-circle-exclamation me-1"></i> Mã PIN không chính xác, vui lòng kiểm tra lại!
+            </div>
+
+            <button type="button" class="sec-submit-btn" id="btnVerifySystemPin" onclick="submitOtpPin()">
+              <i class="fa-solid fa-unlock-keyhole"></i>
+              <span>Xác Nhận & Mở Khóa</span>
             </button>
           </div>
+
         </div>
       </div>
     </div>
@@ -401,6 +582,7 @@
         let queuePollTimer = null;
         let currentWaitingModule = null;
         let pendingRetryCallback = null;
+        let isPinVisible = false;
 
         function detectCurrentModule() {
             const p = window.location.pathname;
@@ -489,15 +671,17 @@
             return response;
         };
 
-        window.addEventListener('beforeunload', function() {
+        // Tự động xóa toàn bộ file temp của phiên (<nguồn>_<phiên>_*) khi người dùng đóng tab / thoát web
+        function sendSessionExitBeacon() {
             const mod = detectCurrentModule();
-            if (mod) {
-                navigator.sendBeacon('/api/module_queue/release', JSON.stringify({
-                    module: mod,
-                    client_id: GLOBAL_CLIENT_ID
-                }));
-            }
-        });
+            const payload = JSON.stringify({
+                module: mod || '',
+                client_id: GLOBAL_CLIENT_ID
+            });
+            navigator.sendBeacon('/api/session/exit', payload);
+        }
+        window.addEventListener('pagehide', sendSessionExitBeacon);
+        window.addEventListener('beforeunload', sendSessionExitBeacon);
 
         document.addEventListener("DOMContentLoaded", function() {
             let path = window.location.pathname;
@@ -507,6 +691,7 @@
             else if (path.includes('/chatbot')) document.getElementById('nav-chatbot')?.classList.add('active');
             else if (path.includes('/image')) document.getElementById('nav-image')?.classList.add('active');
             else if (path.includes('/realtime')) document.getElementById('nav-realtime')?.classList.add('active');
+            else if (path.includes('/settings')) document.getElementById('nav-settings')?.classList.add('active');
 
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get('require_pin') === '1') {
@@ -532,6 +717,9 @@
 
         function openSystemPinModal(e) {
             if (e) e.preventDefault();
+            if (window.location.pathname.includes('/settings')) {
+                return;
+            }
             const sidebarEl = document.getElementById('sidebar');
             const offcanvasInstance = bootstrap.Offcanvas.getInstance(sidebarEl);
             if (offcanvasInstance) {
@@ -545,6 +733,25 @@
         }
 
         const inputs = document.querySelectorAll('.otp-input');
+
+        function togglePinMask() {
+            isPinVisible = !isPinVisible;
+            inputs.forEach(inp => {
+                inp.type = isPinVisible ? 'text' : 'password';
+            });
+            document.getElementById('togglePinEyeIcon').className = isPinVisible ? 'fa-regular fa-eye-slash me-1' : 'fa-regular fa-eye me-1';
+            document.getElementById('togglePinEyeText').innerText = isPinVisible ? 'Ẩn số' : 'Hiện số';
+        }
+
+        function clearOtpInputs() {
+            document.getElementById('pin-error').style.display = 'none';
+            inputs.forEach(i => {
+                i.value = '';
+                i.classList.remove('filled');
+            });
+            if (inputs[0]) inputs[0].focus();
+        }
+
         inputs.forEach((input, index) => {
             input.addEventListener('input', function(e) {
                 document.getElementById('pin-error').style.display = 'none';
@@ -552,12 +759,16 @@
                 if (val.length > 1) {
                     const chars = val.split('');
                     inputs.forEach((inp, idx) => {
-                        if (chars[idx]) inp.value = chars[idx];
+                        if (chars[idx]) {
+                            inp.value = chars[idx];
+                            inp.classList.add('filled');
+                        }
                     });
                     const nextFocus = Math.min(chars.length, inputs.length - 1);
                     inputs[nextFocus].focus();
                 } else {
                     this.value = val;
+                    this.classList.toggle('filled', val !== '');
                     if (val !== '' && index < inputs.length - 1) {
                         inputs[index + 1].focus();
                     }
@@ -572,8 +783,11 @@
                 if (e.key === 'Backspace') {
                     if (this.value === '' && index > 0) {
                         inputs[index - 1].value = '';
+                        inputs[index - 1].classList.remove('filled');
                         inputs[index - 1].focus();
                         e.preventDefault();
+                    } else {
+                        this.classList.remove('filled');
                     }
                 } else if (e.key === 'Enter') {
                     e.preventDefault();
@@ -587,6 +801,7 @@
                 if (!pasteData) return;
                 inputs.forEach((inp, idx) => {
                     inp.value = pasteData[idx] || '';
+                    inp.classList.toggle('filled', !!inp.value);
                 });
                 let pin = Array.from(inputs).map(i => i.value).join('');
                 if (pin.length >= 5) verifyPin(pin);
@@ -599,7 +814,24 @@
             verifyPin(pin);
         }
 
+        function triggerPinErrorShake() {
+            const card = document.getElementById('securityModalCard');
+            document.getElementById('pin-error').style.display = 'block';
+            if (card) {
+                card.classList.remove('sec-shake');
+                void card.offsetWidth;
+                card.classList.add('sec-shake');
+            }
+            inputs.forEach(i => {
+                i.value = '';
+                i.classList.remove('filled');
+            });
+            if (inputs[0]) inputs[0].focus();
+        }
+
         function verifyPin(pinCode) {
+            const btn = document.getElementById('btnVerifySystemPin');
+            if (btn) btn.disabled = true;
             fetch('/verify-pin', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -607,23 +839,22 @@
             })
             .then(res => res.json())
             .then(data => {
+                if (btn) btn.disabled = false;
                 if (data.success) {
                     window.location.href = data.redirect;
                 } else {
-                    document.getElementById('pin-error').style.display = 'block';
-                    inputs.forEach(i => i.value = ''); 
-                    inputs[0].focus();
+                    triggerPinErrorShake();
                 }
             })
             .catch(() => {
-                document.getElementById('pin-error').style.display = 'block';
+                if (btn) btn.disabled = false;
+                triggerPinErrorShake();
             });
         }
 
         document.getElementById('pinModal').addEventListener('shown.bs.modal', () => {
-            document.getElementById('pin-error').style.display = 'none';
-            inputs.forEach(i => i.value = '');
-            setTimeout(() => inputs[0].focus(), 100);
+            clearOtpInputs();
+            setTimeout(() => inputs[0]?.focus(), 120);
         });
     </script>
 </body>
