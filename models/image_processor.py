@@ -12,6 +12,7 @@ import threading
 import numpy as np
 from datetime import datetime
 from flask import Blueprint, request, jsonify, session, current_app
+from models.session_limiter import get_limiter
 
 # ------------------------------------------------------------------------------
 # 1. KHỞI TẠO FLASK BLUEPRINT
@@ -38,7 +39,6 @@ FALLBACK_VISION_MODELS = [
 
 
 def _get_db_setting(key, default=''):
-    """Đọc setting từ MySQL thông qua current_app (Tránh tuyệt đối Circular Import với app.py)"""
     try:
         db = current_app.extensions['sqlalchemy']
         settings_table = db.Model.metadata.tables['system_settings']
@@ -51,7 +51,6 @@ def _get_db_setting(key, default=''):
 
 
 def _update_db_setting(key, value):
-    """Lưu setting vào MySQL thông qua current_app"""
     db = current_app.extensions['sqlalchemy']
     settings_table = db.Model.metadata.tables['system_settings']
     existing_id = db.session.execute(
@@ -67,7 +66,6 @@ def _update_db_setting(key, value):
 
 
 def _get_mysql_image_keys():
-    """Đọc danh sách API Key dành riêng cho Image từ bảng system_settings trên MySQL"""
     try:
         raw = _get_db_setting('image_api_keys', '[]')
         parsed = json.loads(raw)
@@ -79,15 +77,11 @@ def _get_mysql_image_keys():
 
 
 def _load_configured_api_keys():
-    """Tải API Keys ưu tiên từ MySQL (image_api_keys), sau đó kết hợp các nguồn dự phòng"""
     keys = []
-    
-    # 1. Ưu tiên lấy từ MySQL (image_api_keys)
     for k in _get_mysql_image_keys():
         if k not in keys:
             keys.append(k)
 
-    # 2. Lấy thêm từ rtsp_api_list trên MySQL nếu chưa có key riêng
     if not keys:
         try:
             rtsp_raw = _get_db_setting('rtsp_api_list', '[]')
@@ -99,7 +93,6 @@ def _load_configured_api_keys():
         except Exception:
             pass
 
-    # 3. Dự phòng bằng DEFAULT_IMAGE_API_KEYS và biến môi trường
     for k in DEFAULT_IMAGE_API_KEYS:
         if k and k not in keys:
             keys.append(k)
@@ -173,15 +166,13 @@ class ThreadSafeKeyManager:
                 ]
             }
 
-# Khởi tạo an toàn không gọi DB ở cấp module để tránh Circular Import
+
 key_manager = ThreadSafeKeyManager(list(DEFAULT_IMAGE_API_KEYS))
 
-
 # ------------------------------------------------------------------------------
-# 3. QUẢN LÝ TÀI NGUYÊN HỆ ĐIỀU HÀNH (SEMAPHORE & CRITICAL SECTION LOCK)
+# 3. QUẢN LÝ TÀI NGUYÊN HỆ ĐIỀU HÀNH (10 LUỒNG ĐỒNG THỜI & HÀNG ĐỢI)
 # ------------------------------------------------------------------------------
-MAX_CONCURRENT_IMAGE_JOBS = 3
-image_concurrency_semaphore = threading.Semaphore(MAX_CONCURRENT_IMAGE_JOBS)
+MAX_CONCURRENT_IMAGE_JOBS = 10
 critical_section_lock = threading.Lock()
 active_workers_count = 0
 active_workers_lock = threading.Lock()
@@ -378,6 +369,7 @@ def analyze_pose_and_draw(image_bgr):
         **pose_metadata
     }
 
+
 # ------------------------------------------------------------------------------
 # 5. GỌI OPENROUTER VISION AI (CLOUD LLM REASONING)
 # ------------------------------------------------------------------------------
@@ -564,6 +556,7 @@ def overlay_hud_banner(image_bgr, status, thread_name, processing_time_ms, model
 
     return output
 
+
 def _encode_image_to_base64(image_bgr):
     ret, buffer = cv2.imencode('.jpg', image_bgr, [int(cv2.IMWRITE_JPEG_QUALITY), 82])
     if not ret:
@@ -575,20 +568,25 @@ def _encode_image_to_base64(image_bgr):
 # ------------------------------------------------------------------------------
 # 7. CÁC API ENDPOINTS TRONG BLUEPRINT image_bp
 # ------------------------------------------------------------------------------
-
 @image_bp.route('/api/upload_image', methods=['POST'])
 def api_upload_image():
     start_time = time.perf_counter()
     current_thread = threading.current_thread()
     thread_name = current_thread.name
+    client_id = request.headers.get('X-Client-ID') or request.form.get('client_id') or f"img_{uuid.uuid4().hex[:8]}"
 
-    acquired = image_concurrency_semaphore.acquire(blocking=True, timeout=15.0)
-    if not acquired:
+    img_limiter = get_limiter('image')
+    allowed, q_info = img_limiter.acquire_blocking_task(client_id, timeout=1.5)
+    if not allowed:
         return jsonify({
             "success": False,
-            "message": "Hệ thống đang quá tải. Vui lòng thử lại sau giây lát!",
-            "os_metrics": { "semaphore_available": 0, "thread_name": thread_name, "status": "SEMAPHORE_TIMEOUT" }
-        }), 503
+            "waiting": True,
+            "queue_position": q_info.get("position", 1),
+            "active_users": q_info.get("active_count", MAX_CONCURRENT_IMAGE_JOBS),
+            "max_users": MAX_CONCURRENT_IMAGE_JOBS,
+            "message": q_info.get("message"),
+            "os_metrics": {"semaphore_available": 0, "thread_name": thread_name, "status": "QUEUE_WAITING"}
+        }), 429
 
     global active_workers_count
     with active_workers_lock:
@@ -673,16 +671,15 @@ def api_upload_image():
 
     except Exception as ex:
         total_time_ms = round((time.perf_counter() - start_time) * 1000.0, 2)
-        return jsonify({ "success": False, "message": f"Lỗi: {str(ex)}", "os_metrics": { "processing_time_ms": total_time_ms, "thread_name": thread_name } }), 500
+        return jsonify({"success": False, "message": f"Lỗi: {str(ex)}", "os_metrics": {"processing_time_ms": total_time_ms, "thread_name": thread_name}}), 500
     finally:
         with active_workers_lock:
             active_workers_count = max(0, active_workers_count - 1)
-        image_concurrency_semaphore.release()
+        img_limiter.release(client_id)
 
 
 @image_bp.route('/api/image/config', methods=['GET', 'POST'])
 def api_image_config():
-    """API thiết lập và lưu trữ OpenRouter API Key trực tiếp vào MySQL"""
     if request.method == 'POST':
         data = request.get_json(silent=True) or {}
         client_pin = str(data.get('pin_code', '')).strip()
@@ -711,12 +708,9 @@ def api_image_config():
         except Exception as e:
             return jsonify({"success": False, "message": f"Lỗi lưu MySQL: {str(e)}"}), 500
             
-        # Áp dụng thay đổi ngay lập tức vào Key Manager
         key_manager.reload_from_db()
-            
         return jsonify({"success": True, "message": "Đã lưu cấu hình API Keys vào MySQL thành công!"})
         
-    # Xử lý Request GET (Đổ dữ liệu từ MySQL ra UI)
     if not (session.get('is_admin') or session.get('realtime_unlocked') or session.get('chatbot_unlocked')):
         return jsonify({"success": False, "message": "Cần xác thực mã PIN"}), 401
 
@@ -725,6 +719,7 @@ def api_image_config():
         "success": True, 
         "api_keys": saved_keys
     })
+
 
 @image_bp.route('/api/image/logs', methods=['GET'])
 def api_image_logs():
@@ -735,7 +730,8 @@ def api_image_logs():
     with active_workers_lock:
         current_workers = active_workers_count
 
-    return jsonify({ "success": True, "history": logs_copy, "system_metrics": { **metrics_copy, "active_workers": current_workers } })
+    return jsonify({"success": True, "history": logs_copy, "system_metrics": {**metrics_copy, "active_workers": current_workers}})
+
 
 @image_bp.route('/api/image/clear-logs', methods=['POST'])
 def api_clear_image_logs():

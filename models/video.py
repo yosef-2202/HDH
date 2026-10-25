@@ -12,7 +12,7 @@ import numpy as np
 import requests
 import psutil
 from flask import (Blueprint, Response, jsonify, request, stream_with_context, current_app, session)
-from sqlalchemy import text
+from models.session_limiter import get_limiter
 
 video_bp = Blueprint('video_bp', __name__)
 
@@ -105,7 +105,7 @@ def _call_openrouter(api_key, contents, model_name="openrouter/free"):
           "person_id": "<ID Person_N>",
           "video_ts": "<Mốc HH:MM:SS>",
           "behavior": "<Hành quan sát vi được>",
-          "detail": "<Mô bối chi cảnh phục, tiết trang tả>",
+          "detail": "<Mô bối chi cảnh, phục tiết trang tả>",
           "status_code": "<normal | warning | danger>"
         }
       ]
@@ -215,9 +215,8 @@ def _clean_behavior_text(text: str) -> str:
     return t.strip(' -—–,:;')
 
 
-def _bg_analyze(session_id: str, video_path: str, orig_name: str):
+def _bg_analyze(session_id: str, video_path: str, orig_name: str, client_id: str = ""):
     q = _get_q(session_id)
-    start_time = time.time()
     try:
         api_key, model_name, _ = get_video_credentials()
         if not api_key:
@@ -226,7 +225,6 @@ def _bg_analyze(session_id: str, video_path: str, orig_name: str):
                 'behavior': 'Chưa có API Key', 'detail': 'Chưa cấu hình OpenRouter API Key!',
                 'status': '🚨 Nguy hiểm', 'status_code': 'danger'
             })
-            q.put_nowait({'type': 'complete', 'progress': 100})
             return
 
         cap = cv2.VideoCapture(video_path)
@@ -236,7 +234,6 @@ def _bg_analyze(session_id: str, video_path: str, orig_name: str):
                 'behavior': 'Lỗi Video', 'detail': 'Không thể mở tệp video.',
                 'status': '🚨 Nguy hiểm', 'status_code': 'danger'
             })
-            q.put_nowait({'type': 'complete', 'progress': 100})
             return
 
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 1
@@ -258,7 +255,8 @@ def _bg_analyze(session_id: str, video_path: str, orig_name: str):
                 frame_idx += 1
                 continue
 
-            # Đo lường tài nguyên thời gian thực
+            get_limiter('video').try_acquire_stream(client_id or session_id)
+
             try:
                 cpu_val = round(psutil.cpu_percent(interval=None) / max(1, psutil.cpu_count()) + 2.1, 1)
                 ram_val = round(current_process.memory_info().rss / (1024 * 1024), 1)
@@ -306,7 +304,6 @@ def _bg_analyze(session_id: str, video_path: str, orig_name: str):
                 'behavior': 'Lỗi Gọi AI', 'detail': str(last_err),
                 'status': '🚨 Nguy hiểm', 'status_code': 'danger'
             })
-            q.put_nowait({'type': 'complete', 'progress': 100})
             return
 
         try:
@@ -340,8 +337,9 @@ def _bg_analyze(session_id: str, video_path: str, orig_name: str):
 
     except Exception as exc:
         q.put_nowait({'type': 'log', 'person_id': 'SYSTEM', 'video_ts': '00:00:00', 'behavior': 'Lỗi', 'detail': str(exc), 'status': 'Nguy hiểm', 'status_code': 'danger'})
-
-    q.put_nowait({'type': 'complete', 'progress': 100})
+    finally:
+        get_limiter('video').release(client_id or session_id)
+        q.put_nowait({'type': 'complete', 'progress': 100})
 
 
 def _sse_gen(session_id: str):
@@ -363,15 +361,28 @@ def serve_video(filename):
 
 @video_bp.route('/api/video/analyze', methods=['POST'])
 def api_video_upload():
+    client_id = request.form.get('client_id') or request.headers.get('X-Client-ID') or f"vid_{uuid.uuid4().hex[:8]}"
+    slot_info = get_limiter('video').try_acquire_stream(client_id)
+    if not slot_info["allowed"]:
+        return jsonify({
+            'success': False,
+            'waiting': True,
+            'queue_position': slot_info['position'],
+            'active_users': slot_info['active_count'],
+            'max_users': slot_info['max_concurrent'],
+            'message': slot_info['message']
+        }), 429
+
     if 'video' not in request.files:
+        get_limiter('video').release(client_id)
         return jsonify({'success': False, 'message': 'Không có file video'}), 400
     f = request.files['video']
     
-    # Kiểm tra kích thước file (> 50MB sẽ từ chối)
     f.stream.seek(0, os.SEEK_END)
     size = f.stream.tell()
     f.stream.seek(0)
     if size > MAX_VIDEO_BYTES:
+        get_limiter('video').release(client_id)
         return jsonify({'success': False, 'message': f'Tệp quá lớn ({round(size/(1024*1024), 1)} MB). Giới hạn tối đa là 50 MB để đảm bảo hiệu suất AI!'}), 413
 
     ext = os.path.splitext(f.filename)[1].lower()
@@ -381,7 +392,7 @@ def api_video_upload():
 
     session_id = str(uuid.uuid4())
     _get_q(session_id)
-    threading.Thread(target=_bg_analyze, args=(session_id, filepath, f.filename), daemon=True).start()
+    threading.Thread(target=_bg_analyze, args=(session_id, filepath, f.filename, client_id), daemon=True).start()
 
     return jsonify({'success': True, 'session_id': session_id, 'video_url': f'/serve_video/{filename}'})
 

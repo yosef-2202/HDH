@@ -11,6 +11,7 @@ import base64
 import requests
 import psutil
 from datetime import datetime
+from models.session_limiter import get_limiter
 
 rtsp_bp = Blueprint('rtsp_bp', __name__)
 current_process = psutil.Process(os.getpid())
@@ -37,7 +38,6 @@ worker_lock = threading.Lock()
 os.makedirs('static/temp', exist_ok=True)
 
 def load_recent_alerts_from_db(limit=20):
-    """Đọc lịch sử cảnh báo RTSP đã lưu trong MySQL."""
     try:
         from app import app, RtspAlert
         with app.app_context():
@@ -61,7 +61,6 @@ def load_recent_alerts_from_db(limit=20):
         return []
 
 def save_alert_to_mysql(client_id, rtsp_url, alert_obj, prediction_text):
-    """Lưu kết quả nhận diện RTSP vào MySQL để lưu trữ lâu dài và cho Chatbot học."""
     try:
         from app import app, db, RtspAlert
         with app.app_context():
@@ -92,8 +91,6 @@ def init_client(client_id, rtsp_url=''):
         if not global_alerts and db_alerts:
             global_alerts = db_alerts.copy()
         if client_id not in clients:
-            if len(clients) >= MAX_CLIENTS:
-                return False
             clients[client_id] = {
                 'logs': [],
                 'alerts': db_alerts,
@@ -192,7 +189,6 @@ def analyze_frame_with_ai(client_id, frame, recent_frames, alert_id):
             push_log(client_id, f"[{timestamp_start}] [{thread_name}] Đang phân tích khung hình...")
             start_time = time.time()
             
-            # --- OpenCV Radar xử lý xê dịch ---
             motion_detected = False
             frame_for_ai = frame.copy()
             if len(recent_frames) >= 15:
@@ -220,7 +216,7 @@ QUY TẮC BẮT BUỘC:
 - NẾU KHÔNG CÓ ĐỐI TƯỢNG (Người, Xe, Động vật): Chỉ trả lời duy nhất 1 chữ "Không".
 - NẾU CÓ ĐỐI TƯỢNG: Phải tuân thủ chính xác định dạng bên dưới, dùng dấu "|" để ngăn cách.
 
-MẪU ĐỊNH DẠNG (Bắt chước y hệt cấu trúc này):
+MẪU ĐỊNG DẠNG (Bắt chước y hệt cấu trúc này):
 PHẦN 1
 Người | Đang đi bộ | Mặc áo xanh, quần đen, đi giữa các kệ hàng
 Xe máy | Đang đậu | Xe máy đỏ ở góc trái
@@ -243,7 +239,6 @@ Dự đoán sự việc: Khách hàng đang mua sắm."""
             text = res_json['choices'][0]['message']['content'].strip()
             process_time = round(time.time() - start_time, 2)
 
-            # --- ĐO ĐẠC TÀI NGUYÊN TIẾN TRÌNH HĐH ---
             try:
                 cpu_val = round(psutil.cpu_percent(interval=None) / max(1, psutil.cpu_count()) + 3.5, 1)
                 ram_val = round(current_process.memory_info().rss / (1024 * 1024), 1)
@@ -317,7 +312,6 @@ Dự đoán sự việc: Khách hàng đang mua sắm."""
                     "temp_video_url": f"/static/temp/{alert_id}.webm" 
                 }
 
-                # 1. Cập nhật vào bộ nhớ RAM và global_alerts
                 with clients_lock:
                     global_alerts.insert(0, alert_obj)
                     if len(global_alerts) > 50:
@@ -327,7 +321,6 @@ Dự đoán sự việc: Khách hàng đang mua sắm."""
                         if len(clients[client_id]['alerts']) > 20:
                             clients[client_id]['alerts'].pop()
 
-                # 2. Lưu ngay vào MySQL để lưu trữ lâu dài và cho Chatbot học
                 save_alert_to_mysql(client_id, rtsp_url, alert_obj, prediction)
             break 
             
@@ -351,6 +344,7 @@ def generate_frames(rtsp_url, client_id):
 
     try:
         while True:
+            get_limiter('rtsp').try_acquire_stream(client_id)
             if not camera.isOpened(): break
             success, frame = camera.read()
             if not success: break
@@ -376,6 +370,7 @@ def generate_frames(rtsp_url, client_id):
                 yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
     finally:
         camera.release()
+        get_limiter('rtsp').release(client_id)
         with clients_lock:
             if client_id in clients and clients[client_id]['camera'] == camera:
                 clients[client_id]['camera'] = None
@@ -389,15 +384,18 @@ def video_feed():
     client_id = request.args.get('client_id', 'guest')
     if not rtsp_url: return "URL trống", 400
     
-    if not init_client(client_id, rtsp_url):
-        return "Máy chủ đang đầy (Tối đa 10 luồng). Vui lòng thử lại sau.", 429
+    slot_info = get_limiter('rtsp').try_acquire_stream(client_id)
+    if not slot_info["allowed"]:
+        return jsonify(slot_info), 429
         
+    init_client(client_id, rtsp_url)
     push_log(client_id, f"[{datetime.now().strftime('%H:%M:%S')}] [SYSTEM] Bắt đầu kết nối Camera...")
     return Response(generate_frames(rtsp_url, client_id), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @rtsp_bp.route('/api/rtsp/data')
 def rtsp_data():
     client_id = request.args.get('client_id', '')
+    q_status = get_limiter('rtsp').get_status(client_id)
     with clients_lock:
         c_data = clients.get(client_id)
         if not c_data:
@@ -411,7 +409,6 @@ def rtsp_data():
             alerts = c_data['alerts'].copy()
             active_api = c_data.get('active_api_info', '--')
             latest_metrics = c_data.get('latest_metrics')
-        active_users = len([c for c in clients.values() if c.get('camera') is not None])
         
     from app import app, get_setting
     with app.app_context():
@@ -426,7 +423,8 @@ def rtsp_data():
     stats = {
         "queue_size": analysis_queue.qsize(),
         "workers": concurrent_jobs,
-        "active_users": f"{active_users}/{MAX_CLIENTS}",
+        "active_users": f"{q_status['active_count']}/{MAX_CLIENTS}",
+        "waiting_users": q_status['waiting_count'],
         "active_keys": valid_keys_count,
         "latest_metrics": latest_metrics
     }
@@ -439,7 +437,7 @@ def delete_temp(clip_id):
 
 @rtsp_bp.route('/api/rtsp/clear_cache', methods=['POST'])
 def clear_cache():
-    client_id = request.json.get('client_id', '')
+    client_id = (request.get_json(silent=True) or {}).get('client_id', '')
     with clients_lock:
         global_alerts.clear()
         if client_id in clients:
@@ -456,7 +454,8 @@ def clear_cache():
 
 @rtsp_bp.route('/api/rtsp/stop', methods=['POST'])
 def stop_rtsp():
-    client_id = request.json.get('client_id', '')
+    client_id = (request.get_json(silent=True) or {}).get('client_id', '')
+    get_limiter('rtsp').release(client_id)
     with clients_lock:
         if client_id in clients and clients[client_id]['camera']:
             clients[client_id]['camera'].release()

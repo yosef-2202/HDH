@@ -2,7 +2,7 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>{% block title %}AI PLATFORM{% endblock %}</title>
     
     <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -10,13 +10,24 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     
     <style>
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
+
+        html, body {
+            width: 100%;
+            max-width: 100vw;
+            overflow-x: hidden;
+            margin: 0;
+            padding: 0;
+        }
+
         body {
             font-family: 'Quicksand', sans-serif;
             background-color: #fdfbf7;
             background-image: radial-gradient(#f0e6d2 2px, transparent 2px);
             background-size: 30px 30px;
             color: #5a4a42;
-            overflow-x: hidden;
         }
         
         /* SIDEBAR CUTE PASTEL */
@@ -82,18 +93,30 @@
             font-weight: 700;
         }
         
+        .app-layout-wrapper {
+            display: flex;
+            width: 100%;
+            max-width: 100vw;
+            overflow-x: hidden;
+        }
+
         #main-content {
+            flex: 1 1 0%;
+            min-width: 0 !important;
+            max-width: 100% !important;
             padding: 25px 35px;
             background: transparent !important;
+            overflow-x: hidden;
         }
         
-        /* GLOBAL SHARED CLASSES TỪ IMAGE.HTML */
+        /* GLOBAL SHARED CLASSES */
         .card, .custom-card, .viewport-container, .os-badge-card, .custom-glass-card {
             border-radius: 20px !important;
             border: none !important;
             background: rgba(255, 255, 255, 0.95);
             box-shadow: 0 8px 24px rgba(210, 200, 190, 0.4) !important;
             transition: transform 0.25s ease;
+            max-width: 100%;
         }
         .custom-card:hover {
             transform: translateY(-4px);
@@ -104,6 +127,8 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
             border-bottom: 2px dashed #f0d8c0;
             color: #d47a53;
             font-weight: 700;
@@ -129,18 +154,21 @@
         .badge-status-warning { background: #ffaaa5 !important; color: #c92a2a !important; }
         .badge-status-danger { background: #ff8b94 !important; color: #800000 !important; }
 
+        /* Ô NHẬP PIN TỐI ƯU CẢ PC & MOBILE */
         .otp-input {
-            width: 50px;
-            height: 60px;
+            width: 46px;
+            height: 54px;
             text-align: center;
-            font-size: 26px;
+            font-size: 22px !important;
             font-weight: 700;
-            border-radius: 14px;
+            border-radius: 12px;
             border: 2px dashed #f0d8c0;
             background: #fffafa;
-            margin: 0 4px;
+            margin: 0 3px;
             color: #d47a53;
             transition: all 0.2s;
+            padding: 0;
+            touch-action: manipulation;
         }
         .otp-input:focus {
             border-color: #ffb7b2;
@@ -152,6 +180,10 @@
         .mobile-header {
             background: #ffecd2;
             border-bottom: 2px dashed #f0d8c0;
+            position: sticky;
+            top: 0;
+            z-index: 1030;
+            width: 100%;
         }
         .sidebar-mobile-header {
             border-bottom: 2px dashed #f0d8c0 !important;
@@ -182,26 +214,83 @@
             box-shadow: 0 10px 30px rgba(210, 200, 190, 0.5);
         }
         #pin-error { display: none; }
-        
-        @media (max-width: 768px) { #main-content { padding: 15px 12px; } }
+
+        @media (max-width: 991.98px) {
+            body {
+                overflow-y: auto !important;
+                overflow-x: hidden !important;
+                height: auto !important;
+            }
+            #main-content {
+                padding: 12px 10px !important;
+                height: auto !important;
+                overflow-x: hidden !important;
+                overflow-y: visible !important;
+                width: 100% !important;
+                max-width: 100vw !important;
+            }
+            .realtime-wrapper, .video-page-container, .image-page-container, .container-fluid {
+                height: auto !important;
+                overflow-x: hidden !important;
+                width: 100% !important;
+                max-width: 100% !important;
+                padding-left: 0 !important;
+                padding-right: 0 !important;
+            }
+            .row {
+                margin-left: -6px !important;
+                margin-right: -6px !important;
+            }
+            .row > * {
+                padding-left: 6px !important;
+                padding-right: 6px !important;
+                min-width: 0;
+            }
+            .realtime-header, .video-page-container > .d-flex, .image-page-container > .d-flex {
+                flex-wrap: wrap !important;
+                gap: 8px !important;
+                padding: 10px 12px !important;
+            }
+            .header-main-title, h4.fw-bold {
+                font-size: 1.05rem !important;
+                line-height: 1.35;
+            }
+            .video-viewport, .viewport-body {
+                min-height: 220px !important;
+                height: 260px !important;
+                max-height: 45vh !important;
+            }
+            #chatMessages {
+                padding: 12px !important;
+            }
+            .otp-input {
+                width: 42px;
+                height: 50px;
+                font-size: 20px !important;
+                margin: 0 2px;
+            }
+            input, select, textarea, .form-control {
+                font-size: 16px !important;
+            }
+        }
     </style>
 </head>
 <body>
 
     <!-- Header Mobile -->
-    <div class="d-md-none d-flex justify-content-between align-items-center p-3 shadow-sm mobile-header">
-        <div class="fw-bold fs-5" style="color: #d47a53;"><i class="fa-solid fa-paw me-2"></i> AI PLATFORM</div>
-        <div class="d-flex gap-2">
-            <button class="btn btn-sm btn-cute px-2 py-1" style="background: #fff; color: #d47a53;" type="button" data-bs-toggle="modal" data-bs-target="#pinModal" title="Cài đặt hệ thống">
-                <i class="fa-solid fa-sliders fs-5"></i>
+    <div class="d-md-none d-flex justify-content-between align-items-center px-3 py-2 shadow-sm mobile-header">
+        <div class="fw-bold fs-6 text-truncate" style="color: #d47a53;"><i class="fa-solid fa-paw me-2"></i> AI PLATFORM</div>
+        <div class="d-flex gap-2 flex-shrink-0">
+            <button class="btn btn-sm btn-cute px-2 py-1" style="background: #fff; color: #d47a53;" type="button" onclick="openSystemPinModal()" title="Cài đặt hệ thống">
+                <i class="fa-solid fa-sliders fs-6"></i>
             </button>
             <button class="btn btn-sm btn-cute px-2 py-1" style="background: #ffb7b2; color: #fff;" type="button" data-bs-toggle="offcanvas" data-bs-target="#sidebar" aria-label="Mở menu điều hướng">
-                <i class="fa-solid fa-bars fs-5"></i>
+                <i class="fa-solid fa-bars fs-6"></i>
             </button>
         </div>
     </div>
 
-    <div class="d-flex">
+    <div class="app-layout-wrapper">
         <!-- SIDEBAR -->
         <nav id="sidebar" class="offcanvas-md offcanvas-start col-md-3 col-lg-2 flex-shrink-0" tabindex="-1">
             <div class="offcanvas-header d-md-none sidebar-mobile-header">
@@ -233,37 +322,72 @@
                 <div class="nav-section-title">Hệ thống</div>
                 <ul class="nav flex-column pb-4">
                     <li class="nav-item">
-                        <a class="nav-link" style="color: #d47a53;" href="#" data-bs-toggle="modal" data-bs-target="#pinModal" data-bs-dismiss="offcanvas"><i class="fa-solid fa-sliders"></i> Cài đặt hệ thống</a>
+                        <a class="nav-link" style="color: #d47a53;" href="#" onclick="openSystemPinModal(event)"><i class="fa-solid fa-sliders"></i> Cài đặt hệ thống</a>
                     </li>
                 </ul>
             </div>
         </nav>
 
         <!-- MAIN CONTENT -->
-        <main id="main-content" class="flex-grow-1">
+        <main id="main-content">
             {% block content %}{% endblock %}
         </main>
     </div>
 
     <!-- MODAL OTP CHUNG CHO SETTINGS -->
     <div class="modal fade" id="pinModal" tabindex="-1" aria-hidden="true">
-      <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-dialog modal-dialog-centered modal-sm">
         <div class="modal-content pin-modal-content overflow-hidden">
           <div class="modal-header border-0" style="background: #ffecd2; border-bottom: 2px dashed #f0d8c0 !important;">
-            <h5 class="modal-title fw-bold" style="color: #d47a53;"><i class="fa-solid fa-bone me-2"></i>Bảo mật hệ thống</h5>
+            <h6 class="modal-title fw-bold mb-0" style="color: #d47a53;"><i class="fa-solid fa-bone me-2"></i>Bảo mật hệ thống</h6>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
-          <div class="modal-body text-center pt-4 pb-4">
-            <p class="small fw-bold mb-4" style="color: #8c7b70;">Vui lòng nhập mã PIN quản trị (6 chữ số)</p>
-            <div class="d-flex justify-content-center mb-3">
-              <input type="text" class="otp-input" maxlength="1" autofocus>
-              <input type="text" class="otp-input" maxlength="1">
-              <input type="text" class="otp-input" maxlength="1">
-              <input type="text" class="otp-input" maxlength="1">
-              <input type="text" class="otp-input" maxlength="1">
-              <input type="text" class="otp-input" maxlength="1">
+          <div class="modal-body text-center p-4">
+            <p class="small fw-bold mb-3" style="color: #8c7b70;">Nhập mã PIN quản trị (6 chữ số)</p>
+            <div class="d-flex justify-content-center mb-3" id="otp-container">
+              <input type="tel" inputmode="numeric" pattern="[0-9]*" class="otp-input" maxlength="1" autocomplete="one-time-code">
+              <input type="tel" inputmode="numeric" pattern="[0-9]*" class="otp-input" maxlength="1">
+              <input type="tel" inputmode="numeric" pattern="[0-9]*" class="otp-input" maxlength="1">
+              <input type="tel" inputmode="numeric" pattern="[0-9]*" class="otp-input" maxlength="1">
+              <input type="tel" inputmode="numeric" pattern="[0-9]*" class="otp-input" maxlength="1">
+              <input type="tel" inputmode="numeric" pattern="[0-9]*" class="otp-input" maxlength="1">
             </div>
-            <div id="pin-error" class="text-danger small fw-bold mt-2"><i class="fa-solid fa-circle-exclamation me-1"></i> Mã PIN không chính xác!</div>
+            <div id="pin-error" class="text-danger small fw-bold mt-2 mb-2"><i class="fa-solid fa-circle-exclamation me-1"></i> Mã PIN không chính xác!</div>
+            <button type="button" class="btn btn-primary-cute btn-cute w-100 py-2 mt-2" onclick="submitOtpPin()">
+              <i class="fa-solid fa-unlock-keyhole me-1"></i> Xác Nhận
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL HÀNG ĐỢI PHIÊN (HIỂN THỊ CHO NGƯỜI THỨ 11+) -->
+    <div class="modal fade" id="globalQueueModal" data-bs-backdrop="static" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content pin-modal-content overflow-hidden text-center">
+          <div class="modal-header border-0 justify-content-center" style="background: #ffecd2; border-bottom: 2px dashed #f0d8c0 !important;">
+            <h6 class="modal-title fw-bold mb-0" style="color: #d47a53;">
+              <i class="fa-solid fa-hourglass-half fa-spin me-2"></i>Phòng Chờ Phiên Kế Tiếp
+            </h6>
+          </div>
+          <div class="modal-body p-4">
+            <div class="mb-2">
+              <span class="badge rounded-pill px-3 py-2 fw-bold" style="background: #fce7f3; color: #db2777; font-size: 0.85rem;">
+                Đang phục vụ: <span id="qActiveCount">10</span>/10 người
+              </span>
+            </div>
+            <h5 class="fw-bold my-2" style="color: #d47a53;">
+              Vị trí chờ của bạn: #<span id="qPositionNum">1</span>
+            </h5>
+            <p class="small fw-semibold mb-3" style="color: #8c7b70;" id="qWaitingMessage">
+              Máy chủ đang phục vụ tối đa 10 người cùng lúc cho module này. Hệ thống sẽ tự động đưa bạn vào ngay khi có người hoàn tất!
+            </p>
+            <div class="progress mb-3" style="height: 10px; border-radius: 10px; background: #fff5f5; border: 1px dashed #ffb7b2;">
+              <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 100%; background-color: #ffb7b2;"></div>
+            </div>
+            <button type="button" class="btn btn-outline-danger btn-cute btn-sm w-100 py-2" onclick="cancelQueueWaiting()">
+              <i class="fa-solid fa-xmark me-1"></i> Hủy chờ
+            </button>
           </div>
         </div>
       </div>
@@ -271,6 +395,110 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        const GLOBAL_CLIENT_ID = sessionStorage.getItem('realtime_client_id') || ('client_' + Math.random().toString(36).substring(2, 9));
+        sessionStorage.setItem('realtime_client_id', GLOBAL_CLIENT_ID);
+
+        let queuePollTimer = null;
+        let currentWaitingModule = null;
+        let pendingRetryCallback = null;
+
+        function detectCurrentModule() {
+            const p = window.location.pathname;
+            if (p.includes('/realtime')) return 'realtime';
+            if (p.includes('/rtsp')) return 'rtsp';
+            if (p.includes('/video')) return 'video';
+            if (p.includes('/image')) return 'image';
+            if (p.includes('/chatbot')) return 'chatbot';
+            return null;
+        }
+
+        function showQueueWaitingModal(data, retryCallback) {
+            currentWaitingModule = detectCurrentModule();
+            if (retryCallback) pendingRetryCallback = retryCallback;
+
+            document.getElementById('qActiveCount').innerText = data.active_users || data.active_count || 10;
+            document.getElementById('qPositionNum').innerText = data.queue_position || data.position || 1;
+            if (data.message || data.response) {
+                document.getElementById('qWaitingMessage').innerText = String(data.message || data.response).replace('⏳ ', '');
+            }
+
+            const modalEl = document.getElementById('globalQueueModal');
+            bootstrap.Modal.getOrCreateInstance(modalEl).show();
+
+            if (queuePollTimer) clearInterval(queuePollTimer);
+            queuePollTimer = setInterval(async () => {
+                if (!currentWaitingModule) return;
+                try {
+                    const res = await _originalFetch('/api/module_queue/acquire', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ module: currentWaitingModule, client_id: GLOBAL_CLIENT_ID })
+                    });
+                    const info = await res.json();
+                    if (res.ok && info.allowed) {
+                        clearInterval(queuePollTimer);
+                        queuePollTimer = null;
+                        bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+                        if (typeof pendingRetryCallback === 'function') {
+                            const cb = pendingRetryCallback;
+                            pendingRetryCallback = null;
+                            cb();
+                        }
+                    } else {
+                        document.getElementById('qActiveCount').innerText = info.active_count || 10;
+                        document.getElementById('qPositionNum').innerText = info.position || 1;
+                    }
+                } catch (e) {}
+            }, 2000);
+        }
+
+        function cancelQueueWaiting() {
+            if (queuePollTimer) { clearInterval(queuePollTimer); queuePollTimer = null; }
+            if (currentWaitingModule) {
+                navigator.sendBeacon('/api/module_queue/release', JSON.stringify({
+                    module: currentWaitingModule,
+                    client_id: GLOBAL_CLIENT_ID
+                }));
+            }
+            if (typeof isWebcamRunning !== 'undefined' && isWebcamRunning && typeof toggleMainWebcam === 'function') {
+                toggleMainWebcam();
+            }
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('globalQueueModal')).hide();
+        }
+
+        // Bọc window.fetch để tự động gửi X-Client-ID và bắt trạng thái chờ 429 cho mọi module
+        const _originalFetch = window.fetch;
+        window.fetch = async function(input, init = {}) {
+            init.headers = new Headers(init.headers || {});
+            if (!init.headers.has('X-Client-ID')) {
+                init.headers.set('X-Client-ID', GLOBAL_CLIENT_ID);
+            }
+            const response = await _originalFetch(input, init);
+            if (response.status === 429) {
+                try {
+                    const clone = response.clone();
+                    const data = await clone.json();
+                    if (data && (data.waiting || data.status === 'WAITING')) {
+                        showQueueWaitingModal(data, () => {
+                            if (typeof executeVideoAnalysis === 'function' && window.location.pathname.includes('/video')) executeVideoAnalysis();
+                            else if (typeof executeImageAnalysis === 'function' && window.location.pathname.includes('/image')) executeImageAnalysis();
+                        });
+                    }
+                } catch (e) {}
+            }
+            return response;
+        };
+
+        window.addEventListener('beforeunload', function() {
+            const mod = detectCurrentModule();
+            if (mod) {
+                navigator.sendBeacon('/api/module_queue/release', JSON.stringify({
+                    module: mod,
+                    client_id: GLOBAL_CLIENT_ID
+                }));
+            }
+        });
+
         document.addEventListener("DOMContentLoaded", function() {
             let path = window.location.pathname;
             if (path === '/' || path === '/index') document.getElementById('nav-index')?.classList.add('active');
@@ -280,14 +508,19 @@
             else if (path.includes('/image')) document.getElementById('nav-image')?.classList.add('active');
             else if (path.includes('/realtime')) document.getElementById('nav-realtime')?.classList.add('active');
 
-            // Gửi tín hiệu Heartbeat định kỳ để đếm người đang Online
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('require_pin') === '1') {
+                window.history.replaceState({}, document.title, window.location.pathname);
+                openSystemPinModal();
+            }
+
             let visitorId = sessionStorage.getItem('ai_platform_visitor_id');
             if (!visitorId) {
                 visitorId = 'vis_' + Math.random().toString(36).substring(2, 10) + '_' + Date.now();
                 sessionStorage.setItem('ai_platform_visitor_id', visitorId);
             }
             const sendHeartbeat = () => {
-                fetch('/api/heartbeat', {
+                _originalFetch('/api/heartbeat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ visitor_id: visitorId, page: window.location.pathname })
@@ -297,30 +530,74 @@
             setInterval(sendHeartbeat, 10000);
         });
 
+        function openSystemPinModal(e) {
+            if (e) e.preventDefault();
+            const sidebarEl = document.getElementById('sidebar');
+            const offcanvasInstance = bootstrap.Offcanvas.getInstance(sidebarEl);
+            if (offcanvasInstance) {
+                offcanvasInstance.hide();
+            }
+            setTimeout(() => {
+                const pinModalEl = document.getElementById('pinModal');
+                const modal = bootstrap.Modal.getOrCreateInstance(pinModalEl);
+                modal.show();
+            }, 150);
+        }
+
         const inputs = document.querySelectorAll('.otp-input');
         inputs.forEach((input, index) => {
-            input.addEventListener('keyup', function(e) {
-                const currentInput = input;
-                const nextInput = input.nextElementSibling;
-                const prevInput = input.previousElementSibling;
-
+            input.addEventListener('input', function(e) {
                 document.getElementById('pin-error').style.display = 'none';
-
-                if (!/^[0-9]$/.test(e.key) && e.key !== 'Backspace') {
-                    currentInput.value = '';
-                    return;
-                }
-                if (currentInput.value !== '' && nextInput && e.key !== 'Backspace') {
-                    nextInput.focus();
-                }
-                if (e.key === 'Backspace' && prevInput) {
-                    prevInput.focus();
+                let val = this.value.replace(/[^0-9a-zA-Z]/g, '');
+                if (val.length > 1) {
+                    const chars = val.split('');
+                    inputs.forEach((inp, idx) => {
+                        if (chars[idx]) inp.value = chars[idx];
+                    });
+                    const nextFocus = Math.min(chars.length, inputs.length - 1);
+                    inputs[nextFocus].focus();
+                } else {
+                    this.value = val;
+                    if (val !== '' && index < inputs.length - 1) {
+                        inputs[index + 1].focus();
+                    }
                 }
 
                 let pin = Array.from(inputs).map(i => i.value).join('');
                 if (pin.length === 6) verifyPin(pin);
             });
+
+            input.addEventListener('keydown', function(e) {
+                document.getElementById('pin-error').style.display = 'none';
+                if (e.key === 'Backspace') {
+                    if (this.value === '' && index > 0) {
+                        inputs[index - 1].value = '';
+                        inputs[index - 1].focus();
+                        e.preventDefault();
+                    }
+                } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    submitOtpPin();
+                }
+            });
+
+            input.addEventListener('paste', function(e) {
+                e.preventDefault();
+                const pasteData = (e.clipboardData || window.clipboardData).getData('text').trim();
+                if (!pasteData) return;
+                inputs.forEach((inp, idx) => {
+                    inp.value = pasteData[idx] || '';
+                });
+                let pin = Array.from(inputs).map(i => i.value).join('');
+                if (pin.length >= 5) verifyPin(pin);
+            });
         });
+
+        function submitOtpPin() {
+            let pin = Array.from(inputs).map(i => i.value).join('').trim();
+            if (!pin) return;
+            verifyPin(pin);
+        }
 
         function verifyPin(pinCode) {
             fetch('/verify-pin', {
@@ -330,15 +607,24 @@
             })
             .then(res => res.json())
             .then(data => {
-                if (data.success) window.location.href = data.redirect;
-                else {
+                if (data.success) {
+                    window.location.href = data.redirect;
+                } else {
                     document.getElementById('pin-error').style.display = 'block';
                     inputs.forEach(i => i.value = ''); 
                     inputs[0].focus();
                 }
+            })
+            .catch(() => {
+                document.getElementById('pin-error').style.display = 'block';
             });
         }
-        document.getElementById('pinModal').addEventListener('shown.bs.modal', () => inputs[0].focus());
+
+        document.getElementById('pinModal').addEventListener('shown.bs.modal', () => {
+            document.getElementById('pin-error').style.display = 'none';
+            inputs.forEach(i => i.value = '');
+            setTimeout(() => inputs[0].focus(), 100);
+        });
     </script>
 </body>
 </html>

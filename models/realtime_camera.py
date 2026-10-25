@@ -14,6 +14,7 @@ import requests
 import json
 import numpy as np
 from datetime import datetime
+from models.session_limiter import get_limiter
 
 if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
@@ -23,9 +24,9 @@ if sys.stderr and hasattr(sys.stderr, 'reconfigure'):
 realtime_bp = Blueprint('realtime_bp', __name__)
 
 DEFAULT_VISION_MODEL = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
-OPENROUTER_ENDPOINT = "[https://openrouter.ai/api/v1/chat/completions](https://openrouter.ai/api/v1/chat/completions)"
+OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
 
-MAX_CLIENTS = 20
+MAX_CLIENTS = 10
 clients = {} 
 clients_lock = threading.Lock()
 
@@ -43,8 +44,6 @@ os.makedirs('static/temp', exist_ok=True)
 def init_client(client_id):
     with clients_lock:
         if client_id not in clients:
-            if len(clients) >= MAX_CLIENTS:
-                return False
             clients[client_id] = {
                 'logs': [],
                 'recent_frames': [],
@@ -80,8 +79,8 @@ def start_workers_if_needed():
     global workers_started, current_workers_count
     from app import app, get_setting
     with app.app_context():
-        try: target_workers = int(get_setting('realtime_concurrent_jobs', 5))
-        except Exception: target_workers = 5
+        try: target_workers = int(get_setting('realtime_concurrent_jobs', 10))
+        except Exception: target_workers = 10
 
     with worker_lock:
         if not workers_started:
@@ -205,8 +204,9 @@ def analyze_frame_with_ai(client_id, frame, recent_frames, alert_id):
         
         last_error = None
         raw_text = None
+        max_attempts = max(2, len(valid_apis))
 
-        for attempt in range(2):
+        for attempt in range(max_attempts):
             headers = {
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
@@ -230,7 +230,7 @@ def analyze_frame_with_ai(client_id, frame, recent_frames, alert_id):
                 if response.status_code != 200:
                     last_error = f"HTTP {response.status_code}"
                     api_key, model_name, _ = get_realtime_credentials()
-                    time.sleep(0.5)
+                    time.sleep(0.3)
                     continue
                 
                 res_json = response.json()
@@ -251,7 +251,7 @@ def analyze_frame_with_ai(client_id, frame, recent_frames, alert_id):
         metrics = calculate_os_metrics(frame, buffer, len(recent_frames), latency_ms)
 
         if not raw_text:
-            print(f"Loi goi API sau 2 lan thu: {last_error}")
+            print(f"Loi goi API sau {max_attempts} lan thu: {last_error}")
             return
 
         threading.Thread(target=record_short_clip, args=(list(recent_frames), alert_id), daemon=True).start()
@@ -282,8 +282,20 @@ def api_upload_web_frame():
         image_b64 = data.get('image', '')
         if not image_b64: return jsonify({"success": False, "message": "Thiếu dữ liệu ảnh"}), 400
 
-        client_id = data.get('client_id', '').strip()
+        client_id = data.get('client_id', '').strip() or request.headers.get('X-Client-ID', '').strip()
         if not client_id: client_id = session.get('client_id', f"client_{uuid.uuid4().hex[:8]}")
+
+        # Kiểm tra giới hạn 10 người dùng đồng thời
+        slot_info = get_limiter('realtime').try_acquire_stream(client_id)
+        if not slot_info["allowed"]:
+            return jsonify({
+                "success": False,
+                "waiting": True,
+                "queue_position": slot_info["position"],
+                "active_users": slot_info["active_count"],
+                "max_users": slot_info["max_concurrent"],
+                "message": slot_info["message"]
+            }), 429
 
         init_client(client_id)
         start_workers_if_needed()
@@ -325,7 +337,8 @@ def api_get_logs():
 
 @realtime_bp.route('/api/realtime/sessions', methods=['GET'])
 def api_get_sessions():
-    with clients_lock: active_users = len(clients)
+    client_id = request.args.get('client_id', '').strip() or request.headers.get('X-Client-ID', '').strip()
+    q_status = get_limiter('realtime').get_status(client_id)
     global current_workers_count
     from app import app, get_setting
     with app.app_context():
@@ -337,7 +350,9 @@ def api_get_sessions():
 
     return jsonify({
         "success": True, 
-        "active_clients_count": active_users,
+        "active_clients_count": q_status["active_count"],
+        "max_clients": q_status["max_concurrent"],
+        "waiting_count": q_status["waiting_count"],
         "queue_size": analysis_queue.qsize(), 
         "active_workers": current_workers_count,
         "active_keys_count": active_keys_count
@@ -353,7 +368,8 @@ def api_clear_logs():
 @realtime_bp.route('/api/realtime/disconnect', methods=['POST'])
 def api_disconnect():
     data = request.get_json(force=True, silent=True) or {}
-    client_id = data.get('client_id', '').strip()
+    client_id = data.get('client_id', '').strip() or request.headers.get('X-Client-ID', '').strip()
+    get_limiter('realtime').release(client_id)
     with clients_lock:
         if client_id in clients: del clients[client_id]
     return jsonify({"success": True})
@@ -397,8 +413,8 @@ def api_config():
             new_keys = [k.strip() for k in str(keys_input).replace(',', '\n').split('\n') if k.strip()]
 
         model_input = str(data.get('model', '')).strip()
-        try: concurrent_jobs = int(data.get('concurrent_jobs', 5))
-        except Exception: concurrent_jobs = 5
+        try: concurrent_jobs = int(data.get('concurrent_jobs', 10))
+        except Exception: concurrent_jobs = 10
         
         with app.app_context():
             update_setting('realtime_api_keys', json.dumps(new_keys))
@@ -412,8 +428,8 @@ def api_config():
         try: saved_keys = json.loads(get_setting('realtime_api_keys', '[]'))
         except Exception: saved_keys = []
         saved_model = get_setting('realtime_ai_model', DEFAULT_VISION_MODEL)
-        try: concurrent_jobs = int(get_setting('realtime_concurrent_jobs', 5))
-        except Exception: concurrent_jobs = 5
+        try: concurrent_jobs = int(get_setting('realtime_concurrent_jobs', 10))
+        except Exception: concurrent_jobs = 10
 
     return jsonify({
         "success": True, 

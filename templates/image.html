@@ -3,17 +3,11 @@
 
 {% block content %}
 <style>
-    @import url('[https://fonts.googleapis.com/css2?family=Quicksand:wght@400;600;700&display=swap](https://fonts.googleapis.com/css2?family=Quicksand:wght@400;600;700&display=swap)');
-
-    body {
-        font-family: 'Quicksand', sans-serif;
-        background-color: #fdfbf7;
-        background-image: radial-gradient(#f0e6d2 2px, transparent 2px);
-        background-size: 30px 30px;
-    }
-
     .image-page-container {
         padding: 10px 0;
+        width: 100%;
+        max-width: 100%;
+        overflow-x: hidden;
     }
 
     .card,
@@ -26,10 +20,12 @@
     }
 
     .os-badge-card {
-        padding: 12px 15px;
+        padding: 12px 14px;
         display: flex;
         align-items: center;
-        gap: 12px;
+        gap: 10px;
+        height: 100%;
+        min-width: 0;
         transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     }
 
@@ -38,27 +34,30 @@
     }
 
     .os-badge-icon {
-        width: 42px;
-        height: 42px;
+        width: 40px;
+        height: 40px;
         border-radius: 14px;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 1.3rem;
+        font-size: 1.2rem;
+        flex-shrink: 0;
     }
 
     .os-badge-label {
-        font-size: 0.75rem;
+        font-size: 0.72rem;
         color: #8c7b70;
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.5px;
+        white-space: nowrap;
     }
 
     .os-badge-value {
-        font-size: 1.05rem;
+        font-size: 0.98rem;
         font-weight: 700;
         color: #5a4a42;
+        min-width: 0;
     }
 
     .viewport-container {
@@ -84,13 +83,14 @@
     .viewport-body {
         position: relative;
         width: 100%;
-        min-height: 330px;
-        height: clamp(280px, 42vh, 400px);
+        min-height: 300px;
+        height: clamp(260px, 42vh, 400px);
         background: #fffafa;
         display: flex;
         align-items: center;
         justify-content: center;
         overflow: hidden;
+        padding: 8px;
     }
 
     .viewport-body img {
@@ -103,26 +103,27 @@
     .cute-placeholder {
         text-align: center;
         color: #d1c4b8;
+        padding: 0 12px;
     }
 
     .badge-status-normal {
         background: #a8e6cf !important;
-        color: #2d6a4f;
+        color: #2d6a4f !important;
     }
 
     .badge-status-positive {
         background: #ffd3b6 !important;
-        color: #d47a53;
+        color: #d47a53 !important;
     }
 
     .badge-status-warning {
         background: #ffaaa5 !important;
-        color: #c92a2a;
+        color: #c92a2a !important;
     }
 
     .badge-status-danger {
         background: #ff8b94 !important;
-        color: #800000;
+        color: #800000 !important;
     }
 
     .btn-cute {
@@ -141,23 +142,46 @@
     .btn-primary-cute:hover {
         background-color: #ff9a94;
         transform: scale(1.02);
+        color: #fff;
+    }
+
+    @media (max-width: 576px) {
+        .os-badge-card {
+            padding: 10px;
+            gap: 8px;
+        }
+        .os-badge-icon {
+            width: 34px;
+            height: 34px;
+            font-size: 1rem;
+            border-radius: 10px;
+        }
+        .os-badge-label {
+            font-size: 0.65rem;
+        }
+        .os-badge-value {
+            font-size: 0.85rem;
+        }
+        .viewport-body {
+            min-height: 220px !important;
+            height: 240px !important;
+        }
     }
 </style>
 
 <div class="image-page-container">
     <!-- TIÊU ĐỀ & NÚT -->
-    <div class="d-flex justify-content-between align-items-center mb-3 px-2">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 px-1">
         <div>
             <h4 class="fw-bold mb-0" style="color: #d47a53;">
                 <i class="fa-solid fa-paw me-2"></i> Phân Tích Hình Ảnh
             </h4>
         </div>
-        <div class="d-flex gap-2 align-items-center">
+        <div class="d-flex flex-wrap gap-2 align-items-center">
             <button class="btn btn-primary-cute btn-sm btn-cute px-3 py-2 shadow-sm" type="button" onclick="openImageConfigWithPin()">
                 <i class="fa-solid fa-key me-1"></i> Admin Cấu Hình
             </button>
-            <span class="badge bg-success bg-opacity-25 text-success border border-success border-opacity-25 px-3 py-2"
-                style="border-radius: 12px;">
+            <span class="badge bg-success bg-opacity-25 text-success border border-success border-opacity-25 px-3 py-2" style="border-radius: 12px;">
                 <i class="fa-solid fa-cat me-1"></i> Sẵn sàng rồi!!!
             </span>
         </div>
@@ -175,7 +199,7 @@
                 </div>
                 <div class="modal-body p-4 text-center" style="background: #fdfbf7;">
                     <p class="small fw-bold mb-3" style="color: #8c7b70;">Nhập mật khẩu (PIN) để mở cấu hình API:</p>
-                    <input type="password" id="imagePinInput" class="form-control text-center fw-bold mb-2" placeholder="••••••" style="border-radius: 12px; font-size: 1.2rem; letter-spacing: 4px;" onkeypress="if(event.key === 'Enter') verifyImagePinStep1()">
+                    <input type="password" inputmode="numeric" id="imagePinInput" class="form-control text-center fw-bold mb-2" placeholder="••••••" style="border-radius: 12px; font-size: 1.2rem; letter-spacing: 4px;" onkeydown="if(event.key === 'Enter') verifyImagePinStep1()">
                     <div id="imagePinError" class="text-danger small fw-bold mt-2" style="display: none;">Sai mật khẩu!</div>
                 </div>
                 <div class="modal-footer border-0 pt-0" style="background: #fdfbf7;">
@@ -197,7 +221,7 @@
                     <h6 class="modal-title fw-bold mb-0" style="color: #d47a53;"><i class="fa-solid fa-key me-2"></i>Cấu Hình API Key Phân Tích Ảnh (MySQL)</h6>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body p-4" style="background: #fdfbf7;">
+                <div class="modal-body p-3 p-md-4" style="background: #fdfbf7;">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <label class="fw-bold small" style="color: #8c7b70;">Danh sách API Key OpenRouter (Round-Robin):</label>
                         <button type="button" class="btn btn-sm btn-primary-cute btn-cute px-3 py-1" onclick="addImageApiRow()">+ Thêm Token</button>
@@ -220,17 +244,14 @@
                     <i class="fa-solid fa-images me-1"></i> Tải ảnh lên (Tối đa 10MB):
                 </label>
                 <div class="input-group">
-                    <input type="file" id="imageFileInput" accept="image/*" class="form-control form-control-sm py-2"
-                        style="border-radius: 12px 0 0 12px;" onchange="previewImage(event)">
-                    <button class="btn btn-light border" type="button" onclick="clearSelectedImage()"
-                        style="border-radius: 0 12px 12px 0;">
+                    <input type="file" id="imageFileInput" accept="image/*" class="form-control form-control-sm py-2" style="border-radius: 12px 0 0 12px;" onchange="previewImage(event)">
+                    <button class="btn btn-light border px-3" type="button" onclick="clearSelectedImage()" style="border-radius: 0 12px 12px 0;" title="Xóa ảnh đã chọn">
                         <i class="fa-solid fa-xmark text-danger"></i>
                     </button>
                 </div>
             </div>
-            <div class="col-12 col-md-4 d-flex align-items-end pt-md-4">
-                <button type="button" class="btn btn-primary-cute btn-cute w-100 py-2" id="btnAnalyze"
-                    onclick="executeImageAnalysis()" disabled>
+            <div class="col-12 col-md-4 d-flex align-items-end pt-2 pt-md-4">
+                <button type="button" class="btn btn-primary-cute btn-cute w-100 py-2" id="btnAnalyze" onclick="executeImageAnalysis()" disabled>
                     <i class="fa-solid fa-star me-1"></i> Khám Phá
                 </button>
             </div>
@@ -277,12 +298,13 @@
     </div>
 
     <!-- THẺ CHỈ SỐ -->
-    <div class="row g-3 mb-3">
+    <div class="row g-2 g-md-3 mb-3">
         <div class="col-6 col-md-3">
             <div class="os-badge-card">
-                <div class="os-badge-icon" style="background: #e0f2fe; color: #0284c7;"><i
-                        class="fa-solid fa-face-smile"></i></div>
-                <div>
+                <div class="os-badge-icon" style="background: #e0f2fe; color: #0284c7;">
+                    <i class="fa-solid fa-face-smile"></i>
+                </div>
+                <div class="text-truncate">
                     <div class="os-badge-label">Nhận Định</div>
                     <div class="os-badge-value" id="badgeBehaviorStatus">
                         <span class="badge bg-light text-secondary">CHƯA CÓ</span>
@@ -292,9 +314,10 @@
         </div>
         <div class="col-6 col-md-3">
             <div class="os-badge-card">
-                <div class="os-badge-icon" style="background: #dcfce7; color: #16a34a;"><i class="fa-solid fa-leaf"></i>
+                <div class="os-badge-icon" style="background: #dcfce7; color: #16a34a;">
+                    <i class="fa-solid fa-leaf"></i>
                 </div>
-                <div>
+                <div class="text-truncate">
                     <div class="os-badge-label">Độ Trễ</div>
                     <div class="os-badge-value" id="badgeLatency">0.0 <small>ms</small></div>
                 </div>
@@ -302,9 +325,10 @@
         </div>
         <div class="col-6 col-md-3">
             <div class="os-badge-card">
-                <div class="os-badge-icon" style="background: #fef9c3; color: #ca8a04;"><i
-                        class="fa-solid fa-seedling"></i></div>
-                <div>
+                <div class="os-badge-icon" style="background: #fef9c3; color: #ca8a04;">
+                    <i class="fa-solid fa-seedling"></i>
+                </div>
+                <div class="text-truncate">
                     <div class="os-badge-label">Luồng Xử Lý</div>
                     <div class="os-badge-value" id="badgeSemaphore"><span id="activeWorkersNum">0</span> / 3</div>
                 </div>
@@ -312,12 +336,12 @@
         </div>
         <div class="col-6 col-md-3">
             <div class="os-badge-card">
-                <div class="os-badge-icon" style="background: #fce7f3; color: #db2777;"><i
-                        class="fa-solid fa-heart"></i></div>
-                <div>
+                <div class="os-badge-icon" style="background: #fce7f3; color: #db2777;">
+                    <i class="fa-solid fa-heart"></i>
+                </div>
+                <div class="text-truncate" style="min-width: 0;">
                     <div class="os-badge-label">Chìa Khóa</div>
-                    <div class="os-badge-value text-truncate" id="badgeThreadAndKey" style="font-size: 0.8rem;">Đang
-                        đợi...</div>
+                    <div class="os-badge-value text-truncate" id="badgeThreadAndKey" style="font-size: 0.8rem;">Đang đợi...</div>
                 </div>
             </div>
         </div>
@@ -327,11 +351,8 @@
     <div class="row g-3">
         <div class="col-12 col-lg-5">
             <div class="card h-100 p-3">
-                <h6 class="fw-bold mb-3" style="color: #d47a53;"><i class="fa-solid fa-book-open me-2"></i> Mô tả
-                    hình ảnh</h6>
-                <div class="p-3 rounded flex-grow-1"
-                    style="background: #fff5f5; border: 1px dashed #ffb7b2; color: #5a4a42; font-weight: 500; font-size: 0.95rem; line-height: 1.6;"
-                    id="textBehaviorDesc">
+                <h6 class="fw-bold mb-3" style="color: #d47a53;"><i class="fa-solid fa-book-open me-2"></i> Mô tả hình ảnh</h6>
+                <div class="p-3 rounded flex-grow-1" style="background: #fff5f5; border: 1px dashed #ffb7b2; color: #5a4a42; font-weight: 500; font-size: 0.93rem; line-height: 1.6; word-break: break-word;" id="textBehaviorDesc">
                     Bức ảnh của bạn có gì đặc biệt thế? Cho mình xem với nào!
                 </div>
             </div>
@@ -339,19 +360,18 @@
 
         <div class="col-12 col-lg-7">
             <div class="card h-100 p-3">
-                <div class="d-flex justify-content-between mb-2">
-                    <h6 class="fw-bold" style="color: #d47a53;"><i class="fa-solid fa-history me-2"></i> Nhật Ký</h6>
-                    <button class="btn btn-sm btn-outline-danger btn-cute py-0" onclick="clearLogsHistory()">Xóa
-                        hết</button>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="fw-bold mb-0" style="color: #d47a53;"><i class="fa-solid fa-history me-2"></i> Nhật Ký</h6>
+                    <button class="btn btn-sm btn-outline-danger btn-cute py-0 px-2" onclick="clearLogsHistory()">Xóa hết</button>
                 </div>
-                <div style="max-height: 150px; overflow-y: auto; border-radius: 12px; border: 1px solid #f0e6d2;">
-                    <table class="table table-sm table-borderless mb-0" style="font-size: 0.85rem; color: #5a4a42;">
-                        <thead style="background: #ffecd2; position: sticky; top: 0;">
+                <div class="table-responsive" style="max-height: 165px; overflow-y: auto; border-radius: 12px; border: 1px solid #f0e6d2;">
+                    <table class="table table-sm table-borderless align-middle mb-0" style="font-size: 0.84rem; color: #5a4a42;">
+                        <thead style="background: #ffecd2; position: sticky; top: 0; z-index: 1;">
                             <tr>
-                                <th>Giờ</th>
+                                <th class="ps-2">Giờ</th>
                                 <th>Ảnh</th>
                                 <th>Kết quả</th>
-                                <th>Độ trễ</th>
+                                <th class="pe-2">Độ trễ</th>
                             </tr>
                         </thead>
                         <tbody id="historyTableRows">
@@ -506,6 +526,8 @@
                 document.getElementById('resultImg').src = data.result_image;
                 document.getElementById('resultImg').style.display = 'block';
                 document.getElementById('loadingIndicator').style.display = 'none';
+                document.getElementById('resultBadge').textContent = 'Hoàn tất';
+                document.getElementById('resultBadge').className = 'badge bg-success';
 
                 applyStatusBadge(data.status);
                 document.getElementById('textBehaviorDesc').textContent = data.description || 'Xong rồi nè!';
@@ -527,7 +549,9 @@
             btnAnalyze.disabled = false;
             btnAnalyze.innerHTML = '<i class="fa-solid fa-star me-1"></i> Khám Phá Ngay';
             document.getElementById('loadingIndicator').style.display = 'none';
-            if (!document.getElementById('resultImg').src) document.getElementById('resultPlaceholder').style.display = 'block';
+            if (!document.getElementById('resultImg').src || document.getElementById('resultImg').style.display === 'none') {
+                document.getElementById('resultPlaceholder').style.display = 'block';
+            }
         }
     }
 
@@ -554,10 +578,10 @@
                     const tr = document.createElement('tr');
                     const timePart = row.timestamp ? (row.timestamp.split(' ')[1] || row.timestamp) : '--';
                     tr.innerHTML = `
-                        <td><small>${timePart}</small></td>
+                        <td class="ps-2"><small>${timePart}</small></td>
                         <td class="text-truncate" style="max-width: 90px;"><strong>${row.filename}</strong></td>
                         <td><span class="badge bg-light text-dark border">${row.status}</span></td>
-                        <td><small class="fw-bold" style="color:#d47a53">${row.processing_time_ms}ms</small></td>
+                        <td class="pe-2"><small class="fw-bold" style="color:#d47a53">${row.processing_time_ms}ms</small></td>
                     `;
                     tbody.appendChild(tr);
                 });

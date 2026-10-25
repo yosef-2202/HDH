@@ -7,7 +7,7 @@
         <h4 class="fw-bold mb-1" style="color: #d47a53;">
             <i class="fa-solid fa-paw me-2"></i> Bảng Điều Khiển Tổng Quan
         </h4>
-        <p class="small mb-0 fw-semibold" style="color: #8c7b70;">Giám sát lưu lượng người dùng & tài nguyên máy chủ thời gian thực</p>
+        <p class="small mb-0 fw-semibold" style="color: #8c7b70;">Giám sát lưu lượng người dùng, hàng đợi phiên (10 người/module) & tài nguyên máy chủ thời gian thực</p>
     </div>
     <span class="badge bg-success bg-opacity-25 text-success border border-success border-opacity-25 px-3 py-2 d-flex align-items-center" style="border-radius: 12px;">
         <span class="spinner-grow spinner-grow-sm me-2 text-success" role="status" aria-hidden="true" style="width: 0.75rem; height: 0.75rem;"></span>
@@ -16,7 +16,7 @@
 </div>
 
 <!-- THỐNG KÊ NGƯỜI DÙNG TRUY CẬP & HOẠT ĐỘNG REALTIME -->
-<div class="row mb-4 g-3">
+<div class="row mb-3 g-3">
     <!-- 1. Người đang Online -->
     <div class="col-6 col-xl-3">
         <div class="card custom-card h-100 p-3" style="border-left: 5px solid #22c55e !important;">
@@ -54,7 +54,7 @@
                     </div>
                 </div>
                 <div class="d-flex align-items-center justify-content-center flex-shrink-0" style="width: 46px; height: 46px; border-radius: 14px; background: #fff0f0; color: #d47a53; font-size: 1.3rem;">
-                    <i class="fa-solid fa- footprints fa-shoe-prints"></i>
+                    <i class="fa-solid fa-shoe-prints"></i>
                 </div>
             </div>
         </div>
@@ -81,7 +81,7 @@
         </div>
     </div>
 
-    <!-- 4. Luồng RTSP & Sự kiện AI đã học -->
+    <!-- 4. Tổng dữ liệu AI & Phiên đang hoạt động trên cả 5 Module -->
     <div class="col-6 col-xl-3">
         <div class="card custom-card h-100 p-3" style="border-left: 5px solid #f59e0b !important;">
             <div class="d-flex justify-content-between align-items-start">
@@ -92,12 +92,61 @@
                         <span class="fs-6 fw-semibold" style="color: #8c7b70;">bản ghi</span>
                     </h3>
                     <div class="small fw-semibold" style="color: #8c7b70; font-size: 0.76rem;">
-                        <i class="fa-solid fa-video me-1" style="color: #d97706;"></i>Luồng RTSP: <span id="stat-rtsp-streams" class="fw-bold">0</span>/10
+                        <i class="fa-solid fa-layer-group me-1" style="color: #d97706;"></i>Tổng phiên AI: <span id="stat-total-sessions" class="fw-bold">0</span>/50
                     </div>
                 </div>
                 <div class="d-flex align-items-center justify-content-center flex-shrink-0" style="width: 46px; height: 46px; border-radius: 14px; background: #fef3c7; color: #d97706; font-size: 1.3rem;">
                     <i class="fa-solid fa-brain"></i>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- TRẠNG THÁI CẤP PHÁT PHIÊN CỦA TỪNG MODULE (TỐI ĐA 10 NGƯỜI / MODULE) -->
+<div class="card custom-card p-3 mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-2 pb-2" style="border-bottom: 2px dashed #f0d8c0;">
+        <span class="fw-bold" style="color: #d47a53; font-size: 0.9rem;">
+            <i class="fa-solid fa-users-gear me-2"></i>Trạng Thái Phục Vụ Từng Module (Giới hạn 10 Phiên Đồng Thời / Module)
+        </span>
+        <span class="badge rounded-pill px-3 py-1" style="background: #fff5f5; color: #d47a53; border: 1px dashed #ffb7b2; font-size: 0.75rem;">
+            Đang chờ trong hàng đợi: <strong id="stat-total-waiting">0</strong> người
+        </span>
+    </div>
+    <div class="row row-cols-2 row-cols-sm-3 row-cols-lg-5 g-2 text-center">
+        <div class="col">
+            <div class="p-2 rounded-4" style="background: #fffafa; border: 1px dashed #f0d8c0;">
+                <div class="small fw-bold" style="color: #8c7b70; font-size: 0.72rem;"><i class="fa-solid fa-satellite-dish me-1" style="color:#d47a53;"></i>Luồng RTSP</div>
+                <div class="fw-bold fs-6" style="color: #5a4a42;"><span id="mod-rtsp-active">0</span>/10</div>
+                <small class="text-muted" style="font-size: 0.68rem;">Chờ: <span id="mod-rtsp-wait">0</span></small>
+            </div>
+        </div>
+        <div class="col">
+            <div class="p-2 rounded-4" style="background: #fffafa; border: 1px dashed #f0d8c0;">
+                <div class="small fw-bold" style="color: #8c7b70; font-size: 0.72rem;"><i class="fa-solid fa-clock-rotate-left me-1" style="color:#0284c7;"></i>Camera Realtime</div>
+                <div class="fw-bold fs-6" style="color: #5a4a42;"><span id="mod-realtime-active">0</span>/10</div>
+                <small class="text-muted" style="font-size: 0.68rem;">Chờ: <span id="mod-realtime-wait">0</span></small>
+            </div>
+        </div>
+        <div class="col">
+            <div class="p-2 rounded-4" style="background: #fffafa; border: 1px dashed #f0d8c0;">
+                <div class="small fw-bold" style="color: #8c7b70; font-size: 0.72rem;"><i class="fa-solid fa-file-video me-1" style="color:#16a34a;"></i>Xử Lý Video</div>
+                <div class="fw-bold fs-6" style="color: #5a4a42;"><span id="mod-video-active">0</span>/10</div>
+                <small class="text-muted" style="font-size: 0.68rem;">Chờ: <span id="mod-video-wait">0</span></small>
+            </div>
+        </div>
+        <div class="col">
+            <div class="p-2 rounded-4" style="background: #fffafa; border: 1px dashed #f0d8c0;">
+                <div class="small fw-bold" style="color: #8c7b70; font-size: 0.72rem;"><i class="fa-solid fa-image me-1" style="color:#ca8a04;"></i>Xử Lý Ảnh</div>
+                <div class="fw-bold fs-6" style="color: #5a4a42;"><span id="mod-image-active">0</span>/10</div>
+                <small class="text-muted" style="font-size: 0.68rem;">Chờ: <span id="mod-image-wait">0</span></small>
+            </div>
+        </div>
+        <div class="col">
+            <div class="p-2 rounded-4" style="background: #fffafa; border: 1px dashed #f0d8c0;">
+                <div class="small fw-bold" style="color: #8c7b70; font-size: 0.72rem;"><i class="fa-solid fa-robot me-1" style="color:#db2777;"></i>Chatbot AI</div>
+                <div class="fw-bold fs-6" style="color: #5a4a42;"><span id="mod-chatbot-active">0</span>/10</div>
+                <small class="text-muted" style="font-size: 0.68rem;">Chờ: <span id="mod-chatbot-wait">0</span></small>
             </div>
         </div>
     </div>
@@ -196,7 +245,6 @@
                 document.getElementById('stat-ram-used').innerText = data.ram_used;
                 document.getElementById('stat-ram-total').innerText = data.ram_total;
 
-                // Cập nhật thống kê người dùng & hoạt động hệ thống
                 if (data.online_users !== undefined) {
                     document.getElementById('stat-online-users').innerText = Number(data.online_users).toLocaleString('vi-VN');
                 }
@@ -212,8 +260,21 @@
                 if (data.total_ai_alerts !== undefined) {
                     document.getElementById('stat-ai-alerts').innerText = Number(data.total_ai_alerts).toLocaleString('vi-VN');
                 }
-                if (data.active_rtsp_streams !== undefined) {
-                    document.getElementById('stat-rtsp-streams').innerText = data.active_rtsp_streams;
+                if (data.total_active_sessions !== undefined) {
+                    document.getElementById('stat-total-sessions').innerText = data.total_active_sessions;
+                }
+                if (data.total_waiting_sessions !== undefined) {
+                    document.getElementById('stat-total-waiting').innerText = data.total_waiting_sessions;
+                }
+                if (data.module_sessions) {
+                    ['rtsp', 'realtime', 'video', 'image', 'chatbot'].forEach(mod => {
+                        if (data.module_sessions[mod]) {
+                            const actEl = document.getElementById(`mod-${mod}-active`);
+                            const waitEl = document.getElementById(`mod-${mod}-wait`);
+                            if (actEl) actEl.innerText = data.module_sessions[mod].active;
+                            if (waitEl) waitEl.innerText = data.module_sessions[mod].waiting;
+                        }
+                    });
                 }
             })
             .catch(err => console.error("Lỗi lấy dữ liệu:", err));

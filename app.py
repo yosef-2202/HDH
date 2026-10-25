@@ -96,7 +96,7 @@ with app.app_context():
         'rtsp_concurrent_jobs': '10',
         'realtime_api_keys': '[]',
         'realtime_ai_model': 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free',
-        'realtime_concurrent_jobs': '5',
+        'realtime_concurrent_jobs': '10',
         'image_api_keys': '[]',
         'video_api_keys': '[]',
         'video_ai_model': 'openrouter/free',
@@ -136,12 +136,14 @@ from models.realtime_camera import realtime_bp
 from models.chatbot_manager import chatbot_bp
 from models.image_processor import image_bp
 from models.video import video_bp
+from models.session_limiter import limiter_bp
 
 app.register_blueprint(rtsp_bp)
 app.register_blueprint(realtime_bp)
 app.register_blueprint(chatbot_bp)
 app.register_blueprint(image_bp)
 app.register_blueprint(video_bp)
+app.register_blueprint(limiter_bp)
 
 def _record_visit_if_new():
     """Tăng bộ đếm Tổng lượt truy cập và Truy cập hôm nay khi có phiên mới."""
@@ -257,7 +259,7 @@ def realtime(): return render_template('realtime.html')
 @app.route('/settings')
 def settings_page():
     if not session.get('is_admin'):
-        return redirect(url_for('index'))
+        return redirect(url_for('index', require_pin='1'))
     return render_template('settings.html')
 
 @app.route('/api/stats')
@@ -290,13 +292,24 @@ def api_stats():
     except ValueError:
         peak_online = online_count
 
-    # Thống kê số luồng RTSP đang chạy và tổng cảnh báo AI trong MySQL
     active_rtsp_streams = 0
     rtsp_queue_size = 0
+    module_sessions = {}
+    total_active_sessions = 0
+    total_waiting_sessions = 0
     try:
-        from models.rtsp import clients, clients_lock, analysis_queue
-        with clients_lock:
-            active_rtsp_streams = len([c for c in clients.values() if c.get('camera') is not None])
+        from models.session_limiter import MODULE_LIMITERS
+        from models.rtsp import analysis_queue
+        for mod_name, limiter in MODULE_LIMITERS.items():
+            st = limiter.get_status()
+            module_sessions[mod_name] = {
+                "active": st["active_count"],
+                "max": st["max_concurrent"],
+                "waiting": st["waiting_count"]
+            }
+            total_active_sessions += st["active_count"]
+            total_waiting_sessions += st["waiting_count"]
+        active_rtsp_streams = module_sessions.get('rtsp', {}).get('active', 0)
         rtsp_queue_size = analysis_queue.qsize()
     except Exception:
         pass
@@ -319,6 +332,9 @@ def api_stats():
         "today_visits": today_visits,
         "peak_online": peak_online,
         "active_rtsp_streams": active_rtsp_streams,
+        "total_active_sessions": total_active_sessions,
+        "total_waiting_sessions": total_waiting_sessions,
+        "module_sessions": module_sessions,
         "total_ai_alerts": total_ai_alerts
     })
 

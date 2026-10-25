@@ -23,7 +23,7 @@
                     <i class="fa-solid fa-power-off me-2"></i>Quản Lý Tính Năng Hệ Thống
                 </h6>
             </div>
-            <div class="p-4">
+            <div class="p-3 p-md-4">
                 <form id="configForm">
                     <div class="row g-3 mb-4">
                         <div class="col-12 col-sm-6">
@@ -71,14 +71,14 @@
                     <i class="fa-solid fa-image-portrait me-2"></i>Cập Nhật Ảnh Đại Diện Thành Viên
                 </h6>
             </div>
-            <div class="p-4">
-                <div class="table-responsive mb-3" style="border-radius: 14px; border: 1px solid #f0e6d2; overflow: hidden;">
-                    <table class="table table-borderless align-middle mb-0" style="color: #5a4a42;">
+            <div class="p-3 p-md-4">
+                <div class="table-responsive mb-3" style="border-radius: 14px; border: 1px solid #f0e6d2; overflow-x: auto;">
+                    <table class="table table-borderless align-middle mb-0" style="color: #5a4a42; min-width: 560px;">
                         <thead style="background: #ffecd2; color: #d47a53; border-bottom: 2px dashed #f0d8c0;">
                             <tr>
                                 <th style="width: 60px;">Ảnh</th>
                                 <th style="width: 25%;">Họ tên</th>
-                                <th style="width: 15%;">Mã SV</th>
+                                <th style="width: 18%;">Mã SV</th>
                                 <th>Link URL Ảnh (Bỏ trống = Avatar tự động)</th>
                             </tr>
                         </thead>
@@ -135,7 +135,7 @@
         const tbody = document.getElementById('memberTableBody');
         tbody.innerHTML = '';
         members.forEach((mem, index) => {
-            let avatarUrl = mem.avatar || `[https://ui-avatars.com/api/?name=$](https://ui-avatars.com/api/?name=$){encodeURIComponent(mem.name)}&background=${bgColors[index % bgColors.length]}&color=fff&size=50`;
+            let avatarUrl = mem.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(mem.name)}&background=${bgColors[index % bgColors.length]}&color=fff&size=50`;
             
             tbody.innerHTML += `
                 <tr style="border-bottom: 1px dashed #f0e6d2;">
@@ -143,7 +143,7 @@
                     <td class="fw-bold" style="color: #5a4a42;">${mem.name}</td>
                     <td class="fw-semibold" style="color: #8c7b70;">${mem.id}</td>
                     <td>
-                        <input type="text" class="form-control form-control-sm" style="border-radius: 10px; border-color: #f0d8c0;" id="avatar-input-${index}" value="${mem.avatar}" placeholder="Nhập link ảnh (VD: https://...)" onchange="updatePreview(${index})">
+                        <input type="text" class="form-control form-control-sm" style="border-radius: 10px; border-color: #f0d8c0;" id="avatar-input-${index}" value="${mem.avatar || ''}" placeholder="Nhập link ảnh (VD: https://...)" onchange="updatePreview(${index})">
                     </td>
                 </tr>
             `;
@@ -156,7 +156,7 @@
         if (inputVal) {
             imgEl.src = inputVal;
         } else {
-            imgEl.src = `[https://ui-avatars.com/api/?name=$](https://ui-avatars.com/api/?name=$){encodeURIComponent(members[index].name)}&background=${bgColors[index % bgColors.length]}&color=fff&size=50`;
+            imgEl.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(members[index].name)}&background=${bgColors[index % bgColors.length]}&color=fff&size=50`;
         }
     }
 

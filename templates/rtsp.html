@@ -120,14 +120,13 @@
                     <i class="fa-solid fa-cat me-1"></i> Sẵn sàng rồi!!!
                 </span>
                 <span class="badge px-2 py-1 rounded-pill" style="background: #e0f2fe; color: #0284c7;" id="badgeWorkers">
-                    <i class="fa-solid fa-users me-1"></i> Đang phục vụ: --/10
+                    <i class="fa-solid fa-users me-1"></i> Đang phục vụ: 0/10
                 </span>
                 <span class="badge px-2 py-1 rounded-pill" style="background: #fef9c3; color: #ca8a04;">
                     <i class="fa-solid fa-clock me-1"></i> Chu kỳ: 5s/frame
                 </span>
             </div>
 
-            <!-- NÚT MỞ BƯỚC 1 (BOX NHẬP PASS) -->
             <div class="d-flex gap-2 align-items-center">
                 <button class="btn btn-primary-cute btn-sm btn-cute px-3 py-2 shadow-sm" type="button" onclick="openConfigWithPin()">
                     <i class="fa-solid fa-key me-1"></i> Admin Cấu Hình
@@ -178,7 +177,7 @@
                         </div>
                         <div class="text-truncate">
                             <div class="fw-bold text-uppercase" style="font-size: 0.68rem; color: #8c7b70;">Luồng Xử Lý</div>
-                            <div class="fw-bold fs-6" style="color: #5a4a42;" id="statWorkers">-- Threads</div>
+                            <div class="fw-bold fs-6" style="color: #5a4a42;" id="statWorkers">10 Threads</div>
                         </div>
                     </div>
                 </div>
@@ -300,9 +299,7 @@
     </div>
 </div>
 
-<!-- =========================================================
-     BƯỚC 1: BOX NHẬP PASS (MÃ PIN) TRƯỚC KHI VÀO CẤU HÌNH
-     ========================================================= -->
+<!-- BƯỚC 1: BOX NHẬP PASS -->
 <div class="modal fade" id="rtspPinModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-sm modal-dialog-centered">
     <div class="modal-content overflow-hidden" style="border-radius: 20px; border: none;">
@@ -324,9 +321,7 @@
   </div>
 </div>
 
-<!-- =========================================================
-     BƯỚC 2: MODAL CẤU HÌNH API KEY & WORKER (CHỈ HIỆN KHI ĐÚNG PASS)
-     ========================================================= -->
+<!-- BƯỚC 2: MODAL CẤU HÌNH API KEY & WORKER -->
 <div class="modal fade" id="rtspConfigModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-xl modal-dialog-centered">
     <div class="modal-content overflow-hidden" style="border-radius: 20px; border: none;">
@@ -370,7 +365,7 @@
 </div>
 
 <script>
-    const CLIENT_ID = 'client_' + Math.random().toString(36).substring(2, 10);
+    const CLIENT_ID = typeof GLOBAL_CLIENT_ID !== 'undefined' ? GLOBAL_CLIENT_ID : ('client_' + Math.random().toString(36).substring(2, 10));
     let pollInterval = null;
     let rtspApiList = [];
     let isRtspRunning = false;
@@ -381,7 +376,6 @@
         fetchRtspData();
     });
 
-    // BƯỚC 1: Mở Box nhập Pass
     function openConfigWithPin() {
         document.getElementById('rtspPinInput').value = '';
         document.getElementById('rtspPinError').style.display = 'none';
@@ -390,7 +384,6 @@
         setTimeout(() => document.getElementById('rtspPinInput').focus(), 300);
     }
 
-    // Xác thực Pass ở Bước 1 -> Nếu đúng mới mở Bước 2
     function verifyRtspPinStep1() {
         const pin = document.getElementById('rtspPinInput').value.trim();
         const errEl = document.getElementById('rtspPinError');
@@ -407,9 +400,7 @@
         .then(res => res.json())
         .then(data => {
             if (data.success) {
-                // Đóng Box nhập Pass (Bước 1)
                 bootstrap.Modal.getOrCreateInstance(document.getElementById('rtspPinModal')).hide();
-                // Tải dữ liệu và mở Modal Cấu hình API Key (Bước 2)
                 fetch('/api/rtsp/config')
                     .then(r => r.json())
                     .then(d => {
@@ -496,9 +487,22 @@
         }
     }
 
-    function startStream() {
+    async function startStream() {
         const url = document.getElementById('rtspInput').value;
         if (!url) return alert("Nhập link RTSP!");
+
+        // Xin cấp slot trong 10 phiên RTSP trước khi mở luồng
+        const checkRes = await fetch('/api/module_queue/acquire', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ module: 'rtsp', client_id: CLIENT_ID })
+        });
+        const checkData = await checkRes.json();
+        if (!checkRes.ok || !checkData.allowed) {
+            showQueueWaitingModal(checkData, () => startStream());
+            return;
+        }
+
         isRtspRunning = true;
         document.getElementById('rtspPlaceholder').style.display = 'none';
         document.getElementById('videoStream').style.display = 'block';
