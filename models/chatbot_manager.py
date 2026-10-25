@@ -10,64 +10,17 @@ from urllib.parse import quote
 import cv2
 import numpy as np
 import requests
-import psutil
-from dotenv import load_dotenv
 from flask import Blueprint, current_app, jsonify, request, session
 
-# Nạp cấu hình từ chatbot_config.py (hỗ trợ cả ở thư mục gốc và trong models/)
-DEFAULT_BUILTIN_TOKENS = [
-    {
-        'id': 'chat-groq-text',
-        'provider': 'groq',
-        'api_key': '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',
-        'model_name': 'openai/gpt-oss-20b',
-    },
-    {
-        'id': 'chat-groq-vision',
-        'provider': 'groq',
-        'api_key': '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',
-        'model_name': 'meta-llama/llama-4-scout-17b-16e-instruct',
-    },
-]
-
-try:
-    from chatbot_config import CHATBOT_PIN, CHATBOT_TOKENS
-except (ImportError, AttributeError):
-    try:
-        from models.chatbot_config import CHATBOT_PIN, CHATBOT_TOKENS
-    except (ImportError, AttributeError):
-        CHATBOT_PIN = '123456'
-        CHATBOT_TOKENS = DEFAULT_BUILTIN_TOKENS
-
-if not CHATBOT_TOKENS:
-    CHATBOT_TOKENS = DEFAULT_BUILTIN_TOKENS
-
-load_dotenv()
 chatbot_bp = Blueprint('chatbot_bp', __name__)
 
-try:
-    from grok_config import XAI_API_KEY as FILE_XAI_API_KEY, XAI_MODEL as FILE_XAI_MODEL
-except (ImportError, AttributeError):
-    FILE_XAI_API_KEY = ''
-    FILE_XAI_MODEL = ''
+GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions'
+OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions'
+XAI_API_URL = 'https://api.x.ai/v1/chat/completions'
+GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent'
 
-try:
-    from grok_config import GROQ_API_KEY as FILE_GROQ_API_KEY, GROQ_MODEL as FILE_GROQ_MODEL
-except (ImportError, AttributeError):
-    FILE_GROQ_API_KEY = ''
-    FILE_GROQ_MODEL = ''
-
-XAI_CONFIG_KEY = os.getenv('XAI_API_KEY', '').strip() or str(FILE_XAI_API_KEY).strip()
-XAI_CONFIG_MODEL = os.getenv('XAI_MODEL', '').strip() or str(FILE_XAI_MODEL).strip() or 'grok-4.1-fast'
-GROQ_CONFIG_KEY = os.getenv('GROQ_API_KEY', '').strip() or str(FILE_GROQ_API_KEY).strip()
-
-GROQ_API_URL = '[https://api.groq.com/openai/v1/chat/completions](https://api.groq.com/openai/v1/chat/completions)'
-OPENROUTER_API_URL = '[https://openrouter.ai/api/v1/chat/completions](https://openrouter.ai/api/v1/chat/completions)'
-XAI_API_URL = '[https://api.x.ai/v1/chat/completions](https://api.x.ai/v1/chat/completions)'
-GEMINI_API_URL = '[https://generativelanguage.googleapis.com/v1beta/models/](https://generativelanguage.googleapis.com/v1beta/models/){model}:generateContent'
 DEFAULT_GROQ_MODEL = 'openai/gpt-oss-20b'
 GROQ_VISION_MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct'
-GROQ_CONFIG_MODEL = os.getenv('GROQ_MODEL', '').strip() or str(FILE_GROQ_MODEL).strip() or DEFAULT_GROQ_MODEL
 MAX_IMAGE_BYTES = 10 * 1024 * 1024
 MAX_VIDEO_BYTES = 50 * 1024 * 1024
 ALLOWED_IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp'}
@@ -127,26 +80,17 @@ def _update_setting(key, value):
 
 
 def _read_chat_tokens():
-    file_tokens = [token for token in CHATBOT_TOKENS if isinstance(token, dict) and str(token.get('api_key', '')).strip()]
+    """Chỉ đọc danh sách API Token từ bảng system_settings trên MySQL."""
     try:
         tokens = json.loads(_get_setting('chatbot_api_tokens', '[]'))
     except (json.JSONDecodeError, TypeError):
         tokens = []
-    db_tokens = [token for token in tokens if isinstance(token, dict) and str(token.get('api_key', '')).strip()] if isinstance(tokens, list) else []
-    
-    if not db_tokens:
-        return file_tokens
-
-    merged = []
-    positions = {}
-    for token in db_tokens + file_tokens:
-        token_id = str(token.get('id', '')).strip()
-        if token_id and token_id in positions:
-            continue
-        if token_id:
-            positions[token_id] = len(merged)
-        merged.append(token)
-    return merged
+    if not isinstance(tokens, list):
+        return []
+    return [
+        token for token in tokens
+        if isinstance(token, dict) and str(token.get('api_key', '')).strip()
+    ]
 
 
 def _active_chat_tokens():
@@ -333,14 +277,13 @@ def call_model(token, messages, max_tokens=1024):
         payload = {'model': model_name, 'messages': messages, 'temperature': 0.7, 'max_tokens': max_tokens}
 
     started = time.monotonic()
+    label = {'google_gemini': 'Google Gemini', 'openrouter': 'OpenRouter', 'xai': 'xAI Grok', 'groq': 'Groq'}.get(provider, 'AI')
     try:
         response = requests.post(url, headers=headers, json=payload, timeout=(8, 60))
     except requests.Timeout:
-        label = {'google_gemini': 'Google Gemini', 'openrouter': 'OpenRouter', 'xai': 'xAI Grok', 'groq': 'Groq'}[provider]
         return None, ({'success': False, 'response': f'{label} phản hồi quá lâu. Hãy thử lại sau.'}, 504)
-    except requests.RequestException:
-        label = {'google_gemini': 'Google Gemini', 'openrouter': 'OpenRouter', 'xai': 'xAI Grok', 'groq': 'Groq'}[provider]
-        return None, ({'success': False, 'response': f'Không kết nối được {label}. Kiểm tra mạng của máy chủ.'}, 502)
+    except Exception as exc:
+        return None, ({'success': False, 'response': f'Không kết nối được {label}: {str(exc)[:200]}'}, 502)
 
     latency = round(time.monotonic() - started, 2)
     if not response.ok:
@@ -354,7 +297,6 @@ def call_model(token, messages, max_tokens=1024):
         if not isinstance(reply, str) or not reply.strip():
             raise ValueError('empty response')
     except (ValueError, KeyError, IndexError, TypeError):
-        label = {'google_gemini': 'Google Gemini', 'openrouter': 'OpenRouter', 'xai': 'xAI Grok', 'groq': 'Groq'}[provider]
         return None, ({'success': False, 'response': f'{label} trả dữ liệu không đúng định dạng. Vui lòng thử lại.'}, 502)
     return {'success': True, 'response': reply.strip(), 'latency': latency, 'model': model_name}, None
 
@@ -435,7 +377,7 @@ def extract_video_frames(upload, suffix):
 def verify_chatbot_pin():
     data = request.get_json(silent=True) or {}
     pin = str(data.get('pin', '')).strip()
-    if pin and (pin == str(CHATBOT_PIN).strip() or pin == str(_get_setting('system_pin', '123456')).strip() or pin == 'admin' or pin == '123456'):
+    if pin and (pin == str(_get_setting('system_pin', '123456')).strip() or pin == 'admin'):
         session['is_admin'] = True
         session['chatbot_unlocked'] = True
         return jsonify({'success': True})
@@ -499,82 +441,88 @@ def chatbot_status():
 
 @chatbot_bp.route('/api/chatbot/chat', methods=['POST'])
 def handle_chat():
-    data = request.get_json(silent=True) or {}
-    user_message = data.get('message')
-    if not isinstance(user_message, str) or not user_message.strip():
-        return jsonify({'success': False, 'response': 'Vui lòng nhập nội dung câu hỏi.'}), 400
-    token = _get_chat_token(str(data.get('model_id', '')))
-    if not token:
-        return jsonify({'success': False, 'response': 'Chưa chọn model có token hợp lệ. Hãy kiểm tra Cấu hình API của chatbox.'}), 400
+    try:
+        data = request.get_json(silent=True) or {}
+        user_message = data.get('message')
+        if not isinstance(user_message, str) or not user_message.strip():
+            return jsonify({'success': False, 'response': 'Vui lòng nhập nội dung câu hỏi.'}), 400
+        token = _get_chat_token(str(data.get('model_id', '')))
+        if not token:
+            return jsonify({'success': False, 'response': 'Chưa chọn model có token hợp lệ. Hãy kiểm tra Cấu hình API của chatbox.'}), 400
 
-    messages = [{'role': 'system', 'content': DEFAULT_SYSTEM_PROMPT}]
-    history = data.get('history', [])
-    if isinstance(history, list):
-        for item in history[-20:]:
-            if not isinstance(item, dict):
-                continue
-            role, content = item.get('role'), item.get('content')
-            if role in ('user', 'assistant') and isinstance(content, str) and content.strip():
-                messages.append({'role': role, 'content': content[:8000]})
-    messages.append({'role': 'user', 'content': user_message.strip()[:8000] + get_recent_rtsp_context()})
-    result, error = call_model(token, messages)
-    if error:
-        payload, status = error
-        return jsonify(payload), status
-    return jsonify(result)
+        messages = [{'role': 'system', 'content': DEFAULT_SYSTEM_PROMPT}]
+        history = data.get('history', [])
+        if isinstance(history, list):
+            for item in history[-20:]:
+                if not isinstance(item, dict):
+                    continue
+                role, content = item.get('role'), item.get('content')
+                if role in ('user', 'assistant') and isinstance(content, str) and content.strip():
+                    messages.append({'role': role, 'content': content[:8000]})
+        messages.append({'role': 'user', 'content': user_message.strip()[:8000] + get_recent_rtsp_context()})
+        result, error = call_model(token, messages)
+        if error:
+            payload, status = error
+            return jsonify(payload), status
+        return jsonify(result)
+    except Exception as exc:
+        return jsonify({'success': False, 'response': f'Lỗi xử lý phía máy chủ: {str(exc)[:250]}'}), 500
 
 
 @chatbot_bp.route('/api/chatbot/analyze-media', methods=['POST'])
 def analyze_media():
-    upload = request.files.get('media')
-    question = str(request.form.get('question', '')).strip()
-    token = _get_media_token(str(request.form.get('model_id', '')))
-    if not upload or not upload.filename:
-        return jsonify({'success': False, 'response': 'Vui lòng chọn một ảnh hoặc video để phân tích.'}), 400
-    if not token:
-        return jsonify({
-            'success': False,
-            'response': 'Chưa có model hỗ trợ ảnh/video. Hãy thêm Gemini hoặc model OpenRouter có hỗ trợ vision vào Cấu hình Token.',
-        }), 400
+    try:
+        upload = request.files.get('media')
+        question = str(request.form.get('question', '')).strip()
+        token = _get_media_token(str(request.form.get('model_id', '')))
+        if not upload or not upload.filename:
+            return jsonify({'success': False, 'response': 'Vui lòng chọn một ảnh hoặc video để phân tích.'}), 400
+        if not token:
+            return jsonify({
+                'success': False,
+                'response': 'Chưa có model hỗ trợ ảnh/video. Hãy thêm Gemini hoặc model OpenRouter có hỗ trợ vision vào Cấu hình Token.',
+            }), 400
 
-    suffix = os.path.splitext(upload.filename)[1].lower()
-    is_image = suffix in ALLOWED_IMAGE_EXTENSIONS
-    is_video = suffix in ALLOWED_VIDEO_EXTENSIONS
-    if not is_image and not is_video:
-        return jsonify({'success': False, 'response': 'Định dạng chưa hỗ trợ. Hãy gửi ảnh JPG/PNG/WEBP hoặc video MP4/AVI/MOV/MKV/WEBM.'}), 400
-    max_size = MAX_IMAGE_BYTES if is_image else MAX_VIDEO_BYTES
-    if request.content_length and request.content_length > max_size + 1024 * 1024:
-        return jsonify({'success': False, 'response': f'Tệp quá lớn. Giới hạn là {max_size // (1024 * 1024)} MB.'}), 413
-    upload.stream.seek(0, os.SEEK_END)
-    upload_size = upload.stream.tell()
-    upload.stream.seek(0)
-    if upload_size > max_size:
-        return jsonify({'success': False, 'response': f'Tệp quá lớn. Giới hạn là {max_size // (1024 * 1024)} MB.'}), 413
+        suffix = os.path.splitext(upload.filename)[1].lower()
+        is_image = suffix in ALLOWED_IMAGE_EXTENSIONS
+        is_video = suffix in ALLOWED_VIDEO_EXTENSIONS
+        if not is_image and not is_video:
+            return jsonify({'success': False, 'response': 'Định dạng chưa hỗ trợ. Hãy gửi ảnh JPG/PNG/WEBP hoặc video MP4/AVI/MOV/MKV/WEBM.'}), 400
+        max_size = MAX_IMAGE_BYTES if is_image else MAX_VIDEO_BYTES
+        if request.content_length and request.content_length > max_size + 1024 * 1024:
+            return jsonify({'success': False, 'response': f'Tệp quá lớn. Giới hạn là {max_size // (1024 * 1024)} MB.'}), 413
+        upload.stream.seek(0, os.SEEK_END)
+        upload_size = upload.stream.tell()
+        upload.stream.seek(0)
+        if upload_size > max_size:
+            return jsonify({'success': False, 'response': f'Tệp quá lớn. Giới hạn là {max_size // (1024 * 1024)} MB.'}), 413
 
-    if is_image:
-        raw_file = upload.read(MAX_IMAGE_BYTES + 1)
-        if len(raw_file) > MAX_IMAGE_BYTES:
-            return jsonify({'success': False, 'response': 'Ảnh quá lớn. Giới hạn là 10 MB.'}), 413
-        frame = cv2.imdecode(np.frombuffer(raw_file, dtype=np.uint8), cv2.IMREAD_COLOR)
-        data_urls = [resize_and_encode_frame(frame)]
-    else:
-        data_urls = extract_video_frames(upload, suffix)
-    data_urls = [data_url for data_url in data_urls if data_url]
-    if not data_urls:
-        return jsonify({'success': False, 'response': 'Không đọc được ảnh/video. Hãy thử một tệp khác.'}), 400
+        if is_image:
+            raw_file = upload.read(MAX_IMAGE_BYTES + 1)
+            if len(raw_file) > MAX_IMAGE_BYTES:
+                return jsonify({'success': False, 'response': 'Ảnh quá lớn. Giới hạn là 10 MB.'}), 413
+            frame = cv2.imdecode(np.frombuffer(raw_file, dtype=np.uint8), cv2.IMREAD_COLOR)
+            data_urls = [resize_and_encode_frame(frame)]
+        else:
+            data_urls = extract_video_frames(upload, suffix)
+        data_urls = [data_url for data_url in data_urls if data_url]
+        if not data_urls:
+            return jsonify({'success': False, 'response': 'Không đọc được ảnh/video. Hãy thử một tệp khác.'}), 400
 
-    instruction = MEDIA_ANALYSIS_PROMPT
-    if question:
-        instruction += f'\n\nCâu hỏi bổ sung của người dùng: {question[:1000]}'
-    content = [{'type': 'text', 'text': instruction}]
-    content.extend({'type': 'image_url', 'image_url': {'url': data_url}} for data_url in data_urls[:3])
-    result, error = call_model(token, [
-        {'role': 'system', 'content': DEFAULT_SYSTEM_PROMPT},
-        {'role': 'user', 'content': content},
-    ], max_tokens=1200)
-    if error:
-        payload, status = error
-        return jsonify(payload), status
-    result['media_type'] = 'video' if is_video else 'image'
-    result['frames_analyzed'] = len(data_urls)
-    return jsonify(result)
+        instruction = MEDIA_ANALYSIS_PROMPT
+        if question:
+            instruction += f'\n\nCâu hỏi bổ sung của người dùng: {question[:1000]}'
+        content = [{'type': 'text', 'text': instruction}]
+        content.extend({'type': 'image_url', 'image_url': {'url': data_url}} for data_url in data_urls[:3])
+        result, error = call_model(token, [
+            {'role': 'system', 'content': DEFAULT_SYSTEM_PROMPT},
+            {'role': 'user', 'content': content},
+        ], max_tokens=1200)
+        if error:
+            payload, status = error
+            return jsonify(payload), status
+        result['media_type'] = 'video' if is_video else 'image'
+        result['frames_analyzed'] = len(data_urls)
+        return jsonify(result)
+    except Exception as exc:
+        return jsonify({'success': False, 'response': f'Lỗi phân tích tệp trên máy chủ: {str(exc)[:250]}'}), 500

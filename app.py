@@ -10,15 +10,6 @@ import json
 import psutil
 import os
 
-try:
-    from chatbot_config import CHATBOT_TOKENS, CHATBOT_PIN
-except ImportError:
-    try:
-        from models.chatbot_config import CHATBOT_TOKENS, CHATBOT_PIN
-    except ImportError:
-        CHATBOT_TOKENS = []
-        CHATBOT_PIN = '123456'
-
 app = Flask(__name__)
 app.secret_key = 'hdh_secret_key_2026'
 
@@ -89,9 +80,24 @@ with app.app_context():
         {"name": "Bùi Vạn Thiên", "id": "51.01.103.084", "role": "", "avatar": ""}
     ]
 
+    default_chatbot_tokens = [
+        {
+            'id': 'chat-groq-text',
+            'provider': 'groq',
+            'api_key': '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',
+            'model_name': 'openai/gpt-oss-20b',
+        },
+        {
+            'id': 'chat-groq-vision',
+            'provider': 'groq',
+            'api_key': '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',
+            'model_name': 'meta-llama/llama-4-scout-17b-16e-instruct',
+        },
+    ]
+
     today_str = datetime.now().strftime('%Y-%m-%d')
     default_settings = {
-        'system_pin': str(CHATBOT_PIN),
+        'system_pin': '123456',
         'rtsp_api_list': '[]',
         'rtsp_concurrent_jobs': '10',
         'realtime_api_keys': '[]',
@@ -100,7 +106,7 @@ with app.app_context():
         'image_api_keys': '[]',
         'video_api_keys': '[]',
         'video_ai_model': 'openrouter/free',
-        'chatbot_api_tokens': json.dumps(CHATBOT_TOKENS),
+        'chatbot_api_tokens': json.dumps(default_chatbot_tokens),
         'enable_video': 'true',
         'enable_rtsp': 'true',
         'enable_chatbot': 'true',
@@ -116,8 +122,6 @@ with app.app_context():
         existing = SystemSettings.query.filter_by(setting_key=key).first()
         if not existing:
             db.session.add(SystemSettings(setting_key=key, setting_value=value))
-        elif key == 'chatbot_api_tokens' and (not existing.setting_value or existing.setting_value.strip() in ('[]', '')):
-            existing.setting_value = json.dumps(CHATBOT_TOKENS)
     db.session.commit()
 
 @app.context_processor
