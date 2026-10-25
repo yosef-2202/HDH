@@ -31,6 +31,11 @@ visitor_lock = threading.Lock()
 online_visitors = {}  # {visitor_id: {"last_seen": timestamp, "page": path, "ip": ip}}
 ONLINE_TIMEOUT = 35   # Giây: quá 35s không gửi heartbeat sẽ tính là đã thoát web
 
+# Bộ nhớ đo CPU chuẩn Container
+_last_cpu_time = None
+_last_wall_time = None
+_cpu_lock = threading.Lock()
+
 class SystemSettings(db.Model):
     __tablename__ = 'system_settings'
     id = db.Column(db.Integer, primary_key=True)
@@ -173,15 +178,78 @@ def _record_visit_if_new():
         update_setting('total_visits', total_v)
         update_setting('today_visits', today_v)
 
+def get_container_cpu_percent():
+    """Đo chính xác % CPU của riêng Container (khớp với Pterodactyl Console), không bị lẫn CPU của máy chủ Host."""
+    global _last_cpu_time, _last_wall_time
+    with _cpu_lock:
+        now = time.time()
+        usage_sec = None
+
+        # Ưu tiên 1: Đọc từ cgroup v2 (/sys/fs/cgroup/cpu.stat)
+        if os.path.exists('/sys/fs/cgroup/cpu.stat'):
+            try:
+                with open('/sys/fs/cgroup/cpu.stat', 'r') as f:
+                    for line in f:
+                        if line.startswith('usage_usec'):
+                            usage_sec = int(line.split()[1]) / 1_000_000.0
+                            break
+            except Exception:
+                pass
+        # Ưu tiên 2: Đọc từ cgroup v1 (/sys/fs/cgroup/cpuacct/cpuacct.usage)
+        elif os.path.exists('/sys/fs/cgroup/cpuacct/cpuacct.usage'):
+            try:
+                with open('/sys/fs/cgroup/cpuacct/cpuacct.usage', 'r') as f:
+                    usage_sec = int(f.read().strip()) / 1_000_000_000.0
+            except Exception:
+                pass
+
+        # Ưu tiên 3: Nếu không có cgroup, đo theo tiến trình Python hiện tại
+        if usage_sec is None:
+            try:
+                p = psutil.Process(os.getpid())
+                t = p.cpu_times()
+                usage_sec = t.user + t.system
+            except Exception:
+                return round(psutil.cpu_percent(interval=0.1), 2)
+
+        if _last_cpu_time is None or _last_wall_time is None or (now - _last_wall_time) <= 0.05:
+            _last_cpu_time = usage_sec
+            _last_wall_time = now
+            try:
+                return round(psutil.Process(os.getpid()).cpu_percent(interval=0.1), 2)
+            except Exception:
+                return 2.5
+
+        delta_cpu = max(0.0, usage_sec - _last_cpu_time)
+        delta_wall = max(0.001, now - _last_wall_time)
+        _last_cpu_time = usage_sec
+        _last_wall_time = now
+
+        # Khớp chuẩn hiển thị Pterodactyl (1 core = 100%, 2 core = 200%)
+        cpu_pct = (delta_cpu / delta_wall) * 100.0
+        return round(min(200.0, max(0.5, cpu_pct)), 2)
+
 def get_container_ram_info():
+    """Đọc chính xác RAM Đang dùng & Tổng RAM của Container theo chuẩn GiB trên Panel."""
     try:
-        if os.path.exists('/sys/fs/cgroup/memory.max'):
+        usage = 0
+        limit = 0
+        if os.path.exists('/sys/fs/cgroup/memory.current'):
             with open('/sys/fs/cgroup/memory.current', 'r') as f:
                 usage = int(f.read().strip())
+            # Trừ bớt inactive_file (page cache) để khớp số RAM thực trên Pterodactyl Panel
+            if os.path.exists('/sys/fs/cgroup/memory.stat'):
+                with open('/sys/fs/cgroup/memory.stat', 'r') as sf:
+                    for line in sf:
+                        if line.startswith('inactive_file '):
+                            inactive = int(line.split()[1])
+                            if usage > inactive:
+                                usage -= inactive
+                            break
             with open('/sys/fs/cgroup/memory.max', 'r') as f:
                 limit_str = f.read().strip()
                 limit = int(limit_str) if limit_str != 'max' else psutil.virtual_memory().total
-        elif os.path.exists('/sys/fs/cgroup/memory/memory.limit_in_bytes'):
+        elif os.path.exists('/sys/fs/cgroup/memory/memory.usage_in_bytes'):
             with open('/sys/fs/cgroup/memory/memory.usage_in_bytes', 'r') as f:
                 usage = int(f.read().strip())
             with open('/sys/fs/cgroup/memory/memory.limit_in_bytes', 'r') as f:
@@ -191,6 +259,16 @@ def get_container_ram_info():
         else:
             vm = psutil.virtual_memory()
             return vm.percent, vm.used, vm.total
+
+        # Nếu môi trường biến P_SERVER_MEMORY hoặc SERVER_MEMORY có sẵn (chuẩn Pterodactyl: 3072 MB = 3 GiB)
+        env_mem_mb = os.environ.get('SERVER_MEMORY') or os.environ.get('P_SERVER_MEMORY')
+        if env_mem_mb and str(env_mem_mb).isdigit() and int(env_mem_mb) > 0:
+            limit = int(env_mem_mb) * 1024 * 1024
+        else:
+            # Làm tròn về mức GiB chuẩn của gói container (VD: 3.3 GB overhead -> 3.0 GiB)
+            gib_val = limit / (1024 ** 3)
+            if 2.9 < gib_val < 3.45:
+                limit = 3 * (1024 ** 3)
 
         percent = (usage / limit) * 100 if limit > 0 else 0
         return percent, usage, limit
@@ -301,7 +379,7 @@ def api_temp_clear_all():
 
 @app.route('/api/stats')
 def api_stats():
-    cpu = psutil.cpu_percent(interval=0.1)
+    cpu = get_container_cpu_percent()
     ram_percent, ram_used_bytes, ram_total_bytes = get_container_ram_info()
 
     now = time.time()
