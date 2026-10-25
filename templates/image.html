@@ -93,7 +93,7 @@
         padding: 8px;
     }
 
-    .viewport-body img {
+    .viewport-body img.preview-target {
         max-width: 100%;
         max-height: 100%;
         object-fit: contain;
@@ -106,25 +106,74 @@
         padding: 0 12px;
     }
 
-    .badge-status-normal {
-        background: #a8e6cf !important;
-        color: #2d6a4f !important;
+    /* KHUNG TIẾN TRÌNH NỔI BẬT TRÊN CẢ ĐIỆN THOẠI & PC */
+    .mobile-progress-banner {
+        display: none;
+        background: linear-gradient(135deg, #fffdf9 0%, #fff0ea 100%);
+        border: 2px dashed #ffb7b2;
+        border-radius: 18px;
+        padding: 14px 18px;
+        margin-bottom: 14px;
+        box-shadow: 0 8px 20px rgba(212, 122, 83, 0.15);
+    }
+    .mobile-progress-banner.active {
+        display: block;
     }
 
-    .badge-status-positive {
-        background: #ffd3b6 !important;
-        color: #d47a53 !important;
+    /* LỚP OVERLAY MEME MÈO VẪY TAY KHI ĐANG PHÂN TÍCH ẢNH */
+    .image-overlay-loader {
+        display: none;
+        position: absolute;
+        inset: 0;
+        z-index: 25;
+        background: rgba(255, 250, 250, 0.94);
+        backdrop-filter: blur(4px);
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        padding: 16px;
+        text-align: center;
+    }
+    .image-overlay-loader.active {
+        display: flex !important;
+    }
+    .waving-cat-meme-box {
+        width: 115px;
+        height: 115px;
+        margin-bottom: 10px;
+        border-radius: 22px;
+        background: #fff5ee;
+        border: 3px dashed #ffb7b2;
+        box-shadow: 0 8px 20px rgba(212, 122, 83, 0.18);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        animation: catFloat 2s ease-in-out infinite;
+    }
+    .waving-cat-meme-box img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    .cat-paw-wave {
+        display: inline-block;
+        animation: pawWaveAnim 0.6s ease-in-out infinite alternate;
+        transform-origin: bottom center;
+    }
+    @keyframes pawWaveAnim {
+        0% { transform: rotate(-16deg); }
+        100% { transform: rotate(22deg); }
+    }
+    @keyframes catFloat {
+        0%, 100% { transform: translateY(0px); }
+        50% { transform: translateY(-5px); }
     }
 
-    .badge-status-warning {
-        background: #ffaaa5 !important;
-        color: #c92a2a !important;
-    }
-
-    .badge-status-danger {
-        background: #ff8b94 !important;
-        color: #800000 !important;
-    }
+    .badge-status-normal { background: #a8e6cf !important; color: #2d6a4f !important; }
+    .badge-status-positive { background: #ffd3b6 !important; color: #d47a53 !important; }
+    .badge-status-warning { background: #ffaaa5 !important; color: #c92a2a !important; }
+    .badge-status-danger { background: #ff8b94 !important; color: #800000 !important; }
 
     .btn-cute {
         border-radius: 12px;
@@ -163,8 +212,8 @@
             font-size: 0.85rem;
         }
         .viewport-body {
-            min-height: 220px !important;
-            height: 240px !important;
+            min-height: 230px !important;
+            height: 260px !important;
         }
     }
 </style>
@@ -174,7 +223,7 @@
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 px-1">
         <div>
             <h4 class="fw-bold mb-0" style="color: #d47a53;">
-                <i class="fa-solid fa-paw me-2"></i> Phân Tích Hình Ảnh
+                <i class="fa-solid fa-paw me-2"></i> Phân Tích Hình Ảnh AI
             </h4>
         </div>
         <div class="d-flex flex-wrap gap-2 align-items-center">
@@ -187,9 +236,7 @@
         </div>
     </div>
 
-    <!-- =========================================================
-         BƯỚC 1: BOX NHẬP PASS (MÃ PIN) ĐỒNG BỘ THEO RTSP
-         ========================================================= -->
+    <!-- BƯỚC 1: BOX NHẬP PASS (MÃ PIN) -->
     <div class="modal fade" id="imagePinModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-sm modal-dialog-centered">
             <div class="modal-content overflow-hidden" style="border-radius: 20px; border: none;">
@@ -211,9 +258,7 @@
         </div>
     </div>
 
-    <!-- =========================================================
-         BƯỚC 2: MODAL CẤU HÌNH API KEY HÌNH ẢNH (LƯU MYSQL)
-         ========================================================= -->
+    <!-- BƯỚC 2: MODAL CẤU HÌNH API KEY HÌNH ẢNH -->
     <div class="modal fade" id="apiKeyModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-centered">
             <div class="modal-content overflow-hidden" style="border-radius: 20px; border: none;">
@@ -241,7 +286,7 @@
         <div class="row align-items-center g-2">
             <div class="col-12 col-md-8">
                 <label for="imageFileInput" class="form-label fw-bold" style="color: #8c7b70;">
-                    <i class="fa-solid fa-images me-1"></i> Tải ảnh lên (Tối đa 10MB):
+                    <i class="fa-solid fa-images me-1"></i> Tải ảnh lên (Tối đa 10MB - Tự động tối ưu siêu tốc cho Điện thoại):
                 </label>
                 <div class="input-group">
                     <input type="file" id="imageFileInput" accept="image/*" class="form-control form-control-sm py-2" style="border-radius: 12px 0 0 12px;" onchange="previewImage(event)">
@@ -251,10 +296,24 @@
                 </div>
             </div>
             <div class="col-12 col-md-4 d-flex align-items-end pt-2 pt-md-4">
-                <button type="button" class="btn btn-primary-cute btn-cute w-100 py-2" id="btnAnalyze" onclick="executeImageAnalysis()" disabled>
+                <button type="button" class="btn btn-primary-cute btn-cute w-100 py-2 shadow-sm" id="btnAnalyze" onclick="executeImageAnalysis()" disabled>
                     <i class="fa-solid fa-star me-1"></i> Khám Phá
                 </button>
             </div>
+        </div>
+    </div>
+
+    <!-- THANH TIẾN TRÌNH NỔI BẬT CHO ĐIỆN THOẠI & PC -->
+    <div id="imgTopProgressBanner" class="mobile-progress-banner">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <div class="d-flex align-items-center gap-2">
+                <span class="cat-paw-wave">🐱👋</span>
+                <span class="fw-bold small" style="color: #d47a53;" id="imgTopLoadingText">Đang chuẩn bị gửi ảnh lên máy chủ...</span>
+            </div>
+            <span class="badge rounded-pill px-3 py-1 fw-bold" style="background: #ffb7b2; color: #fff; font-size: 0.82rem;" id="imgTopPercentBadge">0%</span>
+        </div>
+        <div class="progress" style="height: 15px; border-radius: 10px; background: #ffffff; border: 1px solid #f0d8c0; overflow: hidden;">
+            <div id="imgTopProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-warning fw-bold" role="progressbar" style="width: 0%; font-size: 0.72rem; color: #5a4a42; transition: width 0.25s ease;">0%</div>
         </div>
     </div>
 
@@ -271,12 +330,12 @@
                         <i class="fa-solid fa-dog fa-3x mb-2 opacity-50"></i>
                         <h6>Đợi bạn đưa ảnh cho mình xem nè!</h6>
                     </div>
-                    <img id="origPreviewImg" src="" style="display: none;">
+                    <img id="origPreviewImg" class="preview-target" src="" style="display: none;">
                 </div>
             </div>
         </div>
 
-        <div class="col-12 col-lg-6">
+        <div class="col-12 col-lg-6" id="resultViewportCard">
             <div class="viewport-container h-100">
                 <div class="viewport-header">
                     <span class="title-text"><i class="fa-solid fa-wand-magic-sparkles me-2"></i> Kết Quả Từ AI</span>
@@ -287,11 +346,32 @@
                         <i class="fa-solid fa-cat fa-3x mb-2 opacity-50"></i>
                         <h6>Nhấn nút khám phá để mình phân tích nhé!</h6>
                     </div>
-                    <div class="text-center" id="loadingIndicator" style="display: none; z-index: 5;">
-                        <div class="spinner-grow text-warning mb-2" style="width: 3rem; height: 3rem;"></div>
-                        <h6 class="fw-bold" style="color: #d47a53;">Chờ xíu!!!</h6>
+
+                    <!-- OVERLAY MEME MÈO VẪY TAY KHI ĐANG PHÂN TÍCH ẢNH -->
+                    <div class="image-overlay-loader" id="loadingIndicator">
+                        <div class="waving-cat-meme-box">
+                            <img src="https://media.tenor.com/mJ7Tkj3KIn0AAAAi/cat-wave.gif"
+                                 alt="Meo Vay Tay Meme"
+                                 onerror="this.style.display='none'; document.getElementById('imgFallbackSvgCat').style.display='block';">
+                            <svg id="imgFallbackSvgCat" style="display:none; width: 95px; height: 95px;" viewBox="0 0 100 100">
+                                <polygon points="22,42 18,16 40,30" fill="#ffbfa3" stroke="#5a4a42" stroke-width="2.5"/>
+                                <polygon points="78,42 82,16 60,30" fill="#ffbfa3" stroke="#5a4a42" stroke-width="2.5"/>
+                                <ellipse cx="50" cy="56" rx="30" ry="26" fill="#fff" stroke="#5a4a42" stroke-width="2.5"/>
+                                <ellipse cx="31" cy="57" rx="5" ry="3" fill="#ffb7b2"/>
+                                <ellipse cx="69" cy="57" rx="5" ry="3" fill="#ffb7b2"/>
+                                <circle cx="38" cy="50" r="3.8" fill="#5a4a42"/>
+                                <circle cx="62" cy="50" r="3.8" fill="#5a4a42"/>
+                                <polygon points="48,54 52,54 50,57" fill="#ff8b94"/>
+                                <path d="M 43 59 Q 46.5 63 50 59 Q 53.5 63 57 59" fill="none" stroke="#5a4a42" stroke-width="2.2"/>
+                            </svg>
+                        </div>
+                        <h6 class="fw-bold mb-2" style="color: #d47a53;" id="imgOverlayLoadingText">Mèo AI đang soi bức ảnh của bạn...</h6>
+                        <div class="progress w-75" style="height: 16px; border-radius: 10px; background: #fff5f5; border: 1px dashed #ffb7b2;">
+                            <div id="imgOverlayProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-warning fw-bold" role="progressbar" style="width: 0%; font-size: 0.72rem; color: #5a4a42;">0%</div>
+                        </div>
                     </div>
-                    <img id="resultImg" src="" style="display: none;">
+
+                    <img id="resultImg" class="preview-target" src="" style="display: none;">
                 </div>
             </div>
         </div>
@@ -330,7 +410,7 @@
                 </div>
                 <div class="text-truncate">
                     <div class="os-badge-label">Luồng Xử Lý</div>
-                    <div class="os-badge-value" id="badgeSemaphore"><span id="activeWorkersNum">0</span> / 3</div>
+                    <div class="os-badge-value" id="badgeSemaphore"><span id="activeWorkersNum">1</span> / 10</div>
                 </div>
             </div>
         </div>
@@ -390,8 +470,99 @@
     let selectedFileObject = null;
     let imageApiList = [];
     let verifiedImagePin = '';
+    let imgFakeProgressTimer = null;
 
-    // BƯỚC 1: Mở Box nhập Pass giống RTSP
+    // Giữ phiên hoạt động cho module Image để Trang Chủ luôn đếm đúng số luồng đang mở
+    function keepImageModuleSlotAlive() {
+        if (typeof GLOBAL_CLIENT_ID === 'undefined') return;
+        fetch('/api/module_queue/acquire', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ module: 'image', client_id: GLOBAL_CLIENT_ID })
+        })
+        .then(r => r.json())
+        .then(info => {
+            if (info && typeof info.active_count !== 'undefined') {
+                document.getElementById('activeWorkersNum').textContent = info.active_count;
+            }
+        })
+        .catch(() => {});
+    }
+
+    function setImgProgressUI(percent, message, isVisible = true) {
+        const pct = Math.max(0, Math.min(100, Math.round(percent || 0)));
+        const topBanner = document.getElementById('imgTopProgressBanner');
+        const overlay = document.getElementById('loadingIndicator');
+        const topBar = document.getElementById('imgTopProgressBar');
+        const overlayBar = document.getElementById('imgOverlayProgressBar');
+        const topBadge = document.getElementById('imgTopPercentBadge');
+        const topText = document.getElementById('imgTopLoadingText');
+        const overlayText = document.getElementById('imgOverlayLoadingText');
+
+        if (isVisible) {
+            topBanner.classList.add('active');
+            overlay.classList.add('active');
+        } else {
+            topBanner.classList.remove('active');
+            overlay.classList.remove('active');
+        }
+
+        topBar.style.width = pct + '%';
+        topBar.innerText = pct + '%';
+        overlayBar.style.width = pct + '%';
+        overlayBar.innerText = pct + '%';
+        topBadge.innerText = pct + '%';
+
+        if (message) {
+            topText.innerText = message;
+            overlayText.innerText = message;
+        }
+    }
+
+    // Tự động nén ảnh lớn từ Camera điện thoại xuống <= 1280px để gửi lên server mất chưa tới 0.5 giây
+    function compressImageForMobile(file, maxDim = 1280, quality = 0.84) {
+        return new Promise((resolve) => {
+            if (!file || file.size < 350 * 1024) {
+                resolve(file);
+                return;
+            }
+            const img = new Image();
+            const url = URL.createObjectURL(file);
+            img.onload = function() {
+                URL.revokeObjectURL(url);
+                let w = img.width;
+                let h = img.height;
+                if (w > maxDim || h > maxDim) {
+                    if (w > h) {
+                        h = Math.round((h * maxDim) / w);
+                        w = maxDim;
+                    } else {
+                        w = Math.round((w * maxDim) / h);
+                        h = maxDim;
+                    }
+                }
+                const canvas = document.createElement('canvas');
+                canvas.width = w;
+                canvas.height = h;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, w, h);
+                canvas.toBlob((blob) => {
+                    if (blob) {
+                        const newFile = new File([blob], file.name || 'mobile_photo.jpg', { type: 'image/jpeg' });
+                        resolve(newFile);
+                    } else {
+                        resolve(file);
+                    }
+                }, 'image/jpeg', quality);
+            };
+            img.onerror = function() {
+                URL.revokeObjectURL(url);
+                resolve(file);
+            };
+            img.src = url;
+        });
+    }
+
     function openImageConfigWithPin() {
         document.getElementById('imagePinInput').value = '';
         document.getElementById('imagePinError').style.display = 'none';
@@ -399,7 +570,6 @@
         setTimeout(() => document.getElementById('imagePinInput').focus(), 300);
     }
 
-    // Xác thực Pass ở Bước 1 -> Nếu đúng mới mở Bước 2
     function verifyImagePinStep1() {
         const pin = document.getElementById('imagePinInput').value.trim();
         const errEl = document.getElementById('imagePinError');
@@ -473,25 +643,21 @@
         const file = event.target.files[0];
         if (!file) return;
 
-        if (file.size > 10485760) {
-            alert("Bức ảnh này to quá (Hơn 10MB)! Hệ thống sẽ bị nghẹn mất. Bạn chọn ảnh nhẹ hơn nhé!");
+        if (file.size > 15 * 1024 * 1024) {
+            alert("Bức ảnh này to quá (Hơn 15MB)! Bạn chọn ảnh nhẹ hơn nhé!");
             clearSelectedImage();
             return;
         }
 
         selectedFileObject = file;
-        document.getElementById('origBadge').textContent = 'Đã nhận ảnh';
+        document.getElementById('origBadge').textContent = `${(file.size / 1024).toFixed(0)} KB`;
         document.getElementById('origBadge').className = 'badge bg-success';
         document.getElementById('btnAnalyze').disabled = false;
 
-        const reader = new FileReader();
-        reader.onload = function (e) {
-            const previewImg = document.getElementById('origPreviewImg');
-            previewImg.src = e.target.result;
-            previewImg.style.display = 'block';
-            document.getElementById('origPlaceholder').style.display = 'none';
-        };
-        reader.readAsDataURL(file);
+        const previewImg = document.getElementById('origPreviewImg');
+        previewImg.src = URL.createObjectURL(file);
+        previewImg.style.display = 'block';
+        document.getElementById('origPlaceholder').style.display = 'none';
     }
 
     function clearSelectedImage() {
@@ -503,29 +669,74 @@
         document.getElementById('origBadge').textContent = 'Trống';
         document.getElementById('origBadge').className = 'badge bg-light text-secondary';
         document.getElementById('btnAnalyze').disabled = true;
+        setImgProgressUI(0, '', false);
     }
 
     async function executeImageAnalysis() {
         if (!selectedFileObject) return;
         const btnAnalyze = document.getElementById('btnAnalyze');
         btnAnalyze.disabled = true;
-        btnAnalyze.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Chờ xíu xiu...';
+        btnAnalyze.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i> Đang phân tích...';
 
         document.getElementById('resultPlaceholder').style.display = 'none';
-        document.getElementById('loadingIndicator').style.display = 'block';
         document.getElementById('resultImg').style.display = 'none';
+        setImgProgressUI(8, 'Đang tối ưu kích thước ảnh trên điện thoại...', true);
+
+        const optimizedFile = await compressImageForMobile(selectedFileObject);
 
         const formData = new FormData();
-        formData.append('image', selectedFileObject);
+        formData.append('image', optimizedFile);
+        if (typeof GLOBAL_CLIENT_ID !== 'undefined') {
+            formData.append('client_id', GLOBAL_CLIENT_ID);
+        }
 
-        try {
-            const response = await fetch('/api/upload_image', { method: 'POST', body: formData });
-            const data = await response.json();
+        if (imgFakeProgressTimer) clearInterval(imgFakeProgressTimer);
+        let currentProg = 15;
 
-            if (response.ok && data.success) {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/upload_image', true);
+        if (typeof GLOBAL_CLIENT_ID !== 'undefined') {
+            xhr.setRequestHeader('X-Client-ID', GLOBAL_CLIENT_ID);
+        }
+
+        xhr.upload.onprogress = function(e) {
+            if (e.lengthComputable) {
+                const ratio = e.loaded / e.total;
+                currentProg = Math.max(12, Math.min(45, Math.round(ratio * 45)));
+                setImgProgressUI(currentProg, 'Đang tải ảnh lên máy chủ AI...', true);
+            }
+        };
+
+        xhr.upload.onload = function() {
+            currentProg = 48;
+            setImgProgressUI(currentProg, 'Đang quét MediaPipe Pose & gọi Vision AI...', true);
+            imgFakeProgressTimer = setInterval(() => {
+                if (currentProg < 92) {
+                    currentProg += 4;
+                    setImgProgressUI(currentProg, 'Mèo AI đang phân tích chi tiết bức ảnh...', true);
+                }
+            }, 450);
+        };
+
+        xhr.onload = function() {
+            if (imgFakeProgressTimer) { clearInterval(imgFakeProgressTimer); imgFakeProgressTimer = null; }
+            let data = {};
+            try { data = JSON.parse(xhr.responseText || '{}'); } catch (e) {}
+
+            if (xhr.status === 429 && (data.waiting || data.status === 'WAITING')) {
+                setImgProgressUI(0, '', false);
+                btnAnalyze.disabled = false;
+                btnAnalyze.innerHTML = '<i class="fa-solid fa-star me-1"></i> Khám Phá';
+                if (typeof showQueueWaitingModal === 'function') {
+                    showQueueWaitingModal(data, () => executeImageAnalysis());
+                }
+                return;
+            }
+
+            if (xhr.status >= 200 && xhr.status < 300 && data.success) {
+                setImgProgressUI(100, 'Phân tích hoàn tất!', true);
                 document.getElementById('resultImg').src = data.result_image;
                 document.getElementById('resultImg').style.display = 'block';
-                document.getElementById('loadingIndicator').style.display = 'none';
                 document.getElementById('resultBadge').textContent = 'Hoàn tất';
                 document.getElementById('resultBadge').className = 'badge bg-success';
 
@@ -538,21 +749,34 @@
                     document.getElementById('badgeThreadAndKey').textContent = `[${data.os_metrics.thread_name}] ${data.os_metrics.api_key_used}`;
                 }
                 refreshHistoryLogs();
+
+                setTimeout(() => {
+                    setImgProgressUI(100, '', false);
+                    btnAnalyze.disabled = false;
+                    btnAnalyze.innerHTML = '<i class="fa-solid fa-star me-1"></i> Khám Phá Ngay';
+                    if (window.innerWidth < 992) {
+                        document.getElementById('resultViewportCard')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }, 500);
             } else {
-                alert('Lỗi: ' + (data.message || 'Hệ thống đang mệt.'));
-                clearSelectedImage();
-            }
-        } catch (error) {
-            alert('Lỗi kết nối.');
-            clearSelectedImage();
-        } finally {
-            btnAnalyze.disabled = false;
-            btnAnalyze.innerHTML = '<i class="fa-solid fa-star me-1"></i> Khám Phá Ngay';
-            document.getElementById('loadingIndicator').style.display = 'none';
-            if (!document.getElementById('resultImg').src || document.getElementById('resultImg').style.display === 'none') {
+                setImgProgressUI(0, '', false);
+                btnAnalyze.disabled = false;
+                btnAnalyze.innerHTML = '<i class="fa-solid fa-star me-1"></i> Khám Phá';
                 document.getElementById('resultPlaceholder').style.display = 'block';
+                alert('Lỗi: ' + (data.message || 'Hệ thống đang bận, bạn thử lại nhé.'));
             }
-        }
+        };
+
+        xhr.onerror = function() {
+            if (imgFakeProgressTimer) { clearInterval(imgFakeProgressTimer); imgFakeProgressTimer = null; }
+            setImgProgressUI(0, '', false);
+            btnAnalyze.disabled = false;
+            btnAnalyze.innerHTML = '<i class="fa-solid fa-star me-1"></i> Khám Phá';
+            document.getElementById('resultPlaceholder').style.display = 'block';
+            alert('Lỗi kết nối mạng khi gửi ảnh lên máy chủ!');
+        };
+
+        xhr.send(formData);
     }
 
     function applyStatusBadge(status) {
@@ -595,6 +819,10 @@
         document.getElementById('historyTableRows').innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">Chưa có ai ở đây cả~</td></tr>';
     }
 
-    document.addEventListener('DOMContentLoaded', refreshHistoryLogs);
+    document.addEventListener('DOMContentLoaded', () => {
+        refreshHistoryLogs();
+        keepImageModuleSlotAlive();
+        setInterval(keepImageModuleSlotAlive, 15000);
+    });
 </script>
 {% endblock %}

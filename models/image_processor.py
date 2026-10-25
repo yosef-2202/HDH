@@ -33,40 +33,28 @@ DEFAULT_IMAGE_API_KEYS = [
 
 OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
 
-DEFAULT_VISION_MODEL = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
+# Ưu tiên router tự động chọn model Vision miễn phí nhanh nhất hiện tại
+DEFAULT_VISION_MODEL = "openrouter/free"
 
 FALLBACK_VISION_MODELS = [
-    "deepseek/deepseek-v4-flash:free",
-    "google/gemma-4-26b-a4b-it:free",
-    "openrouter/free"
+    "google/gemma-3-27b-it:free",
+    "meta-llama/llama-3.2-11b-vision-instruct:free",
 ]
 
 
 def _get_db_setting(key, default=''):
     try:
-        db = current_app.extensions['sqlalchemy']
-        settings_table = db.Model.metadata.tables['system_settings']
-        value = db.session.execute(
-            db.select(settings_table.c.setting_value).where(settings_table.c.setting_key == key)
-        ).scalar_one_or_none()
-        return value if value is not None else default
+        from app import app, get_setting
+        with app.app_context():
+            return get_setting(key, default)
     except Exception:
         return default
 
 
 def _update_db_setting(key, value):
-    db = current_app.extensions['sqlalchemy']
-    settings_table = db.Model.metadata.tables['system_settings']
-    existing_id = db.session.execute(
-        db.select(settings_table.c.id).where(settings_table.c.setting_key == key)
-    ).scalar_one_or_none()
-    if existing_id is None:
-        db.session.execute(db.insert(settings_table).values(setting_key=key, setting_value=str(value)))
-    else:
-        db.session.execute(
-            db.update(settings_table).where(settings_table.c.setting_key == key).values(setting_value=str(value))
-        )
-    db.session.commit()
+    from app import app, update_setting
+    with app.app_context():
+        update_setting(key, value)
 
 
 def _get_mysql_image_keys():
@@ -82,18 +70,37 @@ def _get_mysql_image_keys():
 
 def _load_configured_api_keys():
     keys = []
+    # 1. Lấy key riêng của module Image
     for k in _get_mysql_image_keys():
-        if k not in keys:
+        if k and k not in keys:
             keys.append(k)
+
+    # 2. Nếu chưa cấu hình key riêng cho Image, tự động mượn key từ Video / RTSP / Realtime
+    if not keys:
+        try:
+            vid_raw = _get_db_setting('video_api_keys', '[]')
+            for k in json.loads(vid_raw):
+                if isinstance(k, str) and k.strip() and k.strip() not in keys:
+                    keys.append(k.strip())
+        except Exception:
+            pass
 
     if not keys:
         try:
             rtsp_raw = _get_db_setting('rtsp_api_list', '[]')
-            items = json.loads(rtsp_raw)
-            for it in items:
+            for it in json.loads(rtsp_raw):
                 k = str(it.get('key', '')).strip()
                 if k and k not in keys:
                     keys.append(k)
+        except Exception:
+            pass
+
+    if not keys:
+        try:
+            rt_raw = _get_db_setting('realtime_api_keys', '[]')
+            for k in json.loads(rt_raw):
+                if isinstance(k, str) and k.strip() and k.strip() not in keys:
+                    keys.append(k.strip())
         except Exception:
             pass
 
@@ -131,11 +138,10 @@ class ThreadSafeKeyManager:
             self.error_counts = {k: 0 for k in new_keys}
 
     def get_next_key(self):
-        if not self.db_loaded:
-            try:
-                self.reload_from_db()
-            except Exception:
-                pass
+        try:
+            self.reload_from_db()
+        except Exception:
+            pass
         with self.lock:
             if not self.keys:
                 return ""
@@ -143,6 +149,10 @@ class ThreadSafeKeyManager:
             self.index = (self.index + 1) % len(self.keys)
             self.usage_counts[key] = self.usage_counts.get(key, 0) + 1
             return key
+
+    def get_all_keys(self):
+        with self.lock:
+            return list(self.keys)
 
     def record_error(self, key):
         with self.lock:
@@ -153,22 +163,7 @@ class ThreadSafeKeyManager:
     def mask_key(key):
         if not key or len(key) < 14:
             return "******"
-        return f"{key[:12]}...{key[-4:]}"
-
-    def get_stats(self):
-        with self.lock:
-            return {
-                "total_keys": len(self.keys),
-                "current_index": self.index,
-                "keys_detail": [
-                    {
-                        "masked_key": self.mask_key(k),
-                        "usage_count": self.usage_counts.get(k, 0),
-                        "error_count": self.error_counts.get(k, 0)
-                    }
-                    for k in self.keys
-                ]
-            }
+        return f"{key[:10]}...{key[-4:]}"
 
 
 key_manager = ThreadSafeKeyManager(list(DEFAULT_IMAGE_API_KEYS))
@@ -251,12 +246,17 @@ def analyze_pose_and_draw(image_bgr):
         try:
             with mp_pose.Pose(
                 static_image_mode=True,
-                model_complexity=1,
+                model_complexity=0,
                 enable_segmentation=False,
                 min_detection_confidence=0.5
             ) as pose_detector:
-                image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
-                results = pose_detector.process(image_rgb)
+                # Thu nhỏ ảnh trước khi đưa vào MediaPipe để xử lý siêu tốc (< 150ms)
+                scale_mp = min(1.0, 640.0 / max(w, h, 1))
+                small_rgb = cv2.cvtColor(
+                    cv2.resize(image_bgr, (int(w * scale_mp), int(h * scale_mp))) if scale_mp < 1.0 else image_bgr,
+                    cv2.COLOR_BGR2RGB
+                )
+                results = pose_detector.process(small_rgb)
 
                 if results.pose_landmarks:
                     pose_detected = True
@@ -303,19 +303,19 @@ def analyze_pose_and_draw(image_bgr):
 
                     if is_horizontal:
                         status = "NGUY HIỂM"
-                        heuristic_desc = "Tư thế nằm ngang / nghi ngờ té ngã trên sàn."
+                        heuristic_desc = "Phát hiện tư thế nằm ngang hoặc nghi ngờ té ngã trên mặt sàn."
                     elif hip_angle < 95:
                         status = "CẢNH BÁO"
-                        heuristic_desc = "Tư thế cúi gập người bất thường hoặc ngồi xổm thấp."
+                        heuristic_desc = "Phát hiện tư thế cúi gập người hoặc ngồi xổm thấp."
                     elif left_hand_up and right_hand_up:
                         status = "TÍCH CỰC"
-                        heuristic_desc = "Đang giơ cả hai tay lên cao (cử chỉ tích cực / vẫy tay)."
+                        heuristic_desc = "Đối tượng đang giơ cả hai tay lên cao (cử chỉ tích cực / vẫy tay)."
                     elif left_hand_up or right_hand_up:
                         status = "TÍCH CỰC"
-                        heuristic_desc = "Đang giơ tay / vẫy tay chào."
+                        heuristic_desc = "Đối tượng đang giơ tay hoặc vẫy tay chào."
                     else:
                         status = "BÌNH THƯỜNG"
-                        heuristic_desc = "Tư thế đứng hoặc ngồi ổn định, trạng thái bình thường."
+                        heuristic_desc = "Tư thế đứng hoặc ngồi ổn định, trạng thái hoàn toàn bình thường."
 
                     pose_metadata = {
                         "landmarks_count": detected_landmarks_count,
@@ -327,12 +327,12 @@ def analyze_pose_and_draw(image_bgr):
             print(f"[ImageProcessor] MediaPipe runtime error: {ex}")
 
     if not pose_detected:
-        heuristic_desc = "Phát hiện đối tượng/khung hình (chế độ quét OpenCV bề mặt)."
+        heuristic_desc = "Đã quét khung hình bằng OpenCV Vision, khung cảnh ổn định."
         status = "BÌNH THƯỜNG"
 
-        primary_color = (255, 255, 0)   
-        secondary_color = (0, 255, 0)   
-        alert_color = (0, 100, 255)     
+        primary_color = (255, 255, 0)
+        secondary_color = (0, 255, 0)
+        alert_color = (0, 100, 255)
         thickness = 2
 
         gap = max(20, min(w, h) // 25)
@@ -361,7 +361,7 @@ def analyze_pose_and_draw(image_bgr):
 
         font = cv2.FONT_HERSHEY_SIMPLEX
         font_scale = max(0.4, min(w, h) / 1000.0)
-        
+
         cv2.putText(annotated, f"RES: {w}x{h}", (gap + 10, gap + 25), font, font_scale, primary_color, 1, cv2.LINE_AA)
         cv2.putText(annotated, "SYS: OPENCV-VISION", (gap + 10, gap + 50), font, font_scale, primary_color, 1, cv2.LINE_AA)
         cv2.putText(annotated, "TARGET: ACQUIRED", (gap + 10, gap + 75), font, font_scale, secondary_color, 1, cv2.LINE_AA)
@@ -375,11 +375,11 @@ def analyze_pose_and_draw(image_bgr):
 
 
 # ------------------------------------------------------------------------------
-# 5. GỌI OPENROUTER VISION AI (CLOUD LLM REASONING)
+# 5. GỌI OPENROUTER VISION AI (PHẢN HỒI NHANH & 100% TIẾNG VIỆT)
 # ------------------------------------------------------------------------------
 def _clean_ai_description(text):
     if not text:
-        return "Bình thường, đối tượng trong khung hình."
+        return "Khung hình ổn định, đối tượng hoạt động bình thường."
     cleaned = text.strip()
     cleaned = re.sub(r'(?i)^(miêu tả|hành vi|phân tích|kết luận|trạng thái)\s*:\s*', '', cleaned)
     cleaned = re.sub(r'(?i)^(bức ảnh cho thấy|hình ảnh cho thấy|dựa trên hình ảnh|tôi thấy|trong ảnh là|qua bức ảnh|bức ảnh này cho thấy|trong hình là)\s*[,:]?\s*', '', cleaned)
@@ -402,117 +402,88 @@ def _classify_ai_status(text):
     if "[BÌNH THƯỜNG]" in text_upper or "[NORMAL]" in text_upper:
         return "BÌNH THƯỜNG"
 
-    if any(k in text_upper for k in ["NGUY HIỂM", "DANGER", "TÉ NGÃ", "NGÃ", "ĐÁNH NHAU", "BẤT TỈNH", "NẰM BẤT ĐỘNG"]):
+    if any(k in text_upper for k in ["NGUY HIỂM", "DANGER", "TÉ NGÃ", "NGÃ", "ĐÁNH NHAU", "XÔ XÁT", "BẤT TỈNH", "NẰM BẤT ĐỘNG"]):
         return "NGUY HIỂM"
-    if any(k in text_upper for k in ["CẢNH BÁO", "WARNING", "BẤT THƯỜNG", "LẢNG VÃNG", "CHE MẶT", "CÚI GẬP", "MỆT MỎI"]):
+    if any(k in text_upper for k in ["CẢNH BÁO", "WARNING", "BẤT THƯỜNG", "LẢNG VÃNG", "CHE MẶT", "CÚI GẬP", "ĐỐI ĐẦU"]):
         return "CẢNH BÁO"
-    if any(k in text_upper for k in ["TÍCH CỰC", "CƯỜI", "VẪY TAY", "GIƠ TAY", "THÂN THIỆN", "CHÀO"]):
+    if any(k in text_upper for k in ["TÍCH CỰC", "CƯỜI", "VẪY TAY", "GIƠ TAY", "THÂN THIỆN", "CHÀO", "VUI VẺ"]):
         return "TÍCH CỰC"
     return "BÌNH THƯỜNG"
 
 
-def _extract_answer_from_reasoning(reasoning_text):
-    if not reasoning_text:
-        return "Bình thường, đối tượng trong khung hình."
-    parts = [p.strip() for p in reasoning_text.split('\n\n') if p.strip()]
-    non_thinking = [p for p in parts if not p.lower().startswith('thinking process') and not re.match(r'^\d+\.', p)]
-    if non_thinking:
-        text = non_thinking[-1]
-    else:
-        text = parts[-1]
-    text = text.strip('"\'')
-    return _clean_ai_description(text)
-
-
 def call_openrouter_vision(image_bgr, initial_key):
     h, w = image_bgr.shape[:2]
-    scale = 640.0 / max(w, 1)
+    scale = 640.0 / max(w, h, 1)
     if scale < 1.0:
         small_img = cv2.resize(image_bgr, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
     else:
         small_img = image_bgr
 
-    ret, buffer = cv2.imencode('.jpg', small_img, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
+    ret, buffer = cv2.imencode('.jpg', small_img, [int(cv2.IMWRITE_JPEG_QUALITY), 72])
     if not ret:
         return None, None, "", "Lỗi nén ảnh JPEG"
 
     base64_str = base64.b64encode(buffer).decode('utf-8')
 
     prompt_text = (
-        "Hãy quan sát bức ảnh và kể lại những gì đang diễn ra một cách tự nhiên, đúng mực như một người kể chuyện (khoảng 2-3 câu ngắn):\n"
-        "- Bao quát đầy đủ bối cảnh, nhân vật hoặc đồ vật, trang phục, hành vi cử chỉ và biểu cảm nổi bật một cách súc tích.\n"
-        "- BẮT BUỘC hành văn đúng mực, tự nhiên, mượt mà và chân thật như con người đang diễn đạt trực tiếp.\n"
-        "- TUYỆT ĐỐI KHÔNG dùng các cụm từ máy móc rập khuôn của AI như: 'Bức ảnh cho thấy', 'Dựa trên hình ảnh', 'Tôi thấy', 'Trong ảnh', 'Bức ảnh này'. Hãy đi thẳng ngay vào nội dung và diễn biến của khung cảnh.\n"
-        "- Ở câu cuối cùng, hãy kèm theo nhận định trạng thái trong ngoặc vuông: [BÌNH THƯỜNG], [TÍCH CỰC], [CẢNH BÁO], hoặc [NGUY HIỂM]."
+        "Bạn là chuyên gia AI phân tích hình ảnh bằng TIẾNG VIỆT 100%. "
+        "Hãy mô tả bức ảnh này trong 2-3 câu ngắn gọn, tự nhiên, đi thẳng vào bối cảnh, nhân vật, trang phục, hành động hoặc biểu cảm. "
+        "TUYỆT ĐỐI KHÔNG dùng tiếng Anh. "
+        "Ở cuối câu, bắt buộc gắn 1 trong 4 nhãn: [BÌNH THƯỜNG], [TÍCH CỰC], [CẢNH BÁO], hoặc [NGUY HIỂM]."
     )
 
+    all_keys = key_manager.get_all_keys()
+    keys_to_try = ([initial_key] if initial_key else []) + [k for k in all_keys if k and k != initial_key]
     models_to_try = [DEFAULT_VISION_MODEL] + [m for m in FALLBACK_VISION_MODELS if m != DEFAULT_VISION_MODEL]
-    active_key = initial_key
     last_error = ""
-    best_reasoning_fallback = None
 
-    for model_name in models_to_try:
+    # Giới hạn tối đa 2 lần thử để điện thoại luôn nhận kết quả nhanh trong 3-8 giây
+    attempts = 0
+    for active_key in keys_to_try[:2]:
         headers = {
             "Authorization": f"Bearer {active_key}",
             "Content-Type": "application/json",
             "HTTP-Referer": "http://localhost:24706",
             "X-Title": "HDH Surveillance AI - Image Module"
         }
-
-        payload = {
-            "model": model_name,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt_text},
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{base64_str}"
+        for model_name in models_to_try[:2]:
+            if attempts >= 2:
+                break
+            attempts += 1
+            payload = {
+                "model": model_name,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt_text},
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:image/jpeg;base64,{base64_str}"}
                             }
-                        }
-                    ]
-                }
-            ],
-            "max_tokens": 300,
-            "temperature": 0.3
-        }
-
-        try:
-            resp = requests.post(OPENROUTER_ENDPOINT, headers=headers, json=payload, timeout=10)
-
-            if resp.status_code == 200:
-                data = resp.json()
-                choices = data.get("choices", [])
-                if choices:
-                    msg = choices[0].get("message", {})
-                    content = msg.get("content")
-                    reasoning = msg.get("reasoning")
-
-                    if content and isinstance(content, str) and content.strip():
-                        cleaned_desc = _clean_ai_description(content)
-                        status_tag = _classify_ai_status(content)
-                        return status_tag, cleaned_desc, model_name, active_key
-
-                    if reasoning and isinstance(reasoning, str) and reasoning.strip() and not best_reasoning_fallback:
-                        cleaned_r = _extract_answer_from_reasoning(reasoning)
-                        best_reasoning_fallback = (_classify_ai_status(cleaned_r), cleaned_r, model_name, active_key)
-
-            elif resp.status_code == 429 or resp.status_code == 401:
-                key_manager.record_error(active_key)
-                backup_key = key_manager.get_next_key()
-                if backup_key and backup_key != active_key:
-                    active_key = backup_key
-                last_error = f"Lỗi {resp.status_code} trên model {model_name}"
-                continue
-
-            last_error = f"Model {model_name} HTTP {resp.status_code}"
-        except Exception as req_ex:
-            last_error = f"Lỗi gọi {model_name}: {req_ex}"
-
-    if best_reasoning_fallback:
-        return best_reasoning_fallback
+                        ]
+                    }
+                ],
+                "max_tokens": 250,
+                "temperature": 0.25
+            }
+            try:
+                resp = requests.post(OPENROUTER_ENDPOINT, headers=headers, json=payload, timeout=11)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    choices = data.get("choices", [])
+                    if choices:
+                        msg = choices[0].get("message", {})
+                        content = (msg.get("content") or msg.get("reasoning") or "").strip()
+                        if content:
+                            cleaned_desc = _clean_ai_description(content)
+                            status_tag = _classify_ai_status(content)
+                            return status_tag, cleaned_desc, model_name, active_key
+                else:
+                    key_manager.record_error(active_key)
+                    last_error = f"HTTP {resp.status_code}"
+            except Exception as req_ex:
+                last_error = str(req_ex)
 
     return None, None, "", last_error
 
@@ -525,10 +496,10 @@ def overlay_hud_banner(image_bgr, status, thread_name, processing_time_ms, model
     h, w = output.shape[:2]
 
     status_colors = {
-        "BÌNH THƯỜNG": (46, 139, 87),   
-        "TÍCH CỰC": (220, 160, 30),     
-        "CẢNH BÁO": (0, 140, 255),      
-        "NGUY HIỂM": (34, 34, 215)      
+        "BÌNH THƯỜNG": (46, 139, 87),
+        "TÍCH CỰC": (220, 160, 30),
+        "CẢNH BÁO": (0, 140, 255),
+        "NGUY HIỂM": (34, 34, 215)
     }
     badge_color = status_colors.get(status, (80, 80, 80))
 
@@ -580,22 +551,21 @@ def api_upload_image():
     client_id = request.headers.get('X-Client-ID') or request.form.get('client_id') or f"img_{uuid.uuid4().hex[:8]}"
 
     img_limiter = get_limiter('image')
-    allowed, q_info = img_limiter.acquire_blocking_task(client_id, timeout=1.5)
-    if not allowed:
+    slot_info = img_limiter.try_acquire_stream(client_id)
+    if not slot_info["allowed"]:
         return jsonify({
             "success": False,
             "waiting": True,
-            "queue_position": q_info.get("position", 1),
-            "active_users": q_info.get("active_count", MAX_CONCURRENT_IMAGE_JOBS),
+            "queue_position": slot_info.get("position", 1),
+            "active_users": slot_info.get("active_count", MAX_CONCURRENT_IMAGE_JOBS),
             "max_users": MAX_CONCURRENT_IMAGE_JOBS,
-            "message": q_info.get("message"),
+            "message": slot_info.get("message"),
             "os_metrics": {"semaphore_available": 0, "thread_name": thread_name, "status": "QUEUE_WAITING"}
         }), 429
 
     global active_workers_count
     with active_workers_lock:
         active_workers_count += 1
-        current_active = active_workers_count
 
     image_bgr = None
     original_filename = "upload.jpg"
@@ -635,8 +605,8 @@ def api_upload_image():
             final_description = ai_desc
         else:
             final_status = pose_status
-            final_description = f"{heuristic_desc} (Phân tích Computer Vision cục bộ)"
-            model_used = "Local-MediaPipe-Heuristic"
+            final_description = f"{heuristic_desc} (Đã phân tích nhanh bằng MediaPipe & OpenCV Vision trên máy chủ)."
+            model_used = "Local-MediaPipe-Vision"
 
         elapsed_ms = (time.perf_counter() - start_time) * 1000.0
         final_hud_image = overlay_hud_banner(annotated_img, final_status, thread_name, elapsed_ms, model_used)
@@ -649,6 +619,7 @@ def api_upload_image():
             pass
 
         result_b64 = _encode_image_to_base64(final_hud_image)
+        st_now = img_limiter.get_status(client_id)
 
         total_time_ms = round((time.perf_counter() - start_time) * 1000.0, 2)
         os_metrics = {
@@ -656,7 +627,7 @@ def api_upload_image():
             "thread_name": thread_name,
             "api_key_used": ThreadSafeKeyManager.mask_key(assigned_key),
             "model_used": model_used,
-            "active_concurrent_workers": current_active,
+            "active_concurrent_workers": max(1, st_now.get("active_count", 1)),
             "semaphore_limit": MAX_CONCURRENT_IMAGE_JOBS
         }
 
@@ -688,7 +659,9 @@ def api_upload_image():
     finally:
         with active_workers_lock:
             active_workers_count = max(0, active_workers_count - 1)
-        img_limiter.release(client_id)
+        # Lưu ý: KHÔNG gọi img_limiter.release(client_id) ngay tại đây để giữ phiên ACTIVE (lease 45s)
+        # giúp Trang Chủ đếm chính xác số luồng đang hoạt động ở module Xử lý Ảnh.
+        # Phiên sẽ tự động giải phóng & xóa temp khi đóng tab (sendBeacon) hoặc hết 45s.
 
 
 @image_bp.route('/api/image/config', methods=['GET', 'POST'])
@@ -697,17 +670,17 @@ def api_image_config():
         data = request.get_json(silent=True) or {}
         client_pin = str(data.get('pin_code', '')).strip()
         expected_pin = str(_get_db_setting('system_pin', '123456')).strip()
-            
+
         is_authenticated = (
             session.get('is_admin') or
             session.get('realtime_unlocked') or
             session.get('chatbot_unlocked') or
             (client_pin and (client_pin == expected_pin or client_pin == 'admin'))
         )
-        
+
         if not is_authenticated:
             return jsonify({
-                "success": False, 
+                "success": False,
                 "message": "Chưa xác thực mã PIN hệ thống!"
             }), 401
 
@@ -715,21 +688,21 @@ def api_image_config():
         if isinstance(keys_input, str):
             keys_input = keys_input.splitlines()
         valid_keys = [str(k).strip() for k in keys_input if str(k).strip()]
-        
+
         try:
             _update_db_setting('image_api_keys', json.dumps(valid_keys))
         except Exception as e:
             return jsonify({"success": False, "message": f"Lỗi lưu MySQL: {str(e)}"}), 500
-            
+
         key_manager.reload_from_db()
         return jsonify({"success": True, "message": "Đã lưu cấu hình API Keys vào MySQL thành công!"})
-        
+
     if not (session.get('is_admin') or session.get('realtime_unlocked') or session.get('chatbot_unlocked')):
         return jsonify({"success": False, "message": "Cần xác thực mã PIN"}), 401
 
     saved_keys = _get_mysql_image_keys()
     return jsonify({
-        "success": True, 
+        "success": True,
         "api_keys": saved_keys
     })
 
@@ -740,10 +713,12 @@ def api_image_logs():
         logs_copy = list(image_processing_history)
         metrics_copy = dict(system_metrics)
 
-    with active_workers_lock:
-        current_workers = active_workers_count
-
-    return jsonify({"success": True, "history": logs_copy, "system_metrics": {**metrics_copy, "active_workers": current_workers}})
+    st_now = get_limiter('image').get_status()
+    return jsonify({
+        "success": True,
+        "history": logs_copy,
+        "system_metrics": {**metrics_copy, "active_workers": st_now.get("active_count", 0)}
+    })
 
 
 @image_bp.route('/api/image/clear-logs', methods=['POST'])
