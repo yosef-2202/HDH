@@ -98,6 +98,7 @@
         max-height: 100%;
         object-fit: contain;
         border-radius: 10px;
+        background: #ffffff;
     }
 
     .cute-placeholder {
@@ -236,21 +237,21 @@
         </div>
     </div>
 
-    <!-- BƯỚC 1: BOX NHẬP PASS (MÃ PIN) -->
+    <!-- BƯỚC 1: BOX NHẬP PASS (MÃ PIN LẤY TỪ MYSQL) -->
     <div class="modal fade" id="imagePinModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-sm modal-dialog-centered">
             <div class="modal-content overflow-hidden" style="border-radius: 20px; border: none;">
                 <div class="modal-header border-0" style="background: #ffecd2; border-bottom: 2px dashed #f0d8c0 !important;">
-                    <h6 class="modal-title fw-bold mb-0" style="color: #d47a53;"><i class="fa-solid fa-lock me-2"></i>Xác Thực Quản Trị</h6>
+                    <h6 class="modal-title fw-bold mb-0" style="color: #d47a53;"><i class="fa-solid fa-lock me-2"></i>Xác Thực Quản Trị (MySQL)</h6>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body p-4 text-center" style="background: #fdfbf7;">
-                    <p class="small fw-bold mb-3" style="color: #8c7b70;">Nhập mật khẩu (PIN) để mở cấu hình API:</p>
+                    <p class="small fw-bold mb-3" style="color: #8c7b70;">Nhập mật khẩu (PIN hệ thống lưu trên MySQL) để mở cấu hình API:</p>
                     <input type="password" inputmode="numeric" id="imagePinInput" class="form-control text-center fw-bold mb-2" placeholder="••••••" style="border-radius: 12px; font-size: 1.2rem; letter-spacing: 4px;" onkeydown="if(event.key === 'Enter') verifyImagePinStep1()">
                     <div id="imagePinError" class="text-danger small fw-bold mt-2" style="display: none;">Sai mật khẩu!</div>
                 </div>
                 <div class="modal-footer border-0 pt-0" style="background: #fdfbf7;">
-                    <button type="button" class="btn btn-primary-cute btn-cute w-100 py-2" onclick="verifyImagePinStep1()">
+                    <button type="button" class="btn btn-primary-cute btn-cute w-100 py-2" id="btnVerifyImagePin" onclick="verifyImagePinStep1()">
                         <i class="fa-solid fa-unlock-keyhole me-1"></i> Mở Cấu Hình
                     </button>
                 </div>
@@ -268,7 +269,7 @@
                 </div>
                 <div class="modal-body p-3 p-md-4" style="background: #fdfbf7;">
                     <div class="d-flex justify-content-between align-items-center mb-3">
-                        <label class="fw-bold small" style="color: #8c7b70;">Danh sách API Key OpenRouter (Round-Robin):</label>
+                        <label class="fw-bold small" style="color: #8c7b70;">Danh sách API Key Vision (Hỗ trợ cả OpenRouter <code>sk-or-v1-...</code> và Groq <code>gsk_...</code>):</label>
                         <button type="button" class="btn btn-sm btn-primary-cute btn-cute px-3 py-1" onclick="addImageApiRow()">+ Thêm Token</button>
                     </div>
                     <div id="imageApiListContainer" class="mb-2"></div>
@@ -286,7 +287,7 @@
         <div class="row align-items-center g-2">
             <div class="col-12 col-md-8">
                 <label for="imageFileInput" class="form-label fw-bold" style="color: #8c7b70;">
-                    <i class="fa-solid fa-images me-1"></i> Tải ảnh lên (Tối đa 10MB - Tự động tối ưu siêu tốc cho Điện thoại):
+                    <i class="fa-solid fa-images me-1"></i> Tải ảnh lên (Tối đa 15MB - Tự động xử lý nền PNG & tối ưu siêu tốc):
                 </label>
                 <div class="input-group">
                     <input type="file" id="imageFileInput" accept="image/*" class="form-control form-control-sm py-2" style="border-radius: 12px 0 0 12px;" onchange="previewImage(event)">
@@ -519,10 +520,10 @@
         }
     }
 
-    // Tự động nén ảnh lớn từ Camera điện thoại xuống <= 1280px để gửi lên server mất chưa tới 0.5 giây
-    function compressImageForMobile(file, maxDim = 1280, quality = 0.84) {
+    // Tự động tối ưu kích thước ảnh và phủ nền trắng cho ảnh PNG tách nền để không bị nền đen
+    function compressImageForMobile(file, maxDim = 1280, quality = 0.86) {
         return new Promise((resolve) => {
-            if (!file || file.size < 350 * 1024) {
+            if (!file) {
                 resolve(file);
                 return;
             }
@@ -545,10 +546,14 @@
                 canvas.width = w;
                 canvas.height = h;
                 const ctx = canvas.getContext('2d');
+                // Phủ nền trắng sáng trước khi vẽ để ảnh PNG tách nền không bị biến thành nền đen
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fillRect(0, 0, w, h);
                 ctx.drawImage(img, 0, 0, w, h);
                 canvas.toBlob((blob) => {
                     if (blob) {
-                        const newFile = new File([blob], file.name || 'mobile_photo.jpg', { type: 'image/jpeg' });
+                        const cleanName = (file.name || 'photo.jpg').replace(/\.[^/.]+$/, "") + ".jpg";
+                        const newFile = new File([blob], cleanName, { type: 'image/jpeg' });
                         resolve(newFile);
                     } else {
                         resolve(file);
@@ -570,38 +575,44 @@
         setTimeout(() => document.getElementById('imagePinInput').focus(), 300);
     }
 
-    function verifyImagePinStep1() {
+    async function verifyImagePinStep1() {
         const pin = document.getElementById('imagePinInput').value.trim();
         const errEl = document.getElementById('imagePinError');
+        const btn = document.getElementById('btnVerifyImagePin');
+
         if (!pin) {
-            errEl.innerText = 'Vui lòng nhập mật khẩu!';
+            errEl.innerText = 'Vui lòng nhập mật khẩu (PIN)!';
             errEl.style.display = 'block';
             return;
         }
-        fetch('/verify-pin', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ pin: pin })
-        })
-        .then(res => res.json())
-        .then(data => {
-            if (data.success) {
+
+        if (btn) btn.disabled = true;
+        try {
+            const res = await fetch('/api/image/verify-pin', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pin: pin })
+            });
+            const data = await res.json();
+            if (btn) btn.disabled = false;
+
+            if (res.ok && data.success) {
                 verifiedImagePin = pin;
                 bootstrap.Modal.getOrCreateInstance(document.getElementById('imagePinModal')).hide();
-                fetch('/api/image/config')
-                    .then(r => r.json())
-                    .then(d => {
-                        imageApiList = (d.api_keys && d.api_keys.length) ? d.api_keys : [''];
-                        renderImageApiRows();
-                        bootstrap.Modal.getOrCreateInstance(document.getElementById('apiKeyModal')).show();
-                    });
+                imageApiList = (data.api_keys && data.api_keys.length) ? data.api_keys : [''];
+                renderImageApiRows();
+                bootstrap.Modal.getOrCreateInstance(document.getElementById('apiKeyModal')).show();
             } else {
-                errEl.innerText = 'Mã PIN không chính xác!';
+                errEl.innerText = data.message || 'Mã PIN không chính xác!';
                 errEl.style.display = 'block';
                 document.getElementById('imagePinInput').value = '';
                 document.getElementById('imagePinInput').focus();
             }
-        });
+        } catch (err) {
+            if (btn) btn.disabled = false;
+            errEl.innerText = 'Lỗi kết nối khi kiểm tra mã PIN từ MySQL!';
+            errEl.style.display = 'block';
+        }
     }
 
     function renderImageApiRows() {
@@ -610,7 +621,7 @@
             <div class="row g-2 mb-2 align-items-center bg-white p-2 rounded-4 border mx-0">
                 <button type="button" class="btn btn-sm btn-outline-danger btn-cute col-auto" onclick="removeImageApiRow(${i})">Xóa</button>
                 <div class="col">
-                    <input type="text" class="form-control form-control-sm" style="border-radius: 10px;" placeholder="Nhập API Key (sk-or-v1-...)" value="${key || ''}" onchange="updateImageApiField(${i}, this.value)">
+                    <input type="text" class="form-control form-control-sm" style="border-radius: 10px;" placeholder="Nhập API Key (sk-or-v1-... hoặc gsk_...)" value="${key || ''}" oninput="updateImageApiField(${i}, this.value)">
                 </div>
             </div>`).join('');
     }
@@ -680,12 +691,12 @@
 
         document.getElementById('resultPlaceholder').style.display = 'none';
         document.getElementById('resultImg').style.display = 'none';
-        setImgProgressUI(8, 'Đang tối ưu kích thước ảnh trên điện thoại...', true);
+        setImgProgressUI(8, 'Đang chuẩn hóa nền ảnh & tối ưu kích thước...', true);
 
         const optimizedFile = await compressImageForMobile(selectedFileObject);
 
         const formData = new FormData();
-        formData.append('image', optimizedFile);
+        formData.append('image', optimizedFile, selectedFileObject.name || 'upload.jpg');
         if (typeof GLOBAL_CLIENT_ID !== 'undefined') {
             formData.append('client_id', GLOBAL_CLIENT_ID);
         }
@@ -709,11 +720,11 @@
 
         xhr.upload.onload = function() {
             currentProg = 48;
-            setImgProgressUI(currentProg, 'Đang quét MediaPipe Pose & gọi Vision AI...', true);
+            setImgProgressUI(currentProg, 'Đang nhận diện nhân vật, trang phục & hành động...', true);
             imgFakeProgressTimer = setInterval(() => {
                 if (currentProg < 92) {
                     currentProg += 4;
-                    setImgProgressUI(currentProg, 'Mèo AI đang phân tích chi tiết bức ảnh...', true);
+                    setImgProgressUI(currentProg, 'Mèo AI đang phân tích cử chỉ & hành động nhân vật...', true);
                 }
             }, 450);
         };
