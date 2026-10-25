@@ -140,7 +140,7 @@ from models.realtime_camera import realtime_bp
 from models.chatbot_manager import chatbot_bp
 from models.image_processor import image_bp
 from models.video import video_bp
-from models.session_limiter import limiter_bp
+from models.session_limiter import limiter_bp, get_temp_storage_stats, clear_all_temp_files
 
 app.register_blueprint(rtsp_bp)
 app.register_blueprint(realtime_bp)
@@ -265,6 +265,21 @@ def settings_page():
     if not session.get('is_admin'):
         return redirect(url_for('index', require_pin='1'))
     return render_template('settings.html')
+
+@app.route('/api/temp/stats', methods=['GET'])
+def api_temp_stats():
+    """Lấy thống kê số file và dung lượng bộ nhớ đệm temp."""
+    stats = get_temp_storage_stats()
+    return jsonify({"success": True, **stats})
+
+@app.route('/api/temp/clear_all', methods=['POST'])
+def api_temp_clear_all():
+    """Xóa toàn bộ file tạm trong static/temp và static/uploads."""
+    if not session.get('is_admin'):
+        return jsonify({"success": False, "message": "Cần quyền Quản trị viên để xóa toàn bộ Temp!"}), 401
+    result = clear_all_temp_files()
+    stats = get_temp_storage_stats()
+    return jsonify({"success": True, **result, **stats})
 
 @app.route('/api/stats')
 def api_stats():

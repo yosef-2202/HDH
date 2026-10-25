@@ -11,7 +11,11 @@ import base64
 import requests
 import psutil
 from datetime import datetime
-from models.session_limiter import get_limiter
+from models.session_limiter import (
+    get_limiter,
+    build_temp_filename,
+    cleanup_session_temp_files,
+)
 
 rtsp_bp = Blueprint('rtsp_bp', __name__)
 current_process = psutil.Process(os.getpid())
@@ -153,7 +157,7 @@ def record_short_clip(frame_list, alert_id):
     if not frame_list: return
     try:
         height, width, _ = frame_list[0].shape
-        filepath = f"static/temp/{alert_id}.webm"
+        filepath = os.path.join('static', 'temp', f"{alert_id}.webm")
         fourcc = cv2.VideoWriter_fourcc(*'VP80')
         out = cv2.VideoWriter(filepath, fourcc, 15.0, (width, height))
         for f in frame_list: out.write(f)
@@ -296,7 +300,7 @@ Dự đoán sự việc: Khách hàng đang mua sắm."""
                 behavior_title = ", ".join(unique_actions) if unique_actions else "Phát hiện đối tượng"
                 action_desc = "<b>Đối tượng:</b><br>" + "<br>".join([f"- {p}" for p in detected_objects]) + f"<br><b>Dự đoán:</b> <i>{prediction}</i>"
                 
-                threading.Thread(target=record_short_clip, args=(list(recent_frames), alert_id)).start()
+                threading.Thread(target=record_short_clip, args=(list(recent_frames), alert_id), daemon=True).start()
                 push_log(client_id, f"[{datetime.now().strftime('%H:%M:%S')}] [{thread_name}] {safety_level.upper()}: {behavior_title} ({os_metrics_str})")
 
                 alert_obj = {
@@ -360,7 +364,8 @@ def generate_frames(rtsp_url, client_id):
             if countdown == 0 and not analysis_queue.full():
                 with clients_lock:
                     if client_id in clients: clients[client_id]['last_api_call_time'] = current_time
-                alert_id = f"vid_{client_id}_{int(time.time())}"
+                # Đặt tên chuẩn: rtsp_<tên_phiên>_<số_thứ_tự>
+                alert_id, _ = build_temp_filename('rtsp', client_id, '.webm')
                 analysis_queue.put((client_id, frame_resized.copy(), list(recent_frames), alert_id))
 
             cv2.putText(frame_resized, f"Wait: {countdown}s", (520, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0) if countdown==0 else (0,165,255), 2)
@@ -432,12 +437,17 @@ def rtsp_data():
 
 @rtsp_bp.route('/api/rtsp/delete_temp/<clip_id>', methods=['POST'])
 def delete_temp(clip_id):
-    if os.path.exists(f"static/temp/{clip_id}.webm"): os.remove(f"static/temp/{clip_id}.webm")
+    safe_name = os.path.basename(clip_id)
+    target = os.path.join('static', 'temp', f"{safe_name}.webm")
+    if os.path.exists(target):
+        os.remove(target)
     return jsonify({"success": True})
 
 @rtsp_bp.route('/api/rtsp/clear_cache', methods=['POST'])
 def clear_cache():
     client_id = (request.get_json(silent=True) or {}).get('client_id', '')
+    if client_id:
+        cleanup_session_temp_files('rtsp', client_id)
     with clients_lock:
         global_alerts.clear()
         if client_id in clients:
@@ -455,7 +465,7 @@ def clear_cache():
 @rtsp_bp.route('/api/rtsp/stop', methods=['POST'])
 def stop_rtsp():
     client_id = (request.get_json(silent=True) or {}).get('client_id', '')
-    get_limiter('rtsp').release(client_id)
+    get_limiter('rtsp').release(client_id, cleanup_temp=False)
     with clients_lock:
         if client_id in clients and clients[client_id]['camera']:
             clients[client_id]['camera'].release()

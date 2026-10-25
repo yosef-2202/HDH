@@ -12,12 +12,15 @@ import numpy as np
 import requests
 import psutil
 from flask import (Blueprint, Response, jsonify, request, stream_with_context, current_app, session)
-from models.session_limiter import get_limiter
+from models.session_limiter import (
+    get_limiter,
+    build_temp_filename,
+    TEMP_FOLDER,
+)
 
 video_bp = Blueprint('video_bp', __name__)
 
-UPLOAD_FOLDER = os.path.join('static', 'uploads')
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(TEMP_FOLDER, exist_ok=True)
 
 MAX_VIDEO_BYTES = 50 * 1024 * 1024  # Giới hạn cứng tối đa 50MB
 
@@ -247,6 +250,7 @@ def _bg_analyze(session_id: str, video_path: str, orig_name: str, client_id: str
         samples = []
         prev_gray = None
         frame_idx = 0
+        file_kb = round(os.path.getsize(video_path) / 1024, 1) if os.path.exists(video_path) else 0
 
         while True:
             ok, frame = cap.read()
@@ -267,7 +271,7 @@ def _bg_analyze(session_id: str, video_path: str, orig_name: str, client_id: str
                 'type': 'metrics',
                 'cpu': f"{cpu_val}%",
                 'ram': f"{ram_val} MB",
-                'bw': f"{round(os.path.getsize(video_path)/1024, 1)} KB"
+                'bw': f"{file_kb} KB"
             })
 
             boxes, prev_gray = _detect_boxes_opencv(frame, prev_gray)
@@ -338,6 +342,12 @@ def _bg_analyze(session_id: str, video_path: str, orig_name: str, client_id: str
     except Exception as exc:
         q.put_nowait({'type': 'log', 'person_id': 'SYSTEM', 'video_ts': '00:00:00', 'behavior': 'Lỗi', 'detail': str(exc), 'status': 'Nguy hiểm', 'status_code': 'danger'})
     finally:
+        # Xóa ngay file video tạm sau khi OpenCV đã trích xuất và phân tích xong
+        try:
+            if video_path and os.path.exists(video_path):
+                os.remove(video_path)
+        except Exception:
+            pass
         get_limiter('video').release(client_id or session_id)
         q.put_nowait({'type': 'complete', 'progress': 100})
 
@@ -356,7 +366,7 @@ def _sse_gen(session_id: str):
 @video_bp.route('/serve_video/<filename>')
 def serve_video(filename):
     from flask import send_from_directory
-    return send_from_directory(UPLOAD_FOLDER, filename)
+    return send_from_directory(TEMP_FOLDER, filename)
 
 
 @video_bp.route('/api/video/analyze', methods=['POST'])
@@ -385,12 +395,13 @@ def api_video_upload():
         get_limiter('video').release(client_id)
         return jsonify({'success': False, 'message': f'Tệp quá lớn ({round(size/(1024*1024), 1)} MB). Giới hạn tối đa là 50 MB để đảm bảo hiệu suất AI!'}), 413
 
-    ext = os.path.splitext(f.filename)[1].lower()
-    filename = str(uuid.uuid4()) + ext
-    filepath = os.path.join(UPLOAD_FOLDER, filename)
+    ext = os.path.splitext(f.filename)[1].lower() or '.mp4'
+    # Đặt tên chuẩn: video_<tên_phiên>_<số_thứ_tự>.mp4 lưu vào static/temp
+    base_id, filepath = build_temp_filename('video', client_id, ext)
+    filename = os.path.basename(filepath)
     f.save(filepath)
 
-    session_id = str(uuid.uuid4())
+    session_id = base_id
     _get_q(session_id)
     threading.Thread(target=_bg_analyze, args=(session_id, filepath, f.filename, client_id), daemon=True).start()
 

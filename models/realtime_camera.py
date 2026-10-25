@@ -14,7 +14,11 @@ import requests
 import json
 import numpy as np
 from datetime import datetime
-from models.session_limiter import get_limiter
+from models.session_limiter import (
+    get_limiter,
+    build_temp_filename,
+    cleanup_session_temp_files,
+)
 
 if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
@@ -105,7 +109,7 @@ def record_short_clip(frame_list, alert_id):
     if not frame_list: return
     try:
         height, width, _ = frame_list[0].shape
-        filepath = f"static/temp/{alert_id}.webm"
+        filepath = os.path.join('static', 'temp', f"{alert_id}.webm")
         fourcc = cv2.VideoWriter_fourcc(*'VP80')
         out = cv2.VideoWriter(filepath, fourcc, 10.0, (width, height))
         for f in frame_list: out.write(f)
@@ -321,7 +325,8 @@ def api_upload_web_frame():
             
             if current_time - last_call >= 6.0 and not analysis_queue.full():
                 clients[client_id]['last_api_call_time'] = current_time
-                alert_id = f"vid_{client_id}_{int(time.time())}"
+                # Đặt tên chuẩn: realtime_<tên_phiên>_<số_thứ_tự>
+                alert_id, _ = build_temp_filename('realtime', client_id, '.webm')
                 analysis_queue.put((client_id, frame_resized.copy(), list(clients[client_id]['recent_frames']), alert_id))
 
         return jsonify({"success": True, "client_id": client_id})
@@ -361,6 +366,8 @@ def api_get_sessions():
 @realtime_bp.route('/api/realtime/clear_logs', methods=['POST'])
 def api_clear_logs():
     client_id = request.args.get('client_id', '').strip()
+    if client_id:
+        cleanup_session_temp_files('realtime', client_id)
     with clients_lock:
         if client_id in clients: clients[client_id]['logs'].clear()
     return jsonify({"success": True})
@@ -369,7 +376,7 @@ def api_clear_logs():
 def api_disconnect():
     data = request.get_json(force=True, silent=True) or {}
     client_id = data.get('client_id', '').strip() or request.headers.get('X-Client-ID', '').strip()
-    get_limiter('realtime').release(client_id)
+    get_limiter('realtime').release(client_id, cleanup_temp=True)
     with clients_lock:
         if client_id in clients: del clients[client_id]
     return jsonify({"success": True})

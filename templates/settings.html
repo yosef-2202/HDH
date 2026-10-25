@@ -64,7 +64,64 @@
             </div>
         </div>
 
-        <!-- CARD 2: Chỉnh sửa ảnh thành viên -->
+        <!-- CARD 2: QUẢN LÝ BỘ NHỚ ĐỆM (TEMP FILES THEO NGUỒN & PHIÊN) -->
+        <div class="card custom-card mb-4 overflow-hidden">
+            <div class="viewport-header">
+                <h6 class="fw-bold mb-0" style="color: #d47a53;">
+                    <i class="fa-solid fa-broom me-2"></i>Quản Lý Bộ Nhớ Đệm (Temp Files)
+                </h6>
+                <span class="badge bg-white text-secondary rounded-pill px-3 py-1" style="font-size: 0.75rem;">
+                    Tự động xóa khi thoát web
+                </span>
+            </div>
+            <div class="p-3 p-md-4">
+                <p class="small fw-semibold mb-3" style="color: #8c7b70;">
+                    Các tệp tạm được định danh theo chuẩn <code>&lt;nguồn&gt;_&lt;tên_phiên&gt;_&lt;số_phiên&gt;</code> (VD: <code>rtsp_client_abc_1.webm</code>, <code>realtime_client_abc_2.webm</code>) và tự động giải phóng ngay khi người dùng đóng trình duyệt. Bạn cũng có thể dọn toàn bộ tệp tạm cũ thủ công tại đây:
+                </p>
+
+                <div class="row g-2 mb-3 text-center">
+                    <div class="col-6 col-md-3">
+                        <div class="p-2 rounded-4" style="background: #fff5f5; border: 1px dashed #ffb7b2;">
+                            <div class="small fw-bold" style="color: #8c7b70; font-size: 0.72rem;">Tổng Tệp Temp</div>
+                            <div class="fw-bold fs-5" style="color: #d47a53;"><span id="tempTotalFiles">0</span> tệp</div>
+                            <small class="text-muted" style="font-size: 0.72rem;"><span id="tempTotalMb">0</span> MB</small>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="p-2 rounded-4" style="background: #fffafa; border: 1px dashed #f0d8c0;">
+                            <div class="small fw-bold" style="color: #8c7b70; font-size: 0.72rem;">Luồng RTSP (<code>rtsp_</code>)</div>
+                            <div class="fw-bold fs-5" style="color: #5a4a42;" id="tempRtspCount">0</div>
+                            <small class="text-muted" style="font-size: 0.72rem;">clip tạm</small>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="p-2 rounded-4" style="background: #fffafa; border: 1px dashed #f0d8c0;">
+                            <div class="small fw-bold" style="color: #8c7b70; font-size: 0.72rem;">Realtime (<code>realtime_</code>)</div>
+                            <div class="fw-bold fs-5" style="color: #5a4a42;" id="tempRealtimeCount">0</div>
+                            <small class="text-muted" style="font-size: 0.72rem;">clip tạm</small>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="p-2 rounded-4" style="background: #fffafa; border: 1px dashed #f0d8c0;">
+                            <div class="small fw-bold" style="color: #8c7b70; font-size: 0.72rem;">Video / Khác (<code>video_</code>)</div>
+                            <div class="fw-bold fs-5" style="color: #5a4a42;" id="tempVideoCount">0</div>
+                            <small class="text-muted" style="font-size: 0.72rem;">tệp tạm</small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex flex-wrap justify-content-end gap-2">
+                    <button type="button" class="btn btn-light border btn-cute px-3 py-2" onclick="loadTempStats()">
+                        <i class="fa-solid fa-rotate me-1" style="color: #d47a53;"></i>Làm mới
+                    </button>
+                    <button type="button" id="btnClearAllTemp" class="btn btn-outline-danger btn-cute px-4 py-2 shadow-sm" onclick="clearAllTempFiles()">
+                        <i class="fa-solid fa-trash-can me-2"></i>Xóa Toàn Bộ Temp Cũ
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- CARD 3: Chỉnh sửa ảnh thành viên -->
         <div class="card custom-card overflow-hidden">
             <div class="viewport-header">
                 <h6 class="fw-bold mb-0" style="color: #d47a53;">
@@ -100,6 +157,44 @@
 <script>
     let members = [];
     const bgColors = ["ffb7b2", "a8e6cf", "ffd3b6", "ffaaa5", "d47a53"];
+
+    function loadTempStats() {
+        fetch('/api/temp/stats')
+            .then(res => res.json())
+            .then(data => {
+                if (!data.success) return;
+                document.getElementById('tempTotalFiles').innerText = data.total_files || 0;
+                document.getElementById('tempTotalMb').innerText = data.total_mb || 0;
+                const src = data.by_source || {};
+                document.getElementById('tempRtspCount').innerText = src.rtsp || 0;
+                document.getElementById('tempRealtimeCount').innerText = src.realtime || 0;
+                document.getElementById('tempVideoCount').innerText = (src.video || 0) + (src.other || 0);
+            })
+            .catch(() => {});
+    }
+
+    function clearAllTempFiles() {
+        if (!confirm('Bạn có chắc chắn muốn xóa toàn bộ các file Temp cũ trên máy chủ không?')) return;
+        const btn = document.getElementById('btnClearAllTemp');
+        btn.disabled = true;
+        fetch('/api/temp/clear_all', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                btn.disabled = false;
+                if (data.success) {
+                    alert(`Đã dọn sạch ${data.deleted_files} tệp tạm (Giải phóng ${data.freed_mb} MB)!`);
+                    loadTempStats();
+                } else {
+                    alert('Lỗi: ' + (data.message || 'Không thể xóa tệp tạm'));
+                }
+            })
+            .catch(() => {
+                btn.disabled = false;
+                alert('Lỗi kết nối máy chủ!');
+            });
+    }
+
+    loadTempStats();
 
     fetch('/api/config')
         .then(res => res.json())
