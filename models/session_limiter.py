@@ -5,19 +5,19 @@ import glob
 import re
 import threading
 import time
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, session
 
 limiter_bp = Blueprint('limiter_bp', __name__)
 
-TEMP_FOLDER = os.path.join('static', 'temp')
-UPLOAD_FOLDER = os.path.join('static', 'uploads')
+BASE_PROJECT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+TEMP_FOLDER = os.path.join(BASE_PROJECT_DIR, 'static', 'temp')
+UPLOAD_FOLDER = os.path.join(BASE_PROJECT_DIR, 'static', 'uploads')
 os.makedirs(TEMP_FOLDER, exist_ok=True)
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 _temp_counter_lock = threading.Lock()
-_session_file_counters = {}  # { "rtsp_client_xyz": 1, "realtime_client_xyz": 2 }
+_session_file_counters = {}  # { "rtsp_client_xyz": 1, "img_client_xyz": 2 }
 
-# Bản đồ chuẩn hóa tên nguồn tắt
 SOURCE_PREFIX_MAP = {
     'rtsp': 'rtsp',
     'rstp': 'rtsp',
@@ -31,7 +31,6 @@ SOURCE_PREFIX_MAP = {
 
 
 def sanitize_id(raw_id: str) -> str:
-    """Làm sạch tên phiên để đặt tên file an toàn."""
     clean = re.sub(r'[^a-zA-Z0-9_-]', '', str(raw_id or 'guest'))
     return clean[:48] if clean else 'guest'
 
@@ -42,16 +41,7 @@ def normalize_prefix(module_prefix: str) -> str:
 
 
 def build_temp_filename(module_prefix: str, client_id: str, ext: str = '.webm') -> tuple[str, str]:
-    """
-    Sinh tên file chuẩn theo: <nguồn_tắt>_<tên_phiên>_<số_phiên>.<ext>
-    Ví dụ:
-      - rtsp_client_ab12cd_1.webm
-      - realtime_client_ab12cd_2.webm
-      - video_client_ab12cd_1.mp4
-      - img_client_ab12cd_1.jpg
-      - chat_client_ab12cd_1.mp4
-    Trả về: (base_id_không_đuôi, đường_dẫn_file_đầy_đủ)
-    """
+    os.makedirs(TEMP_FOLDER, exist_ok=True)
     prefix = normalize_prefix(module_prefix)
     cid = sanitize_id(client_id)
     key = f"{prefix}_{cid}"
@@ -67,10 +57,6 @@ def build_temp_filename(module_prefix: str, client_id: str, ext: str = '.webm') 
 
 
 def cleanup_session_temp_files(module_prefix: str, client_id: str) -> int:
-    """
-    Tự động xóa toàn bộ file temp của một phiên thuộc nguồn tương ứng khi người dùng thoát web.
-    Quét theo mẫu: static/temp/<nguồn_tắt>_<client_id>_*
-    """
     if not client_id:
         return 0
     cid = sanitize_id(client_id)
@@ -87,7 +73,15 @@ def cleanup_session_temp_files(module_prefix: str, client_id: str) -> int:
             _session_file_counters.pop(key, None)
 
         for folder in (TEMP_FOLDER, UPLOAD_FOLDER):
-            for pat in (f"{prefix}_{cid}_*", f"rstp_{cid}_*"):
+            if not os.path.exists(folder):
+                continue
+            patterns = [f"{prefix}_{cid}_*", f"{prefix}_{cid}.*"]
+            if prefix == 'rtsp':
+                patterns.append(f"rstp_{cid}_*")
+            elif prefix == 'img':
+                patterns.append(f"image_{cid}_*")
+
+            for pat in patterns:
                 pattern = os.path.join(folder, pat)
                 for fpath in glob.glob(pattern):
                     try:
@@ -99,13 +93,49 @@ def cleanup_session_temp_files(module_prefix: str, client_id: str) -> int:
     return removed_count
 
 
+def cleanup_source_temp_files(module_prefix: str) -> dict:
+    prefix = normalize_prefix(module_prefix)
+    with _temp_counter_lock:
+        keys_to_remove = [k for k in _session_file_counters if k.startswith(f"{prefix}_")]
+        for k in keys_to_remove:
+            _session_file_counters.pop(k, None)
+
+    deleted_files = 0
+    freed_bytes = 0
+    for folder in (TEMP_FOLDER, UPLOAD_FOLDER):
+        if not os.path.exists(folder):
+            continue
+        for fname in os.listdir(folder):
+            fpath = os.path.join(folder, fname)
+            if not os.path.isfile(fpath) or fname.startswith('.'):
+                continue
+            low = fname.lower()
+            match = (
+                low.startswith(f"{prefix}_") or
+                (prefix == 'img' and low.startswith('image_')) or
+                (prefix == 'rtsp' and low.startswith('rstp_'))
+            )
+            if match:
+                try:
+                    freed_bytes += os.path.getsize(fpath)
+                    os.remove(fpath)
+                    deleted_files += 1
+                except Exception:
+                    pass
+
+    return {
+        "source": prefix,
+        "deleted_files": deleted_files,
+        "freed_kb": round(freed_bytes / 1024, 1),
+        "freed_mb": round(freed_bytes / (1024 * 1024), 2)
+    }
+
+
 def cleanup_all_client_temp_files(client_id: str) -> int:
-    """Xóa toàn bộ file temp của 1 client_id trên tất cả các nguồn khi họ đóng trình duyệt."""
     return cleanup_session_temp_files('*', client_id)
 
 
 def get_temp_storage_stats() -> dict:
-    """Thống kê số lượng và dung lượng file temp hiện có theo từng nguồn tắt."""
     total_files = 0
     total_bytes = 0
     by_source = {"rtsp": 0, "realtime": 0, "video": 0, "img": 0, "chat": 0, "other": 0}
@@ -158,7 +188,6 @@ def get_temp_storage_stats() -> dict:
 
 
 def clear_all_temp_files() -> dict:
-    """Xóa sạch toàn bộ file tạm trong static/temp và static/uploads."""
     with _temp_counter_lock:
         _session_file_counters.clear()
 
@@ -186,35 +215,32 @@ def clear_all_temp_files() -> dict:
 
 
 class ModuleQueueManager:
-    """
-    Quản lý tối đa 10 phiên đồng thời (Active Slots) và Hàng đợi FIFO (Waiting Queue)
-    cho từng module độc lập (Chuẩn cơ chế Semaphore + FIFO Scheduling của HĐH).
-    """
-    def __init__(self, module_name: str, max_concurrent: int = 10, lease_timeout: float = 25.0):
+    def __init__(self, module_name: str, max_concurrent: int = 10, lease_timeout: float = 25.0, auto_clean_on_timeout: bool = True):
         self.module_name = module_name
         self.max_concurrent = max_concurrent
         self.lease_timeout = lease_timeout
+        self.auto_clean_on_timeout = auto_clean_on_timeout
         self.cond = threading.Condition(threading.Lock())
-        self.active_clients = {}   # {client_id: last_seen_timestamp}
-        self.waiting_queue = []    # [client_id_1, client_id_2, ...]
-        self.wait_seen = {}        # {client_id: last_seen_timestamp}
+        self.active_clients = {}
+        self.waiting_queue = []
+        self.wait_seen = {}
 
     def _cleanup_unlocked(self):
         now = time.time()
-        # 1. Giải phóng các phiên đang chạy nhưng đã đóng tab / mất kết nối quá lease_timeout
         expired_active = [
             cid for cid, ts in self.active_clients.items()
             if now - ts > self.lease_timeout
         ]
         for cid in expired_active:
             del self.active_clients[cid]
-            threading.Thread(
-                target=cleanup_session_temp_files,
-                args=(self.module_name, cid),
-                daemon=True
-            ).start()
+            # Với module 'image', giữ nguyên bộ nhớ đệm cho đến khi người dùng thoát Web hoặc Admin xóa
+            if self.auto_clean_on_timeout:
+                threading.Thread(
+                    target=cleanup_session_temp_files,
+                    args=(self.module_name, cid),
+                    daemon=True
+                ).start()
 
-        # 2. Xóa những người trong hàng chờ đã thoát trang quá 20s
         expired_wait = [
             cid for cid in self.waiting_queue
             if now - self.wait_seen.get(cid, now) > 20.0
@@ -223,7 +249,6 @@ class ModuleQueueManager:
             self.waiting_queue.remove(cid)
             self.wait_seen.pop(cid, None)
 
-        # 3. Đẩy người đứng đầu hàng đợi (FIFO) vào slot trống
         while len(self.active_clients) < self.max_concurrent and self.waiting_queue:
             next_cid = self.waiting_queue.pop(0)
             self.wait_seen.pop(next_cid, None)
@@ -327,7 +352,6 @@ class ModuleQueueManager:
                 self.cond.wait(timeout=min(1.0, remaining))
 
     def release(self, client_id: str, cleanup_temp: bool = False):
-        """Giải phóng slot ngay lập tức, tùy chọn xóa file temp của phiên và đánh thức người thứ 11."""
         with self.cond:
             removed = False
             if client_id in self.active_clients:
@@ -368,13 +392,13 @@ class ModuleQueueManager:
             }
 
 
-# Khởi tạo giới hạn chuẩn 10 người đồng thời cho từng Module
+# Riêng module 'image' đặt auto_clean_on_timeout=False để chỉ xóa temp khi người dùng thoát Web hoặc Admin ra lệnh xóa
 MODULE_LIMITERS = {
-    "realtime": ModuleQueueManager("realtime", max_concurrent=10, lease_timeout=18.0),
-    "rtsp": ModuleQueueManager("rtsp", max_concurrent=10, lease_timeout=20.0),
-    "video": ModuleQueueManager("video", max_concurrent=10, lease_timeout=120.0),
-    "image": ModuleQueueManager("image", max_concurrent=10, lease_timeout=45.0),
-    "chatbot": ModuleQueueManager("chatbot", max_concurrent=10, lease_timeout=60.0),
+    "realtime": ModuleQueueManager("realtime", max_concurrent=10, lease_timeout=18.0, auto_clean_on_timeout=True),
+    "rtsp": ModuleQueueManager("rtsp", max_concurrent=10, lease_timeout=20.0, auto_clean_on_timeout=True),
+    "video": ModuleQueueManager("video", max_concurrent=10, lease_timeout=120.0, auto_clean_on_timeout=True),
+    "image": ModuleQueueManager("image", max_concurrent=10, lease_timeout=25.0, auto_clean_on_timeout=False),
+    "chatbot": ModuleQueueManager("chatbot", max_concurrent=10, lease_timeout=60.0, auto_clean_on_timeout=True),
 }
 
 
@@ -399,16 +423,15 @@ def api_release_slot():
     mod = str(data.get('module', '')).strip().lower()
     cid = str(data.get('client_id', '')).strip() or request.headers.get('X-Client-ID', '').strip()
     if mod in MODULE_LIMITERS and cid:
-        # Khi người dùng rời module hoặc đóng tab -> Tự động xóa sạch file temp của phiên đó
-        MODULE_LIMITERS[mod].release(cid, cleanup_temp=True)
-    elif cid:
-        cleanup_all_client_temp_files(cid)
+        # Không tự xóa bộ nhớ đệm của image khi chỉ giải phóng slot; chỉ xóa khi thoát web (/api/session/exit)
+        should_clean = (mod != 'image')
+        MODULE_LIMITERS[mod].release(cid, cleanup_temp=should_clean)
     return jsonify({"success": True})
 
 
 @limiter_bp.route('/api/session/exit', methods=['POST'])
 def api_session_exit():
-    """Endpoint nhận tín hiệu sendBeacon khi người dùng đóng tab/trình duyệt để dọn sạch temp của phiên."""
+    """Endpoint nhận tín hiệu sendBeacon khi người dùng đóng tab/thoát trình duyệt -> Xóa sạch temp của phiên."""
     data = request.get_json(force=True, silent=True) or {}
     cid = str(data.get('client_id', '')).strip() or request.headers.get('X-Client-ID', '').strip()
     mod = str(data.get('module', '')).strip().lower()
@@ -416,11 +439,28 @@ def api_session_exit():
     if cid:
         if mod and mod in MODULE_LIMITERS:
             MODULE_LIMITERS[mod].release(cid, cleanup_temp=True)
+            removed = cleanup_session_temp_files(mod, cid)
         else:
             for limiter in MODULE_LIMITERS.values():
                 limiter.release(cid, cleanup_temp=False)
-        removed = cleanup_all_client_temp_files(cid)
+            removed = cleanup_all_client_temp_files(cid)
     return jsonify({"success": True, "removed_temp_files": removed})
+
+
+@limiter_bp.route('/api/temp/clear_source', methods=['POST'])
+def api_clear_source_temp():
+    """Chỉ Admin mới được phép ra lệnh xóa bộ nhớ đệm theo nguồn (ví dụ: 'img')."""
+    if not session.get('is_admin'):
+        return jsonify({
+            "success": False,
+            "message": "Chỉ Quản trị viên (Admin) mới có quyền xóa bộ nhớ đệm!"
+        }), 403
+
+    data = request.get_json(silent=True) or {}
+    source = str(data.get('source', 'img')).strip().lower()
+    result = cleanup_source_temp_files(source)
+    stats = get_temp_storage_stats()
+    return jsonify({"success": True, **result, **stats})
 
 
 @limiter_bp.route('/api/module_queue/status', methods=['GET'])

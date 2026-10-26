@@ -52,7 +52,7 @@
                     <i class="fa-solid fa-broom me-2"></i>Quản Lý Bộ Nhớ Đệm (Temp Files Theo Nguồn & Phiên)
                 </h6>
                 <span class="badge bg-white text-secondary rounded-pill px-3 py-1" style="font-size: 0.75rem;">
-                    <i class="fa-solid fa-bolt text-warning me-1"></i>Tự động xóa khi người dùng thoát Web
+                    <i class="fa-solid fa-bolt text-warning me-1"></i>Chỉ xóa khi Admin ra lệnh hoặc Người dùng thoát Web
                 </span>
             </div>
             <div class="p-3 p-md-4">
@@ -60,8 +60,8 @@
                     <div class="small fw-semibold" style="color: #5a4a42;">
                         <i class="fa-solid fa-circle-info me-1" style="color: #d47a53;"></i>
                         Quy chuẩn lưu trữ tự động: <code>&lt;nguồn_tắt&gt;_&lt;tên_phiên&gt;_&lt;số_phiên&gt;</code>
-                        (VD: <code>rtsp_client_a1b2_1.webm</code>, <code>realtime_client_a1b2_2.webm</code>, <code>video_client_a1b2_1.mp4</code>).
-                        Ngay khi người dùng đóng tab hoặc ngắt kết nối, hệ thống sẽ tự động quét và xóa sạch tệp của phiên đó.
+                        (VD: <code>img_client_a1b2_1.jpg</code>, <code>rtsp_client_a1b2_1.webm</code>, <code>video_client_a1b2_1.mp4</code>).
+                        Bộ nhớ đệm ảnh (<code>img_</code>) được khóa bảo vệ: người dùng không thể tự xóa, hệ thống chỉ xóa khi Quản trị viên ra lệnh tại đây hoặc khi người dùng thoát khỏi trang Web.
                     </div>
                 </div>
 
@@ -125,6 +125,9 @@
                     <div class="d-flex flex-wrap gap-2 ms-auto">
                         <button type="button" class="btn btn-light border btn-cute px-3 py-2" onclick="loadTempStats()">
                             <i class="fa-solid fa-rotate me-1" style="color: #d47a53;"></i>Làm mới
+                        </button>
+                        <button type="button" id="btnClearImgTemp" class="btn btn-warning text-dark btn-cute px-3 py-2 shadow-sm" onclick="clearImageTempOnly()">
+                            <i class="fa-solid fa-images me-1"></i>Xóa Temp Ảnh (<code>img_</code>)
                         </button>
                         <button type="button" id="btnClearAllTemp" class="btn btn-danger btn-cute px-4 py-2 shadow-sm" onclick="clearAllTempFiles()">
                             <i class="fa-solid fa-trash-can me-2"></i>Xóa Toàn Bộ Temp Cũ
@@ -276,13 +279,40 @@
                 } else {
                     listBox.innerHTML = files.map(f => `
                         <span class="badge bg-white text-dark border px-2 py-1 rounded-pill" style="font-family: monospace; font-size: 0.74rem;">
-                            <i class="fa-regular fa-file-video me-1" style="color:#d47a53;"></i>${f.name}
+                            <i class="fa-regular fa-file me-1" style="color:#d47a53;"></i>${f.name}
                             <small class="text-muted ms-1">(${f.size_kb} KB)</small>
                         </span>
                     `).join('');
                 }
             })
             .catch(() => {});
+    }
+
+    function clearImageTempOnly() {
+        if (!confirm('Admin xác nhận xóa toàn bộ bộ nhớ đệm Ảnh (img_*) trên máy chủ?')) return;
+        const btn = document.getElementById('btnClearImgTemp');
+        const msg = document.getElementById('tempClearStatusMsg');
+        btn.disabled = true;
+        fetch('/api/temp/clear_source', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ source: 'img', all_sessions: true })
+        })
+            .then(res => res.json())
+            .then(data => {
+                btn.disabled = false;
+                if (data.success) {
+                    msg.style.color = '#16a34a';
+                    msg.innerHTML = `<i class="fa-solid fa-circle-check me-1"></i>Admin đã xóa sạch ${data.deleted_files} tệp bộ nhớ đệm Ảnh (Giải phóng ${data.freed_kb} KB)!`;
+                    loadTempStats();
+                } else {
+                    alert('Lỗi: ' + (data.message || 'Không thể xóa bộ nhớ đệm ảnh'));
+                }
+            })
+            .catch(() => {
+                btn.disabled = false;
+                alert('Lỗi kết nối máy chủ!');
+            });
     }
 
     function clearAllTempFiles() {
