@@ -18,6 +18,23 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 _temp_counter_lock = threading.Lock()
 _session_file_counters = {}  # { "rtsp_client_xyz": 1, "img_client_xyz": 2 }
 
+# Trạng thái Bật/Tắt tính năng Auto Clean toàn hệ thống (Mặc định: True)
+_auto_clean_lock = threading.Lock()
+_auto_clean_enabled = True
+
+
+def is_auto_clean_enabled() -> bool:
+    with _auto_clean_lock:
+        return _auto_clean_enabled
+
+
+def set_auto_clean_enabled(enabled: bool) -> bool:
+    global _auto_clean_enabled
+    with _auto_clean_lock:
+        _auto_clean_enabled = bool(enabled)
+        return _auto_clean_enabled
+
+
 SOURCE_PREFIX_MAP = {
     'rtsp': 'rtsp',
     'rstp': 'rtsp',
@@ -179,6 +196,7 @@ def get_temp_storage_stats() -> dict:
     recent_files.sort(key=lambda x: x["mtime"], reverse=True)
 
     return {
+        "auto_clean_enabled": is_auto_clean_enabled(),
         "total_files": total_files,
         "total_mb": round(total_bytes / (1024 * 1024), 2),
         "total_kb": round(total_bytes / 1024, 1),
@@ -233,8 +251,8 @@ class ModuleQueueManager:
         ]
         for cid in expired_active:
             del self.active_clients[cid]
-            # Với module 'image', giữ nguyên bộ nhớ đệm cho đến khi người dùng thoát Web hoặc Admin xóa
-            if self.auto_clean_on_timeout:
+            # Chỉ tự động dọn temp khi hết hạn nếu cả cờ module và Auto Clean toàn cục đều đang BẬT
+            if self.auto_clean_on_timeout and is_auto_clean_enabled():
                 threading.Thread(
                     target=cleanup_session_temp_files,
                     args=(self.module_name, cid),
@@ -366,7 +384,7 @@ class ModuleQueueManager:
             if removed:
                 self.cond.notify_all()
 
-        if cleanup_temp and client_id:
+        if cleanup_temp and client_id and is_auto_clean_enabled():
             cleanup_session_temp_files(self.module_name, client_id)
 
     def get_status(self, client_id: str = "") -> dict:
@@ -423,28 +441,68 @@ def api_release_slot():
     mod = str(data.get('module', '')).strip().lower()
     cid = str(data.get('client_id', '')).strip() or request.headers.get('X-Client-ID', '').strip()
     if mod in MODULE_LIMITERS and cid:
-        # Không tự xóa bộ nhớ đệm của image khi chỉ giải phóng slot; chỉ xóa khi thoát web (/api/session/exit)
-        should_clean = (mod != 'image')
+        # Không tự xóa bộ nhớ đệm của image khi chỉ giải phóng slot; và tôn trọng trạng thái Auto Clean
+        should_clean = (mod != 'image') and is_auto_clean_enabled()
         MODULE_LIMITERS[mod].release(cid, cleanup_temp=should_clean)
     return jsonify({"success": True})
 
 
 @limiter_bp.route('/api/session/exit', methods=['POST'])
 def api_session_exit():
-    """Endpoint nhận tín hiệu sendBeacon khi người dùng đóng tab/thoát trình duyệt -> Xóa sạch temp của phiên."""
+    """Endpoint nhận tín hiệu sendBeacon khi người dùng đóng tab/thoát trình duyệt -> Xóa sạch temp nếu Auto Clean đang Bật."""
     data = request.get_json(force=True, silent=True) or {}
     cid = str(data.get('client_id', '')).strip() or request.headers.get('X-Client-ID', '').strip()
     mod = str(data.get('module', '')).strip().lower()
     removed = 0
+    auto_clean = is_auto_clean_enabled()
+
     if cid:
         if mod and mod in MODULE_LIMITERS:
-            MODULE_LIMITERS[mod].release(cid, cleanup_temp=True)
-            removed = cleanup_session_temp_files(mod, cid)
+            MODULE_LIMITERS[mod].release(cid, cleanup_temp=auto_clean)
+            if auto_clean:
+                removed = cleanup_session_temp_files(mod, cid)
         else:
             for limiter in MODULE_LIMITERS.values():
                 limiter.release(cid, cleanup_temp=False)
-            removed = cleanup_all_client_temp_files(cid)
-    return jsonify({"success": True, "removed_temp_files": removed})
+            if auto_clean:
+                removed = cleanup_all_client_temp_files(cid)
+    return jsonify({
+        "success": True,
+        "auto_clean_enabled": auto_clean,
+        "removed_temp_files": removed
+    })
+
+
+@limiter_bp.route('/api/temp/auto_clean', methods=['GET', 'POST'])
+def api_toggle_auto_clean():
+    """API lấy hoặc cập nhật trạng thái Bật/Tắt tính năng Auto Clean (Yêu cầu quyền Admin khi thay đổi)."""
+    if request.method == 'GET':
+        return jsonify({
+            "success": True,
+            "auto_clean_enabled": is_auto_clean_enabled()
+        })
+
+    if not session.get('is_admin'):
+        return jsonify({
+            "success": False,
+            "message": "Chỉ Quản trị viên (Admin) mới có quyền bật/tắt Auto Clean!"
+        }), 403
+
+    data = request.get_json(silent=True) or {}
+    if 'enabled' in data:
+        new_state = set_auto_clean_enabled(bool(data.get('enabled')))
+    else:
+        new_state = set_auto_clean_enabled(not is_auto_clean_enabled())
+
+    return jsonify({
+        "success": True,
+        "auto_clean_enabled": new_state,
+        "message": (
+            "Đã BẬT tự động dọn bộ nhớ đệm (Auto Clean) khi người dùng thoát phiên!"
+            if new_state else
+            "Đã TẮT tự động dọn bộ nhớ đệm (Auto Clean) - Tệp tạm sẽ được giữ lại cho đến khi Admin xóa!"
+        )
+    })
 
 
 @limiter_bp.route('/api/temp/clear_source', methods=['POST'])

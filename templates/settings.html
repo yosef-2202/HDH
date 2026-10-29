@@ -26,6 +26,25 @@
         border-radius: 18px;
         padding: 18px;
     }
+    .autoclean-switch-pill {
+        background: #ffffff;
+        border: 1.5px solid #f0d8c0;
+        border-radius: 50px;
+        padding: 5px 14px;
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        box-shadow: 0 3px 10px rgba(212, 122, 83, 0.1);
+        transition: all 0.25s ease;
+    }
+    .autoclean-switch-pill.active-mode {
+        border-color: #10b981;
+        background: #f0fdf4;
+    }
+    .autoclean-switch-pill.inactive-mode {
+        border-color: #f59e0b;
+        background: #fffbeb;
+    }
 </style>
 
 <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 px-2 gap-2">
@@ -51,9 +70,15 @@
                 <h6 class="fw-bold mb-0" style="color: #d47a53;">
                     <i class="fa-solid fa-broom me-2"></i>Quản Lý Bộ Nhớ Đệm (Temp Files Theo Nguồn & Phiên)
                 </h6>
-                <span class="badge bg-white text-secondary rounded-pill px-3 py-1" style="font-size: 0.75rem;">
-                    <i class="fa-solid fa-bolt text-warning me-1"></i>Chỉ xóa khi Admin ra lệnh hoặc Người dùng thoát Web
-                </span>
+                <!-- Nút Bật/Tắt Auto Clean trực tiếp trên Header -->
+                <div class="autoclean-switch-pill active-mode" id="autoCleanPillBox">
+                    <div class="form-check form-switch m-0 d-flex align-items-center gap-2">
+                        <input class="form-check-input fs-5 m-0" type="checkbox" role="switch" id="toggleAutoCleanSwitch" checked onchange="toggleAutoCleanMode(this.checked)" style="cursor: pointer;">
+                        <label class="form-check-label fw-bold small m-0" for="toggleAutoCleanSwitch" style="cursor: pointer; color: #4a3a32;">
+                            Auto Clean: <span id="autoCleanStateBadge" class="text-success">ĐANG BẬT</span>
+                        </label>
+                    </div>
+                </div>
             </div>
             <div class="p-3 p-md-4">
                 <div class="p-3 rounded-4 mb-3 d-flex flex-wrap justify-content-between align-items-center gap-2" style="background: #fff5f5; border: 1px dashed #ffb7b2;">
@@ -61,7 +86,9 @@
                         <i class="fa-solid fa-circle-info me-1" style="color: #d47a53;"></i>
                         Quy chuẩn lưu trữ tự động: <code>&lt;nguồn_tắt&gt;_&lt;tên_phiên&gt;_&lt;số_phiên&gt;</code>
                         (VD: <code>img_client_a1b2_1.jpg</code>, <code>rtsp_client_a1b2_1.webm</code>, <code>video_client_a1b2_1.mp4</code>).
-                        Bộ nhớ đệm ảnh (<code>img_</code>) được khóa bảo vệ: người dùng không thể tự xóa, hệ thống chỉ xóa khi Quản trị viên ra lệnh tại đây hoặc khi người dùng thoát khỏi trang Web.
+                        <span id="autoCleanDescText">
+                            Khi <b>Auto Clean ĐANG BẬT</b>, hệ thống sẽ tự động thu hồi tệp tạm khi người dùng đóng tab/thoát trang Web hoặc hết phiên chờ. Khi <b>TẮT</b>, toàn bộ tệp tạm sẽ được giữ lại cho đến khi Admin bấm xóa thủ công.
+                        </span>
                     </div>
                 </div>
 
@@ -125,6 +152,9 @@
                     <div class="d-flex flex-wrap gap-2 ms-auto">
                         <button type="button" class="btn btn-light border btn-cute px-3 py-2" onclick="loadTempStats()">
                             <i class="fa-solid fa-rotate me-1" style="color: #d47a53;"></i>Làm mới
+                        </button>
+                        <button type="button" id="btnToggleAutoCleanBtn" class="btn btn-outline-success btn-cute px-3 py-2" onclick="clickToggleAutoCleanButton()">
+                            <i class="fa-solid fa-wand-magic-sparkles me-1"></i><span id="btnToggleAutoCleanText">Tắt Auto Clean</span>
                         </button>
                         <button type="button" id="btnClearImgTemp" class="btn btn-warning text-dark btn-cute px-3 py-2 shadow-sm" onclick="clearImageTempOnly()">
                             <i class="fa-solid fa-images me-1"></i>Xóa Temp Ảnh (<code>img_</code>)
@@ -256,13 +286,86 @@
 
 <script>
     let members = [];
+    let isAutoCleanEnabled = true;
     const bgColors = ["ffb7b2", "a8e6cf", "ffd3b6", "ffaaa5", "d47a53"];
+
+    function renderAutoCleanUI(enabled) {
+        isAutoCleanEnabled = !!enabled;
+        const switchEl = document.getElementById('toggleAutoCleanSwitch');
+        const pillBox = document.getElementById('autoCleanPillBox');
+        const stateBadge = document.getElementById('autoCleanStateBadge');
+        const btnEl = document.getElementById('btnToggleAutoCleanBtn');
+        const btnText = document.getElementById('btnToggleAutoCleanText');
+
+        if (switchEl) switchEl.checked = isAutoCleanEnabled;
+
+        if (isAutoCleanEnabled) {
+            pillBox?.classList.remove('inactive-mode');
+            pillBox?.classList.add('active-mode');
+            if (stateBadge) {
+                stateBadge.className = 'text-success fw-bold';
+                stateBadge.innerText = 'ĐANG BẬT';
+            }
+            if (btnEl) {
+                btnEl.className = 'btn btn-outline-secondary btn-cute px-3 py-2';
+            }
+            if (btnText) {
+                btnText.innerText = 'Tắt Auto Clean';
+            }
+        } else {
+            pillBox?.classList.remove('active-mode');
+            pillBox?.classList.add('inactive-mode');
+            if (stateBadge) {
+                stateBadge.className = 'text-warning fw-bold';
+                stateBadge.innerText = 'ĐANG TẮT';
+            }
+            if (btnEl) {
+                btnEl.className = 'btn btn-success btn-cute px-3 py-2 shadow-sm';
+            }
+            if (btnText) {
+                btnText.innerText = 'Bật Auto Clean';
+            }
+        }
+    }
+
+    function clickToggleAutoCleanButton() {
+        toggleAutoCleanMode(!isAutoCleanEnabled);
+    }
+
+    function toggleAutoCleanMode(targetState) {
+        const msg = document.getElementById('tempClearStatusMsg');
+        fetch('/api/temp/auto_clean', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled: Boolean(targetState) })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                renderAutoCleanUI(data.auto_clean_enabled);
+                if (msg) {
+                    msg.style.color = data.auto_clean_enabled ? '#16a34a' : '#d97706';
+                    msg.innerHTML = `<i class="fa-solid ${data.auto_clean_enabled ? 'fa-circle-check' : 'fa-pause-circle'} me-1"></i>${data.message}`;
+                }
+            } else {
+                renderAutoCleanUI(isAutoCleanEnabled);
+                alert('Lỗi: ' + (data.message || 'Không thể thay đổi trạng thái Auto Clean'));
+            }
+        })
+        .catch(() => {
+            renderAutoCleanUI(isAutoCleanEnabled);
+            alert('Lỗi kết nối máy chủ khi bật/tắt Auto Clean!');
+        });
+    }
 
     function loadTempStats() {
         fetch('/api/temp/stats')
             .then(res => res.json())
             .then(data => {
                 if (!data.success) return;
+                if (typeof data.auto_clean_enabled !== 'undefined') {
+                    renderAutoCleanUI(data.auto_clean_enabled);
+                }
                 document.getElementById('tempTotalFiles').innerText = data.total_files || 0;
                 document.getElementById('tempTotalMb').innerText = data.total_mb || 0;
                 const src = data.by_source || {};

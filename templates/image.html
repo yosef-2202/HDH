@@ -62,6 +62,77 @@
         border-color: #ffb7b2;
         background: #fff5f2;
     }
+
+    .img-key-list-container {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        max-height: 260px;
+        overflow-y: auto;
+        padding: 4px 2px;
+    }
+    .img-key-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: #ffffff;
+        border: 1px solid #f0d8c0;
+        padding: 8px 10px;
+        border-radius: 14px;
+        box-shadow: 0 2px 6px rgba(212, 122, 83, 0.05);
+        transition: all 0.2s ease;
+    }
+    .img-key-row:focus-within {
+        border-color: #d47a53;
+        box-shadow: 0 3px 10px rgba(212, 122, 83, 0.12);
+    }
+    .btn-delete-img-key {
+        background: #fff;
+        color: #dc3545;
+        border: 1px solid #ff8fa3;
+        border-radius: 20px;
+        padding: 4px 12px;
+        font-size: 0.76rem;
+        font-weight: 700;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: all 0.15s ease;
+    }
+    .btn-delete-img-key:hover {
+        background: #fff0f3;
+        border-color: #dc3545;
+    }
+    .img-key-input {
+        flex: 1;
+        border: 1px solid #e2e6ec;
+        border-radius: 10px;
+        padding: 7px 12px;
+        font-family: Consolas, Monaco, monospace;
+        font-size: 0.82rem;
+        color: #4a3a32;
+        outline: none;
+        background: #fffdfa;
+    }
+    .img-key-input:focus {
+        border-color: #d47a53;
+        background: #ffffff;
+    }
+    .btn-add-img-token {
+        background: #ffb7b2;
+        color: #ffffff;
+        border: none;
+        border-radius: 20px;
+        padding: 5px 14px;
+        font-size: 0.78rem;
+        font-weight: 700;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: all 0.2s ease;
+    }
+    .btn-add-img-token:hover {
+        background: #ff9e99;
+        transform: translateY(-1px);
+    }
 </style>
 
 <div class="image-page-container">
@@ -72,7 +143,7 @@
                 <i class="fa-solid fa-image me-2"></i>Phân Tích Hành Vi & Đối Tượng Qua Ảnh
             </h4>
             <p class="small mb-0 fw-semibold" style="color: #8c7b70;">
-                Nhận diện tư thế MediaPipe + Vision AI đa luồng (Tối đa 10 phiên đồng thời) & Giám sát CPU, RAM, Băng thông mạng theo phiên
+                Nhận diện tư thế MediaPipe + Vision AI đa luồng (Tối đa 10 phiên đồng thời) & Giám sát CPU, RAM, Băng thông mạng
             </p>
         </div>
         <div class="d-flex align-items-center gap-2 flex-wrap">
@@ -80,13 +151,13 @@
                 <i class="fa-solid fa-users-viewfinder me-1"></i>Phiên hoạt động: <strong id="imgActiveSlots">0</strong>/10
             </span>
             <button type="button" class="btn btn-primary-cute btn-cute px-3 py-2 shadow-sm" onclick="openImageConfigModal()">
-                <i class="fa-solid fa-key me-1"></i>Cấu hình API & Model
+                <i class="fa-solid fa-key me-1"></i>Cấu hình API Key
             </button>
         </div>
     </div>
 
     <div class="row g-4">
-        <!-- CỘT TRÁI: TẢI ẢNH & CẤU HÌNH NHANH -->
+        <!-- CỘT TRÁI: TẢI ẢNH -->
         <div class="col-12 col-lg-5">
             <div class="card custom-card h-100 overflow-hidden">
                 <div class="viewport-header">
@@ -97,20 +168,6 @@
                 </div>
                 <div class="card-body p-3 p-md-4 d-flex flex-column justify-content-between">
                     <div>
-                        <!-- Chọn Model AI -->
-                        <div class="mb-3">
-                            <label class="form-label small fw-bold mb-1" style="color: #5a4a42;">
-                                <i class="fa-solid fa-microchip me-1" style="color: #d47a53;"></i>Chế độ / Mô hình xử lý ảnh:
-                            </label>
-                            <select id="imageModelSelect" class="form-select form-select-sm fw-semibold" style="border-radius: 12px; border-color: #f0d8c0; padding: 9px 12px; color: #5a4a42;">
-                                <option value="meta-llama/llama-4-scout-17b-16e-instruct">Llama 4 Scout 17B Vision (Groq - Siêu tốc khuyên dùng)</option>
-                                <option value="meta-llama/llama-4-maverick-17b-128e-instruct">Llama 4 Maverick 17B Vision (Groq - Phân tích sâu)</option>
-                                <option value="google/gemma-3-27b-it:free">Google Gemma 3 27B Vision (OpenRouter Free)</option>
-                                <option value="qwen/qwen2.5-vl-32b-instruct:free">Qwen 2.5 VL 32B Vision (OpenRouter Free)</option>
-                                <option value="local-opencv">OpenCV + MediaPipe Local (Offline siêu nhanh)</option>
-                            </select>
-                        </div>
-
                         <!-- Vùng kéo thả ảnh -->
                         <div class="upload-dropzone mb-3" id="dropzoneArea" onclick="document.getElementById('imageFileInput').click()">
                             <input type="file" id="imageFileInput" accept="image/*" class="d-none" onchange="handleFileSelect(event)">
@@ -118,10 +175,10 @@
                                 <i class="fa-solid fa-cloud-arrow-up" style="font-size: 2.3rem; color: #ffb7b2;"></i>
                             </div>
                             <h6 class="fw-bold mb-1" style="color: #5a4a42;" id="selectedFileName">Nhấn để chọn ảnh hoặc kéo thả vào đây</h6>
-                            <p class="small text-muted mb-0" style="font-size: 0.76rem;">Hỗ trợ JPG, PNG, WEBP (Tự động giữ nền sáng cho ảnh PNG trong suốt)</p>
+                            <p class="small text-muted mb-0" style="font-size: 0.76rem;">Hỗ trợ JPG, PNG, WEBP</p>
                         </div>
 
-                        <!-- Ảnh xem trước khi gửi -->
+                        <!-- Ảnh xem trước -->
                         <div id="previewBeforeBox" class="text-center mb-3 d-none">
                             <div class="small fw-bold mb-1 text-start" style="color: #8c7b70;">
                                 <i class="fa-regular fa-eye me-1" style="color: #d47a53;"></i>Ảnh gốc đã chọn (<span id="previewFileSize">0 KB</span>):
@@ -133,7 +190,7 @@
                     <div>
                         <div class="p-2 rounded-3 mb-3 small fw-semibold" style="background: #fff5f5; border: 1px dashed #ffb7b2; color: #7a6a60; font-size: 0.76rem;">
                             <i class="fa-solid fa-lock me-1" style="color: #d47a53;"></i>
-                            Bộ nhớ đệm ảnh (<code>img_</code>) được quản lý bởi Hệ thống: chỉ thu hồi khi bạn đóng Web hoặc khi Quản trị viên ra lệnh xóa.
+                            Bộ nhớ đệm ảnh (<code>img_</code>) được quản lý bởi Hệ thống tự động thu hồi.
                         </div>
 
                         <button type="button" id="btnAnalyzeImage" class="btn btn-primary-cute btn-cute w-100 py-2 fs-6 shadow-sm" onclick="executeImageAnalysis()">
@@ -144,7 +201,7 @@
             </div>
         </div>
 
-        <!-- CỘT PHẢI: KẾT QUẢ QUANG HỌC HUD & THÔNG SỐ CPU, RAM, MẠNG CỦA PHIÊN -->
+        <!-- CỘT PHẢI: KẾT QUẢ & THÔNG SỐ -->
         <div class="col-12 col-lg-7">
             <div class="card custom-card h-100 overflow-hidden">
                 <div class="viewport-header">
@@ -152,7 +209,7 @@
                     <span id="resultStatusBadge" class="badge badge-status-normal rounded-pill px-3 py-1">Sẵn sàng</span>
                 </div>
                 <div class="card-body p-3 p-md-4">
-                    <!-- Khung hiển thị ảnh kết quả có HUD -->
+                    <!-- Khung hiển thị ảnh kết quả -->
                     <div class="image-viewport-box mb-3" id="resultViewport">
                         <div id="resultPlaceholder" class="text-center text-light opacity-75 px-3">
                             <i class="fa-regular fa-image mb-2" style="font-size: 2.8rem; color: #ffb7b2;"></i>
@@ -162,12 +219,12 @@
                         <div id="resultLoading" class="text-center text-light d-none">
                             <div class="spinner-border text-warning mb-2" role="status"></div>
                             <div class="fw-bold">Đang phân tích tư thế & gọi Vision AI...</div>
-                            <small class="text-white-50">Đang đo tải CPU, RAM và băng thông mạng của phiên...</small>
+                            <small class="text-white-50">Đang đo tải CPU, RAM và băng thông mạng...</small>
                         </div>
                         <img id="resultHudImage" src="" alt="Kết quả AI" class="d-none">
                     </div>
 
-                    <!-- Lời nhận xét chi tiết của AI -->
+                    <!-- Lời nhận xét -->
                     <div class="p-3 rounded-4 mb-3" style="background: #fff8f0; border: 1px dashed #f0d8c0;">
                         <div class="d-flex justify-content-between align-items-center mb-1 flex-wrap gap-1">
                             <span class="small fw-bold text-uppercase" style="color: #d47a53;">
@@ -182,24 +239,23 @@
                         </p>
                     </div>
 
-                    <!-- BẢNG GIÁM SÁT CPU, RAM, ĐƯỜNG TRUYỀN MẠNG CỦA 1 PHIÊN XỬ LÝ ẢNH -->
+                    <!-- BẢNG GIÁM SÁT TÀI NGUYÊN -->
                     <div class="p-3 rounded-4" style="background: #fff5f5; border: 1px dashed #ffb7b2;">
                         <div class="d-flex flex-wrap justify-content-between align-items-center mb-2 gap-1">
                             <span class="small fw-bold" style="color: #d47a53;">
-                                <i class="fa-solid fa-gauge-high me-1"></i>Tài Nguyên Hệ Điều Hành Của Phiên Xử Lý Này
+                                <i class="fa-solid fa-gauge-high me-1"></i>Tài Nguyên Hệ Điều Hành Phiên
                             </span>
                             <div class="d-flex gap-2 flex-wrap">
                                 <span class="badge bg-white text-secondary border rounded-pill" style="font-size: 0.7rem;" id="metricThreadName">
                                     <i class="fa-solid fa-code-branch me-1"></i>Luồng: Chờ
                                 </span>
                                 <span class="badge bg-white text-secondary border rounded-pill" style="font-size: 0.7rem;" id="metricModelUsed">
-                                    Model: --
+                                    Model: qwen/qwen-2.5-vl-72b-instruct
                                 </span>
                             </div>
                         </div>
 
                         <div class="row g-2 text-center">
-                            <!-- 1. Tải CPU -->
                             <div class="col-6 col-md-3">
                                 <div class="os-metric-tile">
                                     <div class="small fw-bold text-muted" style="font-size: 0.68rem;">
@@ -211,8 +267,6 @@
                                     </small>
                                 </div>
                             </div>
-
-                            <!-- 2. Bộ nhớ RAM -->
                             <div class="col-6 col-md-3">
                                 <div class="os-metric-tile">
                                     <div class="small fw-bold text-muted" style="font-size: 0.68rem;">
@@ -224,8 +278,6 @@
                                     </small>
                                 </div>
                             </div>
-
-                            <!-- 3. Đường truyền mạng -->
                             <div class="col-6 col-md-3">
                                 <div class="os-metric-tile">
                                     <div class="small fw-bold text-muted" style="font-size: 0.68rem;">
@@ -237,8 +289,6 @@
                                     </small>
                                 </div>
                             </div>
-
-                            <!-- 4. Thời gian phản hồi -->
                             <div class="col-6 col-md-3">
                                 <div class="os-metric-tile">
                                     <div class="small fw-bold text-muted" style="font-size: 0.68rem;">
@@ -258,13 +308,18 @@
         </div>
     </div>
 
-    <!-- LỊCH SỬ CÁC PHIÊN XỬ LÝ ẢNH GẦN ĐÂY -->
+    <!-- LỊCH SỬ -->
     <div class="card custom-card mt-4 overflow-hidden">
         <div class="viewport-header">
-            <span><i class="fa-solid fa-clock-rotate-left me-2"></i>Nhật Ký Các Phiên Xử Lý Ảnh & Thông Số Hệ Điều Hành</span>
-            <button type="button" class="btn btn-sm btn-light border btn-cute px-3 py-1" onclick="loadImageHistory()">
-                <i class="fa-solid fa-rotate me-1" style="color: #d47a53;"></i>Làm mới
-            </button>
+            <span><i class="fa-solid fa-clock-rotate-left me-2"></i>Nhật Ký Các Phiên Xử Lý Ảnh</span>
+            <div>
+                <button type="button" class="btn btn-sm btn-outline-danger btn-cute px-3 py-1 me-1" onclick="clearMyLogs()">
+                    <i class="fa-solid fa-trash-can me-1"></i>Xóa log của tôi
+                </button>
+                <button type="button" class="btn btn-sm btn-light border btn-cute px-3 py-1" onclick="loadImageHistory()">
+                    <i class="fa-solid fa-rotate me-1" style="color: #d47a53;"></i>Làm mới
+                </button>
+            </div>
         </div>
         <div class="card-body p-3">
             <div id="imageHistoryContainer" class="row g-2">
@@ -274,24 +329,23 @@
     </div>
 </div>
 
-<!-- MODAL BẢO MẬT 2 LỚP CẤU HÌNH API KEY & MODEL (CHỈ DÀNH CHO ADMIN) -->
+<!-- MODAL CẤU HÌNH -->
 <div class="modal fade" id="imageConfigModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content pin-modal-content overflow-hidden">
             <div class="viewport-header">
                 <h6 class="fw-bold mb-0" style="color: #d47a53;">
-                    <i class="fa-solid fa-shield-halved me-2"></i>Cấu Hình API Key & Model Xử Lý Ảnh
+                    <i class="fa-solid fa-shield-halved me-2"></i>Cấu Hình API Key (OpenRouter)
                 </h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
             </div>
             <div class="modal-body p-4">
-                <!-- Bước 1: Nhập mã PIN hệ thống -->
                 <div id="imgPinStep">
                     <label class="form-label small fw-bold" style="color: #5a4a42;">
-                        <i class="fa-solid fa-lock me-1" style="color: #d47a53;"></i>Nhập mã PIN Quản trị viên để mở khóa cấu hình:
+                        <i class="fa-solid fa-lock me-1" style="color: #d47a53;"></i>Nhập mã PIN Quản trị viên:
                     </label>
                     <div class="input-group mb-2">
-                        <input type="password" id="imgAdminPinInput" class="form-control fw-bold text-center" placeholder="••••••" maxlength="10" style="letter-spacing: 4px; border-radius: 12px 0 0 12px;">
+                        <input type="password" id="imgAdminPinInput" class="form-control fw-bold text-center" placeholder="••••••" maxlength="10" style="letter-spacing: 4px; border-radius: 12px 0 0 12px;" onkeydown="if(event.key==='Enter') verifyImageAdminPin()">
                         <button class="btn btn-primary-cute btn-cute px-3" type="button" onclick="verifyImageAdminPin()">
                             <i class="fa-solid fa-unlock me-1"></i>Mở Khóa
                         </button>
@@ -299,20 +353,23 @@
                     <div id="imgPinErrorMsg" class="small text-danger fw-bold d-none"></div>
                 </div>
 
-                <!-- Bước 2: Chỉnh sửa API Keys & Model mặc định sau khi mở khóa -->
                 <div id="imgConfigStep" class="d-none">
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold" style="color: #5a4a42;">Model AI mặc định:</label>
-                        <select id="adminDefaultImgModel" class="form-select form-select-sm" style="border-radius: 10px;"></select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold" style="color: #5a4a42;">
-                            Danh sách API Keys (Mỗi dòng 1 Key Groq <code>gsk_...</code> hoặc OpenRouter <code>sk-or-...</code>):
+                    <div class="d-flex justify-content-between align-items-center mb-2 gap-2 flex-wrap">
+                        <label class="form-label small fw-bold mb-0" style="color: #5a4a42;">
+                            Danh sách API Keys (OpenRouter bắt đầu bằng <code>sk-or-...</code>):
                         </label>
-                        <textarea id="adminImgApiKeys" rows="4" class="form-control form-control-sm" style="border-radius: 12px; font-family: monospace;" placeholder="gsk_..."></textarea>
+                        <button type="button" class="btn-add-img-token" onclick="addImgApiKeyRow('')">
+                            <i class="fa-solid fa-plus me-1"></i>Thêm Token
+                        </button>
                     </div>
+
+                    <div id="adminImgKeyListContainer" class="img-key-list-container mb-3"></div>
+
                     <div id="imgConfigSaveMsg" class="small fw-bold mb-2 d-none"></div>
-                    <div class="d-flex justify-content-end gap-2">
+                    <div class="d-flex justify-content-end gap-2 pt-2" style="border-top: 1px dashed #f0d8c0;">
+                        <button type="button" class="btn btn-light border btn-cute px-3 py-2" data-bs-dismiss="modal">
+                            Đóng
+                        </button>
                         <button type="button" class="btn btn-primary-cute btn-cute px-4 py-2" onclick="saveImageAdminConfig()">
                             <i class="fa-solid fa-floppy-disk me-1"></i>Lưu Vào MySQL
                         </button>
@@ -324,28 +381,15 @@
 </div>
 
 <script>
+    const GLOBAL_CLIENT_ID = "client_" + Math.random().toString(36).substr(2, 9);
     let selectedImageFile = null;
     let verifiedAdminPin = '';
 
-    // Khởi tạo danh sách model và lịch sử khi mở trang
     document.addEventListener('DOMContentLoaded', () => {
-        fetch('/api/image/models')
-            .then(res => res.json())
-            .then(data => {
-                if (data.success && data.models) {
-                    const sel = document.getElementById('imageModelSelect');
-                    sel.innerHTML = data.models.map(m =>
-                        `<option value="${m.id}" ${m.id === data.selected_model ? 'selected' : ''}>${m.name}</option>`
-                    ).join('');
-                }
-            })
-            .catch(() => {});
-
         loadImageHistory();
         updateQueueSlotStatus();
-        setInterval(updateQueueSlotStatus, 4000);
+        setInterval(updateQueueSlotStatus, 4000); 
 
-        // Hỗ trợ kéo thả file ảnh
         const dz = document.getElementById('dropzoneArea');
         if (dz) {
             dz.addEventListener('dragover', (e) => {
@@ -365,9 +409,12 @@
 
     function updateQueueSlotStatus() {
         fetch(`/api/module_queue/status?module=image&client_id=${encodeURIComponent(GLOBAL_CLIENT_ID)}`)
-            .then(res => res.json())
+            .then(res => {
+                if(res.ok) return res.json();
+                throw new Error("Endpoint không tồn tại hoặc lỗi mạng");
+            })
             .then(data => {
-                if (data.success) {
+                if (data && data.success) {
                     document.getElementById('imgActiveSlots').innerText = data.active_count || 0;
                 }
             })
@@ -422,7 +469,6 @@
         const formData = new FormData();
         formData.append('image', selectedImageFile);
         formData.append('client_id', GLOBAL_CLIENT_ID);
-        formData.append('model_name', document.getElementById('imageModelSelect').value);
 
         fetch('/api/upload_image', {
             method: 'POST',
@@ -439,6 +485,7 @@
 
             if (status === 429) {
                 document.getElementById('resultPlaceholder').classList.remove('d-none');
+                alert("Hệ thống đang quá tải do vượt quá 10 phiên xử lý đồng thời! Vui lòng thử lại sau vài giây.");
                 return;
             }
 
@@ -448,23 +495,22 @@
                 return;
             }
 
-            // Hiển thị ảnh kết quả HUD
             const hudImg = document.getElementById('resultHudImage');
             hudImg.src = data.result_image;
             hudImg.classList.remove('d-none');
 
-            // Hiển thị trạng thái & mô tả
             applyStatusBadgeStyle(data.status);
             document.getElementById('resultDescriptionText').innerText = data.description || '';
             if (data.temp_image_id) {
                 document.getElementById('resultTempFileId').innerHTML = `<i class="fa-regular fa-file-image me-1" style="color:#d47a53;"></i>${data.temp_image_id}.jpg`;
             }
 
-            // Hiển thị chi tiết CPU, RAM, Đường truyền mạng của phiên xử lý ảnh
             if (data.os_metrics) {
                 const m = data.os_metrics;
                 document.getElementById('metricThreadName').innerHTML = `<i class="fa-solid fa-code-branch me-1"></i>${m.thread_name || 'Worker'}`;
-                document.getElementById('metricModelUsed').innerText = `Model: ${m.model_used || 'AI'}`;
+                
+                // Hiển thị tên model thật đầy đủ
+                document.getElementById('metricModelUsed').innerText = `Model: ${m.model_used || 'qwen/qwen-2.5-vl-72b-instruct'}`;
 
                 document.getElementById('metricCpuPercent').innerText = `${m.cpu_percent ?? 0}%`;
                 document.getElementById('metricSemaphore').innerText = `Phiên: ${m.active_concurrent_workers ?? 1}/${m.semaphore_limit ?? 10}`;
@@ -492,6 +538,26 @@
         });
     }
 
+    function clearMyLogs() {
+        if (!confirm('Bạn có chắc muốn xóa lịch sử ảnh của riêng bạn không? (Không ảnh hưởng đến ảnh của người khác)')) return;
+        
+        fetch('/api/image/clear-logs', {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'X-Client-ID': GLOBAL_CLIENT_ID
+            },
+            body: JSON.stringify({ client_id: GLOBAL_CLIENT_ID })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                loadImageHistory();
+            }
+        })
+        .catch(() => alert('Lỗi kết nối khi xóa nhật ký!'));
+    }
+
     function loadImageHistory() {
         fetch('/api/image/logs')
             .then(res => res.json())
@@ -510,7 +576,9 @@
                                 </span>
                                 <small class="text-muted fw-semibold" style="font-size: 0.72rem;">${item.timestamp}</small>
                             </div>
-                            <div class="small fw-bold mb-1" style="color: #5a4a42;">${item.description}</div>
+                            <div class="small fw-bold mb-1" style="color: #8c7b70; font-style: italic; user-select: none;">
+                                <i class="fa-solid fa-lock me-1" style="color: #d47a53;"></i>[Nội dung phân tích đã được ẩn]
+                            </div>
                             <div class="d-flex flex-wrap gap-2 mt-2 pt-1" style="border-top: 1px dashed #f0d8c0; font-size: 0.72rem;">
                                 <span class="text-primary fw-bold"><i class="fa-solid fa-microchip me-1"></i>CPU: ${item.cpu_percent ?? 0}%</span>
                                 <span class="text-success fw-bold"><i class="fa-solid fa-memory me-1"></i>RAM: ${item.ram_percent ?? 0}% (${item.ram_used_gb ?? 0}/${item.ram_total_gb ?? 0}GB)</span>
@@ -524,11 +592,70 @@
             .catch(() => {});
     }
 
+    function addImgApiKeyRow(keyValue = '') {
+        const container = document.getElementById('adminImgKeyListContainer');
+        const row = document.createElement('div');
+        row.className = 'img-key-row';
+
+        const cleanVal = String(keyValue || '').replace(/[\r\n\s]+/g, '');
+        row.innerHTML = `
+            <button type="button" class="btn-delete-img-key" onclick="removeImgApiKeyRow(this)">Xóa</button>
+            <input type="text" class="img-key-input" placeholder="Nhập sk-or-v1-..." value="${cleanVal}" spellcheck="false" autocomplete="off">
+        `;
+
+        const inputEl = row.querySelector('.img-key-input');
+        inputEl.addEventListener('paste', (e) => {
+            e.preventDefault();
+            const pasted = (e.clipboardData || window.clipboardData).getData('text') || '';
+            const extracted = pasted.match(/(?:sk-or-v1-[a-fA-F0-9]{32,128})/g)
+                || pasted.split(/[\r\n]+/).map(s => s.trim()).filter(Boolean);
+
+            if (extracted.length > 1) {
+                inputEl.value = extracted[0];
+                for (let i = 1; i < extracted.length; i++) {
+                    addImgApiKeyRow(extracted[i]);
+                }
+            } else {
+                inputEl.value = pasted.replace(/[\r\n\s]+/g, '');
+            }
+        });
+
+        container.appendChild(row);
+    }
+
+    function removeImgApiKeyRow(btnEl) {
+        const container = document.getElementById('adminImgKeyListContainer');
+        btnEl.closest('.img-key-row').remove();
+        if (container.children.length === 0) {
+            addImgApiKeyRow('');
+        }
+    }
+
+    function renderImgApiKeyList(rawKeys) {
+        const container = document.getElementById('adminImgKeyListContainer');
+        container.innerHTML = '';
+
+        let joinedText = Array.isArray(rawKeys) ? rawKeys.join('\n') : String(rawKeys || '');
+        joinedText = joinedText.replace(/sk-or-v1-[\r\n\s]+([a-fA-F0-9]+)/g, 'sk-or-v1-$1');
+
+        const validMatches = joinedText.match(/(?:sk-or-v1-[a-fA-F0-9]{32,128})/g);
+        const cleanList = validMatches && validMatches.length > 0
+            ? [...new Set(validMatches)]
+            : (Array.isArray(rawKeys) ? rawKeys.map(k => String(k).trim()).filter(k => k.startsWith('sk-or-') && k.length > 20) : []);
+
+        if (cleanList.length === 0) {
+            addImgApiKeyRow('');
+        } else {
+            cleanList.forEach(k => addImgApiKeyRow(k));
+        }
+    }
+
     function openImageConfigModal() {
         document.getElementById('imgPinStep').classList.remove('d-none');
         document.getElementById('imgConfigStep').classList.add('d-none');
         document.getElementById('imgAdminPinInput').value = '';
         document.getElementById('imgPinErrorMsg').classList.add('d-none');
+        document.getElementById('imgConfigSaveMsg').classList.add('d-none');
         bootstrap.Modal.getOrCreateInstance(document.getElementById('imageConfigModal')).show();
     }
 
@@ -548,12 +675,7 @@
                 verifiedAdminPin = pin;
                 document.getElementById('imgPinStep').classList.add('d-none');
                 document.getElementById('imgConfigStep').classList.remove('d-none');
-
-                const sel = document.getElementById('adminDefaultImgModel');
-                sel.innerHTML = (data.available_models || []).map(m =>
-                    `<option value="${m.id}" ${m.id === data.selected_model ? 'selected' : ''}>${m.name}</option>`
-                ).join('');
-                document.getElementById('adminImgApiKeys').value = (data.api_keys || []).join('\n');
+                renderImgApiKeyList(data.api_keys || []);
             } else {
                 errEl.innerText = data.message || 'Mã PIN không đúng!';
                 errEl.classList.remove('d-none');
@@ -562,17 +684,26 @@
     }
 
     function saveImageAdminConfig() {
-        const keys = document.getElementById('adminImgApiKeys').value.split('\n').map(k => k.trim()).filter(Boolean);
-        const selectedModel = document.getElementById('adminDefaultImgModel').value;
+        const inputs = document.querySelectorAll('#adminImgKeyListContainer .img-key-input');
+        const keys = Array.from(inputs)
+            .map(inp => inp.value.replace(/[\r\n\s]+/g, ''))
+            .filter(k => k.startsWith('sk-or-') && k.length > 20);
+
         const msgEl = document.getElementById('imgConfigSaveMsg');
+
+        if (keys.length === 0) {
+            msgEl.classList.remove('d-none');
+            msgEl.className = 'small fw-bold mb-2 text-danger';
+            msgEl.innerText = 'Vui lòng nhập ít nhất 1 API Key OpenRouter hợp lệ!';
+            return;
+        }
 
         fetch('/api/image/config', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 pin_code: verifiedAdminPin,
-                api_keys: keys,
-                selected_model: selectedModel
+                api_keys: keys
             })
         })
         .then(res => res.json())
@@ -581,7 +712,7 @@
             if (data.success) {
                 msgEl.className = 'small fw-bold mb-2 text-success';
                 msgEl.innerText = data.message;
-                document.getElementById('imageModelSelect').value = selectedModel;
+                renderImgApiKeyList(keys);
             } else {
                 msgEl.className = 'small fw-bold mb-2 text-danger';
                 msgEl.innerText = data.message || 'Lỗi lưu cấu hình!';
