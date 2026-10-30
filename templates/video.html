@@ -231,23 +231,17 @@
                                  onerror="this.style.display='none'; document.getElementById('fallbackSvgCat').style.display='block';">
                             <!-- Mèo Meme Vẫy Tay Vector dự phòng nếu mạng chặn GIF -->
                             <svg id="fallbackSvgCat" style="display:none; width: 110px; height: 110px;" viewBox="0 0 100 100">
-                                <!-- Tai mèo -->
                                 <polygon points="22,42 18,16 40,30" fill="#ffbfa3" stroke="#5a4a42" stroke-width="2.5" stroke-linejoin="round"/>
                                 <polygon points="78,42 82,16 60,30" fill="#ffbfa3" stroke="#5a4a42" stroke-width="2.5" stroke-linejoin="round"/>
-                                <!-- Mặt & Thân mèo -->
                                 <ellipse cx="50" cy="56" rx="30" ry="26" fill="#fff" stroke="#5a4a42" stroke-width="2.5"/>
-                                <!-- Má hồng -->
                                 <ellipse cx="31" cy="57" rx="5" ry="3" fill="#ffb7b2"/>
                                 <ellipse cx="69" cy="57" rx="5" ry="3" fill="#ffb7b2"/>
-                                <!-- Mắt long lanh -->
                                 <circle cx="38" cy="50" r="3.8" fill="#5a4a42"/>
                                 <circle cx="62" cy="50" r="3.8" fill="#5a4a42"/>
                                 <circle cx="36.8" cy="48.8" r="1.3" fill="#fff"/>
                                 <circle cx="60.8" cy="48.8" r="1.3" fill="#fff"/>
-                                <!-- Mũi & Miệng cười :3 -->
                                 <polygon points="48,54 52,54 50,57" fill="#ff8b94"/>
                                 <path d="M 43 59 Q 46.5 63 50 59 Q 53.5 63 57 59" fill="none" stroke="#5a4a42" stroke-width="2.2" stroke-linecap="round"/>
-                                <!-- Tay mèo vẫy vẫy liên tục -->
                                 <g class="svg-paw-wave">
                                     <ellipse cx="82" cy="52" rx="8" ry="13" transform="rotate(20 82 52)" fill="#fff" stroke="#5a4a42" stroke-width="2.5"/>
                                     <circle cx="84" cy="46" r="2.8" fill="#ffb7b2"/>
@@ -343,11 +337,15 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-4" style="background: #fdfbf7;">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <label class="fw-bold small" style="color: #8c7b70;">Danh sách API Key OpenRouter:</label>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <label class="fw-bold small" style="color: #8c7b70;">Danh sách API Key (xAI / Groq / OpenRouter):</label>
                     <button type="button" class="btn btn-sm btn-primary-cute btn-cute px-3 py-1" onclick="addVideoApiRow()">+ Thêm Token</button>
                 </div>
                 <div id="videoApiListContainer" class="mb-3"></div>
+                <div class="p-3 rounded-4" style="background: #fffafa; border: 1px dashed #ffb7b2;">
+                    <label class="form-label fw-bold small mb-1" style="color: #8c7b70;">AI Vision Model:</label>
+                    <input type="text" id="videoModelInput" class="form-control form-control-sm" style="border-radius: 10px;" placeholder="VD: grok-4-fast-non-reasoning hoặc google/gemini-2.0-flash-exp:free">
+                </div>
             </div>
             <div class="modal-footer border-0" style="background: #fdfbf7;">
                 <button type="button" class="btn btn-light btn-cute" data-bs-dismiss="modal">Đóng</button>
@@ -358,12 +356,18 @@
 </div>
 
 <script>
+    const videoClientId = (typeof GLOBAL_CLIENT_ID !== 'undefined' && GLOBAL_CLIENT_ID)
+        ? GLOBAL_CLIENT_ID
+        : (sessionStorage.getItem('video_client_id') || ('vid_' + Math.random().toString(36).substring(2, 9)));
+    sessionStorage.setItem('video_client_id', videoClientId);
+
     let selectedVideoFile = null;
     let videoApiList = [];
     let verifiedVideoPin = '';
     let activeSSE = null;
     let fallbackPollTimer = null;
-    let renderedLogCount = 0;
+    let seenLogKeys = new Set();
+    let isAnalysisFinished = false;
 
     window.SystemLog = {
         add: function(message, type = 'info') {
@@ -419,44 +423,60 @@
         document.getElementById('videoPinInput').value = '';
         document.getElementById('videoPinError').style.display = 'none';
         bootstrap.Modal.getOrCreateInstance(document.getElementById('videoPinModal')).show();
+        setTimeout(() => document.getElementById('videoPinInput').focus(), 250);
     }
 
-    function verifyVideoPinStep1() {
+    async function verifyVideoPinStep1() {
         const pin = document.getElementById('videoPinInput').value.trim();
-        fetch('/verify-pin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin }) })
-        .then(res => res.json())
-        .then(data => {
+        if (!pin) return;
+        try {
+            const res = await fetch('/api/video/verify_pin', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pin })
+            });
+            const data = await res.json();
             if (data.success) {
                 verifiedVideoPin = pin;
                 bootstrap.Modal.getOrCreateInstance(document.getElementById('videoPinModal')).hide();
-                fetch('/api/video/config').then(r => r.json()).then(d => {
-                    videoApiList = (d.api_keys && d.api_keys.length) ? d.api_keys : [''];
-                    renderVideoApiRows();
-                    bootstrap.Modal.getOrCreateInstance(document.getElementById('videoConfigModal')).show();
-                });
+                const confRes = await fetch('/api/video/config');
+                const d = await confRes.json();
+                videoApiList = (d.api_keys && d.api_keys.length) ? d.api_keys : [''];
+                document.getElementById('videoModelInput').value = d.model || 'grok-4-fast-non-reasoning';
+                renderVideoApiRows();
+                bootstrap.Modal.getOrCreateInstance(document.getElementById('videoConfigModal')).show();
             } else {
                 document.getElementById('videoPinError').style.display = 'block';
             }
-        });
+        } catch (e) {
+            document.getElementById('videoPinError').style.display = 'block';
+        }
     }
 
     function renderVideoApiRows() {
         document.getElementById('videoApiListContainer').innerHTML = videoApiList.map((k, i) => `
             <div class="row g-2 mb-2 align-items-center bg-white p-2 rounded-4 border mx-0">
                 <button type="button" class="btn btn-sm btn-outline-danger col-auto" onclick="videoApiList.splice(${i},1);renderVideoApiRows()">Xóa</button>
-                <div class="col"><input type="text" class="form-control form-control-sm" value="${k || ''}" onchange="videoApiList[${i}]=this.value"></div>
+                <div class="col"><input type="text" class="form-control form-control-sm" placeholder="Nhập API Key (xai-... / gsk_... / sk-or-v1-...)" value="${k || ''}" oninput="videoApiList[${i}]=this.value"></div>
             </div>`).join('');
     }
     function addVideoApiRow() { videoApiList.push(''); renderVideoApiRows(); }
 
     function saveVideoConfig() {
+        const model = document.getElementById('videoModelInput').value.trim() || 'grok-4-fast-non-reasoning';
         fetch('/api/video/config', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ api_keys: videoApiList.filter(k => k.trim()), pin_code: verifiedVideoPin })
+            body: JSON.stringify({
+                api_keys: videoApiList.map(k => k.trim()).filter(Boolean),
+                model: model,
+                pin_code: verifiedVideoPin
+            })
         }).then(res => res.json()).then(d => {
-            alert(d.success ? 'Đã lưu cấu hình!' : d.message);
-            bootstrap.Modal.getOrCreateInstance(document.getElementById('videoConfigModal')).hide();
+            alert(d.success ? (d.message || 'Đã lưu cấu hình!') : (d.message || 'Lỗi lưu cấu hình'));
+            if (d.success) {
+                bootstrap.Modal.getOrCreateInstance(document.getElementById('videoConfigModal')).hide();
+            }
         });
     }
 
@@ -483,6 +503,7 @@
     }
 
     function clearSelectedVideo() {
+        stopActiveStreams();
         document.getElementById('videoFileInput').value = '';
         selectedVideoFile = null;
         const videoPlayer = document.getElementById('mainVideoPlayer');
@@ -497,7 +518,7 @@
     }
 
     function clearResults() {
-        renderedLogCount = 0;
+        seenLogKeys.clear();
         document.getElementById('resultTableBody').innerHTML = `<tr><td colspan="5" class="text-center text-muted py-5">Chưa có ai ở đây cả~</td></tr>`;
     }
 
@@ -513,7 +534,10 @@
     }
 
     function finishAnalysisUI() {
+        if (isAnalysisFinished) return;
+        isAnalysisFinished = true;
         stopActiveStreams();
+
         const btn = document.getElementById('btnAnalyzeVideo');
         const badgeState = document.getElementById('pipelineStateBadge');
         setProgressUI(100, 'Meow~ Phân tích video hoàn tất rồi nè!', true);
@@ -528,12 +552,23 @@
             if (window.innerWidth < 992) {
                 document.getElementById('resultSectionCard')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
-        }, 900);
+        }, 800);
+    }
+
+    function processIncomingLogItem(item, tableBody) {
+        if (!item) return;
+        const uniqueKey = item.log_id || `${item.person_id}_${item.video_ts}_${item.behavior}_${item.detail}`;
+        if (seenLogKeys.has(uniqueKey)) return;
+        seenLogKeys.add(uniqueKey);
+
+        appendResultRow(item, tableBody);
+        SystemLog.add(`Phát hiện: ${item.person_id} (${item.video_ts}) - ${item.behavior}`, "warning");
     }
 
     function startMonitoringSession(sessionId) {
         const tableBody = document.getElementById('resultTableBody');
         stopActiveStreams();
+        isAnalysisFinished = false;
 
         // 1. Luồng SSE chính
         try {
@@ -549,9 +584,7 @@
                     setProgressUI(payload.progress || 45, payload.stage_text || 'Đang phân tích khung hình video...');
                 }
                 if (payload.type === 'log') {
-                    renderedLogCount++;
-                    appendResultRow(payload, tableBody);
-                    SystemLog.add(`Phát hiện: ${payload.person_id} - ${payload.behavior}`, "warning");
+                    processIncomingLogItem(payload, tableBody);
                 }
                 if (payload.type === 'complete') {
                     finishAnalysisUI();
@@ -559,8 +592,9 @@
             };
         } catch (e) {}
 
-        // 2. Luồng Polling dự phòng mỗi 1.2s (Đảm bảo 100% điện thoại luôn nhảy % và nhận kết quả)
+        // 2. Luồng Polling dự phòng mỗi 1.5s (chống trùng nhờ seenLogKeys)
         fallbackPollTimer = setInterval(async () => {
+            if (isAnalysisFinished) return;
             try {
                 const r = await fetch(`/api/video/status/${sessionId}`);
                 if (!r.ok) return;
@@ -572,22 +606,19 @@
                     document.getElementById('vidRam').innerText = st.metrics.ram;
                     document.getElementById('vidBw').innerText = st.metrics.bw;
                 }
-                setProgressUI(st.progress || 45, st.stage_text || 'Đang xử lý video trên máy chủ...');
+                if (!st.completed) {
+                    setProgressUI(st.progress || 45, st.stage_text || 'Đang xử lý video trên máy chủ...');
+                }
 
-                if (Array.isArray(st.logs) && st.logs.length > renderedLogCount) {
-                    const newLogs = st.logs.slice(renderedLogCount);
-                    renderedLogCount = st.logs.length;
-                    newLogs.forEach(item => {
-                        appendResultRow(item, tableBody);
-                        SystemLog.add(`Phát hiện: ${item.person_id} - ${item.behavior}`, "warning");
-                    });
+                if (Array.isArray(st.logs)) {
+                    st.logs.forEach(item => processIncomingLogItem(item, tableBody));
                 }
 
                 if (st.completed) {
                     finishAnalysisUI();
                 }
             } catch (err) {}
-        }, 1200);
+        }, 1500);
     }
 
     function executeVideoAnalysis() {
@@ -598,9 +629,9 @@
         const videoPlayer = document.getElementById('mainVideoPlayer');
 
         stopActiveStreams();
-        renderedLogCount = 0;
+        seenLogKeys.clear();
+        isAnalysisFinished = false;
 
-        // Tạm dừng trình phát video trên điện thoại để không che lớp tiến trình
         try { videoPlayer.pause(); } catch (e) {}
 
         btn.disabled = true;
@@ -614,16 +645,11 @@
 
         const formData = new FormData();
         formData.append('video', selectedVideoFile);
-        if (typeof GLOBAL_CLIENT_ID !== 'undefined') {
-            formData.append('client_id', GLOBAL_CLIENT_ID);
-        }
+        formData.append('client_id', videoClientId);
 
-        // Dùng XMLHttpRequest để lấy % tiến độ Upload thực tế trên điện thoại (1% -> 40%)
         const xhr = new XMLHttpRequest();
         xhr.open('POST', '/api/video/analyze', true);
-        if (typeof GLOBAL_CLIENT_ID !== 'undefined') {
-            xhr.setRequestHeader('X-Client-ID', GLOBAL_CLIENT_ID);
-        }
+        xhr.setRequestHeader('X-Client-ID', videoClientId);
 
         xhr.upload.onprogress = function(e) {
             if (e.lengthComputable) {
@@ -645,6 +671,8 @@
                 btn.innerHTML = '<i class="fa-solid fa-star me-1"></i> Khám Phá Video';
                 if (typeof showQueueWaitingModal === 'function') {
                     showQueueWaitingModal(data, () => executeVideoAnalysis());
+                } else {
+                    alert(data.message || 'Hệ thống đang đầy, vui lòng thử lại sau giây lát!');
                 }
                 return;
             }

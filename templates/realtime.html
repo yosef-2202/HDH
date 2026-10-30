@@ -196,6 +196,18 @@
         color: #800000;
     }
 
+    .behavior-pill {
+        background-color: #fff0e6;
+        color: #b85d38;
+        border: 1px solid #f0d8c0;
+        font-size: 0.73rem;
+        font-weight: 700;
+        padding: 2px 7px;
+        border-radius: 6px;
+        display: inline-block;
+        margin-right: 5px;
+    }
+
     .os-metric-pill {
         background-color: #fff5f5;
         color: #5a4a42;
@@ -223,7 +235,7 @@
                     style="font-size: 0.78rem;" id="headerConnectionStatus">
                     <i class="fa-solid fa-pause me-1"></i> Chờ kết nối
                 </span>
-                <span class="status-badge badge-status-normal">
+                <span class="status-badge badge-status-normal" id="queueStatusBadge">
                     <i class="fa-solid fa-cat me-1"></i> Sẵn sàng rồi!!!
                 </span>
                 <span class="status-badge" style="background: #e0f2fe; color: #0284c7;">
@@ -259,7 +271,7 @@
                     <div class="camera-overlay-badge"><span class="pulse-dot"></span> Webcam Của Bạn</div>
                     <span class="badge bg-light text-secondary border camera-status-pill" id="overlayStatusBadge">SẴN SÀNG</span>
 
-                    <video id="webVideo" autoplay muted class="d-none camera-mirrored"></video>
+                    <video id="webVideo" autoplay muted playsinline class="d-none camera-mirrored"></video>
                     <canvas id="hiddenCanvas" class="d-none"></canvas>
 
                     <div class="text-center p-2 z-1" id="cameraPlaceholder" style="color: #d1c4b8;">
@@ -276,6 +288,7 @@
                     <div class="d-flex align-items-center flex-grow-1" style="min-width: 0; margin-right: 10px;">
                         <span class="badge badge-status-normal me-2 px-2 py-1 rounded-pill fw-bold flex-shrink-0"
                             id="liveBadgeStatus">CHỜ</span>
+                        <span class="behavior-pill d-none flex-shrink-0" id="liveBehaviorBadge"></span>
                         <span class="text-truncate fw-bold d-block" id="liveDescription"
                             style="font-size: 0.85rem; color: #5a4a42;">Chưa có dữ liệu phân tích...</span>
                     </div>
@@ -296,7 +309,7 @@
                         </div>
                         <div>
                             <div class="fw-bold text-uppercase" style="font-size: 0.68rem; color: #8c7b70;">Luồng Xử Lý</div>
-                            <div class="fw-bold fs-6" style="color: #5a4a42;" id="statWorkers">5</div>
+                            <div class="fw-bold fs-6" style="color: #5a4a42;" id="statWorkers">10</div>
                         </div>
                     </div>
                 </div>
@@ -394,7 +407,7 @@
                             <tr>
                                 <th style="width: 10%; min-width: 75px;">Giờ</th>
                                 <th style="width: 12%; min-width: 90px;">Nhận Định</th>
-                                <th class="text-start" style="width: 44%;">Mô Tả Hành Vi</th>
+                                <th class="text-start" style="width: 44%;">Hành Vi & Mô Tả Chi Tiết</th>
                                 <th style="width: 25%; min-width: 200px;">Tài Nguyên HĐH</th>
                                 <th style="width: 9%; min-width: 65px; white-space: nowrap;">Video</th>
                             </tr>
@@ -411,31 +424,32 @@
     </div>
 </div>
 
-<!-- MODAL XEM LẠI VIDEO -->
+<!-- MODAL XEM LẠI VIDEO / ẢNH MINH CHỨNG -->
 <div class="modal fade" id="playbackModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content overflow-hidden" style="border-radius: 20px; border: none;">
             <div class="viewport-header">
-                <h6 class="modal-title fw-bold mb-0" style="color: #d47a53;"><i class="fa-solid fa-film me-2"></i>Xem Lại Video Minh Chứng (15 Frames)</h6>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <h6 class="modal-title fw-bold mb-0" style="color: #d47a53;"><i class="fa-solid fa-film me-2"></i>Xem Lại Video / Ảnh Minh Chứng (15 Frames)</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" onclick="stopPlaybackMedia()"></button>
             </div>
             <div class="modal-body p-4 text-center" style="background: #fdfbf7;">
-                <p class="small fw-semibold mb-3" style="color: #8c7b70;"><i class="fa-solid fa-circle-info me-1"></i>Đoạn video clip được trích xuất từ bộ đệm RAM tại thời điểm phân tích.</p>
+                <p class="small fw-semibold mb-3" style="color: #8c7b70;"><i class="fa-solid fa-circle-info me-1"></i>Dữ liệu được trích xuất từ bộ đệm RAM tại thời điểm phân tích.</p>
                 <div class="d-inline-block rounded-4 overflow-hidden shadow-sm w-100" style="background:#000; border: 2px dashed #f0d8c0;">
                     <video id="playbackVideo" controls autoplay class="img-fluid w-100" style="max-height: 400px; object-fit: contain;"></video>
+                    <img id="playbackImage" class="img-fluid w-100 d-none" style="max-height: 400px; object-fit: contain;" alt="Ảnh minh chứng">
                 </div>
             </div>
             <div class="modal-footer border-0 d-flex justify-content-between align-items-center" style="background: #fdfbf7;">
                 <div class="fw-bold px-2" style="color: #d47a53;" id="playbackTimestamp">--:--:--</div>
                 <button type="button" class="btn btn-light btn-cute px-4" data-bs-dismiss="modal"
-                    onclick="document.getElementById('playbackVideo').pause()">Đóng</button>
+                    onclick="stopPlaybackMedia()">Đóng</button>
             </div>
         </div>
     </div>
 </div>
 
 <!-- =========================================================
-     BƯỚC 1: BOX NHẬP PASS (MÃ PIN) ĐỒNG BỘ THEO RTSP
+     BƯỚC 1: BOX NHẬP PASS (MÃ PIN) ĐỒNG BỘ VỚI PYTHON
      ========================================================= -->
 <div class="modal fade" id="pinAuthModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-sm modal-dialog-centered">
@@ -472,18 +486,18 @@
             <div class="modal-body p-4" style="background: #fdfbf7;">
                 <input type="hidden" id="hiddenConfigPin">
                 <div class="d-flex justify-content-between align-items-center mb-2">
-                    <label class="form-label fw-bold small mb-0" style="color: #8c7b70;">Danh sách API Keys OpenRouter:</label>
+                    <label class="form-label fw-bold small mb-0" style="color: #8c7b70;">Danh sách API Keys (xAI / Groq / OpenRouter):</label>
                     <button class="btn btn-sm btn-primary-cute btn-cute px-3 py-1" type="button" onclick="addApiKeyInput()">+ Thêm Token</button>
                 </div>
                 <div id="apiKeysContainer" class="mb-3"></div>
                 <div class="row g-3 p-3 rounded-4 mx-0" style="background: #fffafa; border: 1px dashed #ffb7b2;">
                     <div class="col-md-8">
                         <label class="form-label fw-bold small mb-1" style="color: #8c7b70;">AI Model:</label>
-                        <input type="text" id="modalModelName" class="form-control form-control-sm" style="border-radius: 10px;" placeholder="VD: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free">
+                        <input type="text" id="modalModelName" class="form-control form-control-sm" style="border-radius: 10px;" placeholder="VD: grok-4-fast-non-reasoning">
                     </div>
                     <div class="col-md-4">
                         <label class="form-label fw-bold small mb-1" style="color: #8c7b70;">Số luồng Worker (Jobs):</label>
-                        <input type="number" id="modalConcurrentJobs" class="form-control form-control-sm" style="border-radius: 10px;" min="1" max="20" value="5">
+                        <input type="number" id="modalConcurrentJobs" class="form-control form-control-sm" style="border-radius: 10px;" min="1" max="20" value="10">
                     </div>
                 </div>
             </div>
@@ -516,32 +530,44 @@
     }
 
     let webStream = null, webAiInterval = null, isWebcamRunning = false;
+    let isTogglingCamera = false, isUploadingFrame = false;
     let CAPTURE_INTERVAL_MS = 1000;
     let latestAiCpu = "4.2%", latestAiRam = "18 MB", latestAiBw = "140 Kbps";
     let playbackModalInstance = null;
 
     async function toggleMainWebcam() {
+        if (isTogglingCamera) return;
+        isTogglingCamera = true;
+
         const headerStatus = document.getElementById('headerConnectionStatus');
         const pipelineBadge = document.getElementById('pipelineStateBadge');
-        if (isWebcamRunning) {
-            if (webStream) webStream.getTracks().forEach(t => t.stop());
-            clearInterval(webAiInterval);
-            isWebcamRunning = false;
-            document.getElementById('webVideo').classList.add('d-none');
-            document.getElementById('cameraPlaceholder').classList.remove('d-none');
-            document.getElementById('btnToggleWebcam').innerHTML = '<i class="fa-solid fa-video me-1"></i> Bật Camera AI';
-            document.getElementById('btnToggleWebcam').className = 'btn btn-primary-cute btn-sm btn-cute px-3 py-1 shadow-sm';
-            document.getElementById('overlayStatusBadge').innerText = 'ĐÃ TẮT';
-            document.getElementById('overlayStatusBadge').className = 'badge bg-light text-secondary border camera-status-pill';
+        const queueBadge = document.getElementById('queueStatusBadge');
 
-            headerStatus.className = 'badge bg-light text-secondary border rounded-pill fw-bold d-flex align-items-center px-3 py-1';
-            headerStatus.innerHTML = '<i class="fa-solid fa-pause me-1"></i> Chờ kết nối';
-            pipelineBadge.className = 'badge bg-white text-secondary rounded-pill';
-            pipelineBadge.innerText = 'IDLE';
-            simulateResourceIdle();
-            return;
-        }
         try {
+            if (isWebcamRunning) {
+                if (webStream) webStream.getTracks().forEach(t => t.stop());
+                clearInterval(webAiInterval);
+                webAiInterval = null;
+                isWebcamRunning = false;
+                isUploadingFrame = false;
+
+                document.getElementById('webVideo').classList.add('d-none');
+                document.getElementById('cameraPlaceholder').classList.remove('d-none');
+                document.getElementById('btnToggleWebcam').innerHTML = '<i class="fa-solid fa-video me-1"></i> Bật Camera AI';
+                document.getElementById('btnToggleWebcam').className = 'btn btn-primary-cute btn-sm btn-cute px-3 py-1 shadow-sm';
+                document.getElementById('overlayStatusBadge').innerText = 'ĐÃ TẮT';
+                document.getElementById('overlayStatusBadge').className = 'badge bg-light text-secondary border camera-status-pill';
+
+                headerStatus.className = 'badge bg-light text-secondary border rounded-pill fw-bold d-flex align-items-center px-3 py-1';
+                headerStatus.innerHTML = '<i class="fa-solid fa-pause me-1"></i> Chờ kết nối';
+                pipelineBadge.className = 'badge bg-white text-secondary rounded-pill';
+                pipelineBadge.innerText = 'IDLE';
+                queueBadge.className = 'status-badge badge-status-normal';
+                queueBadge.innerHTML = '<i class="fa-solid fa-cat me-1"></i> Sẵn sàng rồi!!!';
+                simulateResourceIdle();
+                return;
+            }
+
             webStream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640 }, height: { ideal: 360 } }, audio: false });
             isWebcamRunning = true;
             const videoEl = document.getElementById('webVideo');
@@ -558,40 +584,64 @@
             pipelineBadge.className = 'badge badge-status-normal rounded-pill';
             pipelineBadge.innerText = 'RUNNING';
 
-            setTimeout(captureAndSendFrame, 800);
+            clearInterval(webAiInterval);
             webAiInterval = setInterval(captureAndSendFrame, CAPTURE_INTERVAL_MS);
         } catch (err) {
             alert('Lỗi mở Camera: ' + err.message);
+        } finally {
+            isTogglingCamera = false;
         }
     }
 
-    function captureAndSendFrame() {
-        if (!isWebcamRunning) return;
+    async function captureAndSendFrame() {
+        if (!isWebcamRunning || isUploadingFrame) return;
 
         const video = document.getElementById('webVideo');
         if (!video || video.readyState < 2 || video.videoWidth === 0) return;
 
-        const canvas = document.getElementById('hiddenCanvas');
-        const ctx = canvas.getContext('2d');
+        isUploadingFrame = true;
+        try {
+            const canvas = document.getElementById('hiddenCanvas');
+            const ctx = canvas.getContext('2d');
 
-        canvas.width = 640;
-        canvas.height = 360;
+            canvas.width = 640;
+            canvas.height = 360;
 
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-        const imageDataBase64 = canvas.toDataURL('image/jpeg', 0.8);
-        const payloadKbps = Math.round((imageDataBase64.length * 0.75 * 8) / 1024);
+            const imageDataBase64 = canvas.toDataURL('image/jpeg', 0.8);
+            const payloadKbps = Math.round((imageDataBase64.length * 0.75 * 8) / 1024);
 
-        simulateResourceActive(payloadKbps);
+            simulateResourceActive(payloadKbps);
 
-        fetch('/api/realtime/upload_web_frame', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                image: imageDataBase64,
-                client_id: currentClientId
-            })
-        }).catch(err => console.error("Lỗi khi gửi frame:", err));
+            const res = await fetch('/api/realtime/upload_web_frame', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Client-ID': currentClientId
+                },
+                body: JSON.stringify({
+                    image: imageDataBase64,
+                    client_id: currentClientId
+                })
+            });
+
+            const queueBadge = document.getElementById('queueStatusBadge');
+            if (res.status === 429) {
+                const waitData = await res.json();
+                queueBadge.className = 'status-badge badge-soft-warning';
+                queueBadge.innerHTML = `<i class="fa-solid fa-hourglass-half me-1"></i> Đang chờ lượt (#${waitData.queue_position || 1})`;
+                document.getElementById('liveBadgeStatus').innerText = 'HÀNG ĐỢI';
+                document.getElementById('liveDescription').innerText = waitData.message || 'Hệ thống đang đầy, vui lòng chờ lượt...';
+            } else if (res.ok) {
+                queueBadge.className = 'status-badge badge-status-normal';
+                queueBadge.innerHTML = '<i class="fa-solid fa-cat me-1"></i> Đang phân tích';
+            }
+        } catch (err) {
+            console.error("Lỗi khi gửi frame:", err);
+        } finally {
+            isUploadingFrame = false;
+        }
     }
 
     function simulateResourceActive(payloadKbps) {
@@ -620,11 +670,30 @@
         });
     }
 
-    window.playBehaviorVideo = function (videoPath, timestampKey) {
+    function stopPlaybackMedia() {
+        const vid = document.getElementById('playbackVideo');
+        if (vid) vid.pause();
+    }
+
+    window.playBehaviorVideo = function (mediaPath, timestampKey) {
         if (!playbackModalInstance) playbackModalInstance = new bootstrap.Modal(document.getElementById('playbackModal'));
-        if (videoPath) {
-            let vid = document.getElementById('playbackVideo');
-            vid.src = videoPath + "?t=" + new Date().getTime();
+        if (mediaPath) {
+            const vid = document.getElementById('playbackVideo');
+            const img = document.getElementById('playbackImage');
+            const urlWithCacheBust = mediaPath + "?t=" + new Date().getTime();
+
+            if (mediaPath.toLowerCase().endsWith('.jpg') || mediaPath.toLowerCase().endsWith('.jpeg') || mediaPath.toLowerCase().endsWith('.png')) {
+                vid.pause();
+                vid.removeAttribute('src');
+                vid.classList.add('d-none');
+                img.src = urlWithCacheBust;
+                img.classList.remove('d-none');
+            } else {
+                img.classList.add('d-none');
+                img.removeAttribute('src');
+                vid.classList.remove('d-none');
+                vid.src = urlWithCacheBust;
+            }
             document.getElementById('playbackTimestamp').innerText = timestampKey;
         }
         playbackModalInstance.show();
@@ -632,81 +701,104 @@
 
     async function clearLogs() {
         if (confirm("Bạn muốn xóa hết nhật ký của phiên này luôn hả?")) {
-            await fetch(`/api/realtime/clear_logs?client_id=${currentClientId}`, { method: 'POST' });
+            await fetch(`/api/realtime/clear_logs?client_id=${encodeURIComponent(currentClientId)}`, { method: 'POST' });
             fetchLogs();
         }
     }
 
     async function fetchLogs() {
-        const res = await fetch(`/api/realtime/logs?client_id=${currentClientId}`);
-        const data = await res.json();
-        if (!data.success) return;
+        try {
+            const res = await fetch(`/api/realtime/logs?client_id=${encodeURIComponent(currentClientId)}`);
+            const data = await res.json();
+            if (!data.success) return;
 
-        let tbodyHtml = '';
-        if (data.logs.length === 0) {
-            tbodyHtml = '<tr><td colspan="5" class="py-3 text-muted">Chưa có ai ở đây cả~</td></tr>';
-            document.getElementById('liveBadgeStatus').innerText = 'CHỜ';
-            document.getElementById('liveBadgeStatus').className = 'badge badge-status-normal me-2 px-2 py-1 rounded-pill fw-bold flex-shrink-0';
-            document.getElementById('liveDescription').innerText = 'Chưa có dữ liệu phân tích...';
-            document.getElementById('liveTimestamp').innerText = '--:--:--';
-            document.getElementById('mainWebcamCard').className = 'webcam-main-card flex-grow-1';
-        } else {
-            data.logs.forEach(log => {
-                let badgeClass = 'badge-soft-success';
-                if (log.status === 'CẢNH BÁO') badgeClass = 'badge-soft-warning';
-                else if (log.status === 'NGUY HIỂM') badgeClass = 'badge-soft-danger';
+            let tbodyHtml = '';
+            const liveBehEl = document.getElementById('liveBehaviorBadge');
 
-                let btnDisabled = log.image_path ? '' : 'disabled';
-                let btnColor = log.image_path ? 'btn-primary-cute' : 'btn-light text-muted opacity-75';
-                let osMetricsText = log.os_metrics || 'CPU: 6.4% | RAM: 22.5MB | Trễ: 850ms (W-1)';
+            if (data.logs.length === 0) {
+                tbodyHtml = '<tr><td colspan="5" class="py-3 text-muted">Chưa có ai ở đây cả~</td></tr>';
+                document.getElementById('liveBadgeStatus').innerText = 'CHỜ';
+                document.getElementById('liveBadgeStatus').className = 'badge badge-status-normal me-2 px-2 py-1 rounded-pill fw-bold flex-shrink-0';
+                liveBehEl.classList.add('d-none');
+                liveBehEl.innerText = '';
+                document.getElementById('liveDescription').innerText = 'Chưa có dữ liệu phân tích...';
+                document.getElementById('liveTimestamp').innerText = '--:--:--';
+                document.getElementById('mainWebcamCard').className = 'webcam-main-card flex-grow-1';
+            } else {
+                data.logs.forEach(log => {
+                    let badgeClass = 'badge-soft-success';
+                    if (log.status === 'CẢNH BÁO') badgeClass = 'badge-soft-warning';
+                    else if (log.status === 'NGUY HIỂM') badgeClass = 'badge-soft-danger';
 
-                tbodyHtml += `
-                    <tr>
-                        <td class="fw-bold" style="font-size: 0.75rem; color: #8c7b70; white-space: nowrap;">${log.timestamp}</td>
-                        <td><span class="badge ${badgeClass} px-2 py-1 rounded-pill" style="font-size:0.7rem; white-space: nowrap;">${log.status}</span></td>
-                        <td class="text-start fw-semibold" style="white-space: normal; word-wrap: break-word; word-break: break-word; font-size: 0.8rem; color: #5a4a42;">${log.description}</td>
-                        <td style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><span class="os-metric-pill" title="${osMetricsText}"><i class="fa-solid fa-seedling me-1" style="color: #d47a53;"></i>${osMetricsText}</span></td>
-                        <td style="white-space: nowrap;">
-                            <button class="btn btn-sm ${btnColor} btn-cute py-0 px-2" style="font-size: 0.72rem;" ${btnDisabled} onclick="playBehaviorVideo('${log.image_path}', '${log.timestamp}')">
-                                Xem
-                            </button>
-                        </td>
-                    </tr>
-                `;
-            });
+                    let btnDisabled = log.image_path ? '' : 'disabled';
+                    let btnColor = log.image_path ? 'btn-primary-cute' : 'btn-light text-muted opacity-75';
+                    let osMetricsText = log.os_metrics || 'CPU: 6.4% | RAM: 22.5MB | Trễ: 850ms (W-1)';
+                    let behaviorBadgeHtml = log.behavior ? `<span class="behavior-pill">[${log.behavior}]</span>` : '';
 
-            const myLatestLog = data.logs[0];
-            if (myLatestLog) {
-                if (myLatestLog.metrics_detail) {
-                    latestAiCpu = myLatestLog.metrics_detail.cpu;
-                    latestAiRam = myLatestLog.metrics_detail.ram;
-                    latestAiBw = myLatestLog.metrics_detail.bw + '/req';
-                }
-                if (isWebcamRunning) {
-                    document.getElementById('liveBadgeStatus').innerText = myLatestLog.status;
-                    document.getElementById('liveDescription').innerText = myLatestLog.description;
-                    document.getElementById('liveTimestamp').innerText = myLatestLog.timestamp;
+                    tbodyHtml += `
+                        <tr>
+                            <td class="fw-bold" style="font-size: 0.75rem; color: #8c7b70; white-space: nowrap;">${log.timestamp}</td>
+                            <td><span class="badge ${badgeClass} px-2 py-1 rounded-pill" style="font-size:0.7rem; white-space: nowrap;">${log.status}</span></td>
+                            <td class="text-start fw-semibold" style="white-space: normal; word-wrap: break-word; word-break: break-word; font-size: 0.8rem; color: #5a4a42;">
+                                ${behaviorBadgeHtml}${log.description}
+                            </td>
+                            <td style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><span class="os-metric-pill" title="${osMetricsText}"><i class="fa-solid fa-seedling me-1" style="color: #d47a53;"></i>${osMetricsText}</span></td>
+                            <td style="white-space: nowrap;">
+                                <button class="btn btn-sm ${btnColor} btn-cute py-0 px-2" style="font-size: 0.72rem;" ${btnDisabled} onclick="playBehaviorVideo('${log.image_path}', '${log.timestamp}')">
+                                    Xem
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                });
 
-                    document.getElementById('liveBadgeStatus').className = 'badge me-2 px-2 py-1 rounded-pill fw-bold flex-shrink-0 ' +
-                        (myLatestLog.status === 'CẢNH BÁO' ? 'badge-status-warning' : (myLatestLog.status === 'NGUY HIỂM' ? 'badge-status-danger' : 'badge-status-normal'));
+                const myLatestLog = data.logs[0];
+                if (myLatestLog) {
+                    if (myLatestLog.metrics_detail) {
+                        latestAiCpu = myLatestLog.metrics_detail.cpu;
+                        latestAiRam = myLatestLog.metrics_detail.ram;
+                        latestAiBw = myLatestLog.metrics_detail.bw + '/req';
+                    }
+                    if (isWebcamRunning) {
+                        document.getElementById('liveBadgeStatus').innerText = myLatestLog.status;
+                        if (myLatestLog.behavior) {
+                            liveBehEl.innerText = `[${myLatestLog.behavior}]`;
+                            liveBehEl.classList.remove('d-none');
+                        } else {
+                            liveBehEl.classList.add('d-none');
+                        }
+                        document.getElementById('liveDescription').innerText = myLatestLog.description;
+                        document.getElementById('liveTimestamp').innerText = myLatestLog.timestamp;
+
+                        document.getElementById('liveBadgeStatus').className = 'badge me-2 px-2 py-1 rounded-pill fw-bold flex-shrink-0 ' +
+                            (myLatestLog.status === 'CẢNH BÁO' ? 'badge-status-warning' : (myLatestLog.status === 'NGUY HIỂM' ? 'badge-status-danger' : 'badge-status-normal'));
+                    }
                 }
             }
+            document.getElementById('historyTableBody').innerHTML = tbodyHtml;
+        } catch (err) {
+            console.error("Lỗi lấy logs:", err);
         }
-        document.getElementById('historyTableBody').innerHTML = tbodyHtml;
     }
 
     async function fetchSessionStats() {
-        const res = await fetch('/api/realtime/sessions');
-        const data = await res.json();
-        if (!data.success) return;
-        document.getElementById('statWorkers').innerText = data.active_workers;
-        document.getElementById('statQueue').innerText = `${data.queue_size} / 300`;
-        if (typeof data.active_keys_count === 'number') {
-            document.getElementById('statKeys').innerText = `${data.active_keys_count} Keys Active`;
+        try {
+            const res = await fetch(`/api/realtime/sessions?client_id=${encodeURIComponent(currentClientId)}`, {
+                headers: { 'X-Client-ID': currentClientId }
+            });
+            const data = await res.json();
+            if (!data.success) return;
+            document.getElementById('statWorkers').innerText = data.active_workers;
+            document.getElementById('statQueue').innerText = `${data.queue_size} / 300`;
+            if (typeof data.active_keys_count === 'number') {
+                document.getElementById('statKeys').innerText = `${data.active_keys_count} Keys Active`;
+            }
+        } catch (err) {
+            console.error("Lỗi lấy session stats:", err);
         }
     }
 
-    // BƯỚC 1: Mở Box nhập Pass giống RTSP
+    // BƯỚC 1: Mở Box nhập Pass
     function openPinModal() {
         document.getElementById('authPinInput').value = '';
         document.getElementById('realtimePinError').style.display = 'none';
@@ -720,12 +812,12 @@
         div.innerHTML = `
             <button type="button" class="btn btn-sm btn-outline-danger btn-cute col-auto" onclick="this.parentElement.remove()">Xóa</button>
             <div class="col">
-                <input type="text" class="form-control form-control-sm api-key-input" style="border-radius: 10px;" placeholder="Nhập API Key (sk-or-v1-...)" value="${val}">
+                <input type="text" class="form-control form-control-sm api-key-input" style="border-radius: 10px;" placeholder="Nhập API Key (xai-... / gsk_... / sk-or-v1-...)" value="${val}">
             </div>`;
         document.getElementById('apiKeysContainer').appendChild(div);
     }
 
-    // BƯỚC 2: Xác thực PIN qua /verify-pin, đúng mới mở Modal Cấu hình API Key
+    // BƯỚC 2: Xác thực PIN qua /api/realtime/verify_pin của realtime_camera.py
     async function verifyPinAndOpenConfig() {
         const pin = document.getElementById('authPinInput').value.trim();
         const errEl = document.getElementById('realtimePinError');
@@ -734,37 +826,42 @@
             errEl.style.display = 'block';
             return;
         }
-        const res = await fetch('/verify-pin', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ pin })
-        });
-        const data = await res.json();
-        if (data.success) {
-            bootstrap.Modal.getOrCreateInstance(document.getElementById('pinAuthModal')).hide();
-            document.getElementById('hiddenConfigPin').value = pin;
-            const confData = await (await fetch('/api/realtime/config')).json();
-            document.getElementById('apiKeysContainer').innerHTML = '';
-            (confData.keys_full && confData.keys_full.length ? confData.keys_full : []).forEach(k => addApiKeyInput(k));
-            if (!document.getElementById('apiKeysContainer').children.length) addApiKeyInput();
+        try {
+            const res = await fetch('/api/realtime/verify_pin', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pin })
+            });
+            const data = await res.json();
+            if (data.success) {
+                bootstrap.Modal.getOrCreateInstance(document.getElementById('pinAuthModal')).hide();
+                document.getElementById('hiddenConfigPin').value = pin;
+                const confData = await (await fetch('/api/realtime/config')).json();
+                document.getElementById('apiKeysContainer').innerHTML = '';
+                (confData.keys_full && confData.keys_full.length ? confData.keys_full : []).forEach(k => addApiKeyInput(k));
+                if (!document.getElementById('apiKeysContainer').children.length) addApiKeyInput();
 
-            document.getElementById('modalModelName').value = confData.model || '';
-            document.getElementById('modalConcurrentJobs').value = confData.concurrent_jobs || 5;
+                document.getElementById('modalModelName').value = confData.model || 'grok-4-fast-non-reasoning';
+                document.getElementById('modalConcurrentJobs').value = confData.concurrent_jobs || 10;
 
-            bootstrap.Modal.getOrCreateInstance(document.getElementById('configAiModal')).show();
-        } else {
-            errEl.innerText = 'Mã PIN không chính xác!';
+                bootstrap.Modal.getOrCreateInstance(document.getElementById('configAiModal')).show();
+            } else {
+                errEl.innerText = data.message || 'Mã PIN không chính xác!';
+                errEl.style.display = 'block';
+                document.getElementById('authPinInput').value = '';
+                document.getElementById('authPinInput').focus();
+            }
+        } catch (err) {
+            errEl.innerText = 'Lỗi kết nối máy chủ!';
             errEl.style.display = 'block';
-            document.getElementById('authPinInput').value = '';
-            document.getElementById('authPinInput').focus();
         }
     }
 
     async function saveAiConfig() {
         const pin = document.getElementById('hiddenConfigPin').value;
         const model = document.getElementById('modalModelName').value.trim();
-        const concurrent_jobs = parseInt(document.getElementById('modalConcurrentJobs').value) || 5;
-        const api_keys = Array.from(document.querySelectorAll('.api-key-input')).map(i => i.value.trim()).filter(v => v).join('\n');
+        const concurrent_jobs = parseInt(document.getElementById('modalConcurrentJobs').value) || 10;
+        const api_keys = Array.from(document.querySelectorAll('.api-key-input')).map(i => i.value.trim()).filter(v => v);
 
         const res = await fetch('/api/realtime/config', {
             method: 'POST',
@@ -774,7 +871,7 @@
 
         const resData = await res.json();
         if (resData.success) {
-            alert("Đã lưu cấu hình API Key Realtime vào MySQL thành công!");
+            alert(resData.message || "Đã lưu cấu hình API Key Realtime vào MySQL thành công!");
             bootstrap.Modal.getOrCreateInstance(document.getElementById('configAiModal')).hide();
             fetchSessionStats();
         } else {
@@ -791,7 +888,8 @@
     });
 
     window.addEventListener("beforeunload", function () {
-        navigator.sendBeacon('/api/realtime/disconnect', JSON.stringify({ client_id: currentClientId }));
+        const payload = new Blob([JSON.stringify({ client_id: currentClientId })], { type: 'application/json' });
+        navigator.sendBeacon('/api/realtime/disconnect', payload);
     });
 </script>
 {% endblock %}

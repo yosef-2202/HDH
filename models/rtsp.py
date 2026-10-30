@@ -15,6 +15,8 @@ from models.session_limiter import (
     get_limiter,
     build_temp_filename,
     cleanup_session_temp_files,
+    is_auto_clean_enabled,
+    sanitize_id,
 )
 
 rtsp_bp = Blueprint('rtsp_bp', __name__)
@@ -41,11 +43,15 @@ worker_lock = threading.Lock()
 
 os.makedirs('static/temp', exist_ok=True)
 
-def load_recent_alerts_from_db(limit=20):
+def load_recent_alerts_from_db(client_id=None, limit=20):
     try:
         from app import app, RtspAlert
         with app.app_context():
-            records = RtspAlert.query.order_by(RtspAlert.id.desc()).limit(limit).all()
+            query = RtspAlert.query
+            if client_id is not None:
+                cid = sanitize_id(client_id)
+                query = query.filter_by(client_id=cid)
+            records = query.order_by(RtspAlert.id.desc()).limit(limit).all()
             result = []
             for r in records:
                 result.append({
@@ -67,10 +73,11 @@ def load_recent_alerts_from_db(limit=20):
 def save_alert_to_mysql(client_id, rtsp_url, alert_obj, prediction_text):
     try:
         from app import app, db, RtspAlert
+        cid = sanitize_id(client_id)
         with app.app_context():
             new_record = RtspAlert(
                 alert_id=alert_obj["id"],
-                client_id=client_id,
+                client_id=cid,
                 rtsp_url=rtsp_url,
                 time_str=alert_obj["time"],
                 behavior=alert_obj["behavior"],
@@ -89,15 +96,16 @@ def save_alert_to_mysql(client_id, rtsp_url, alert_obj, prediction_text):
         print(f"[RTSP MySQL Error] Không thể lưu vào DB: {e}")
 
 def init_client(client_id, rtsp_url=''):
-    db_alerts = load_recent_alerts_from_db(20)
+    cid = sanitize_id(client_id)
+    client_alerts = load_recent_alerts_from_db(client_id=cid, limit=20)
     with clients_lock:
         global global_alerts
-        if not global_alerts and db_alerts:
-            global_alerts = db_alerts.copy()
-        if client_id not in clients:
-            clients[client_id] = {
+        if not global_alerts:
+            global_alerts = load_recent_alerts_from_db(client_id=None, limit=50)
+        if cid not in clients:
+            clients[cid] = {
                 'logs': [],
-                'alerts': db_alerts,
+                'alerts': client_alerts,
                 'last_api_call_time': 0,
                 'camera': None,
                 'rtsp_url': rtsp_url,
@@ -106,7 +114,7 @@ def init_client(client_id, rtsp_url=''):
             }
         else:
             if rtsp_url:
-                clients[client_id]['rtsp_url'] = rtsp_url
+                clients[cid]['rtsp_url'] = rtsp_url
         return True
 
 def get_api_credentials():
@@ -165,12 +173,14 @@ def record_short_clip(frame_list, alert_id):
     except Exception: pass
 
 def push_log(client_id, message):
+    cid = sanitize_id(client_id)
     with clients_lock:
-        if client_id in clients:
-            if len(clients[client_id]['logs']) > 50: clients[client_id]['logs'].pop(0)
-            clients[client_id]['logs'].append(message)
+        if cid in clients:
+            if len(clients[cid]['logs']) > 50: clients[cid]['logs'].pop(0)
+            clients[cid]['logs'].append(message)
 
 def analyze_frame_with_ai(client_id, frame, recent_frames, alert_id):
+    cid = sanitize_id(client_id)
     api_key, model_name, valid_apis = get_api_credentials()
     if not api_key: return
 
@@ -181,16 +191,16 @@ def analyze_frame_with_ai(client_id, frame, recent_frames, alert_id):
     api_info = f"{model_name} ({api_key[:4]}...{api_key[-4:]})" if api_key else "--"
     rtsp_url = ""
     with clients_lock:
-        if client_id in clients:
-            clients[client_id]['active_api_info'] = api_info
-            rtsp_url = clients[client_id].get('rtsp_url', '')
+        if cid in clients:
+            clients[cid]['active_api_info'] = api_info
+            rtsp_url = clients[cid].get('rtsp_url', '')
 
     max_retries = max(1, len(valid_apis)) 
     
     for attempt in range(max_retries):
         try:
             timestamp_start = datetime.now().strftime("%H:%M:%S")
-            push_log(client_id, f"[{timestamp_start}] [{thread_name}] Đang phân tích khung hình...")
+            push_log(cid, f"[{timestamp_start}] [{thread_name}] Đang phân tích khung hình...")
             start_time = time.time()
             
             motion_detected = False
@@ -259,11 +269,11 @@ Dự đoán sự việc: Khách hàng đang mua sắm."""
             }
 
             with clients_lock:
-                if client_id in clients:
-                    clients[client_id]['latest_metrics'] = metrics_detail
+                if cid in clients:
+                    clients[cid]['latest_metrics'] = metrics_detail
             
             if text.lower().startswith("không") and len(text) < 15:
-                push_log(client_id, f"[{datetime.now().strftime('%H:%M:%S')}] [{thread_name}] Không có đối tượng ({os_metrics_str})")
+                push_log(cid, f"[{datetime.now().strftime('%H:%M:%S')}] [{thread_name}] Không có đối tượng ({os_metrics_str})")
                 break
 
             part1, part2 = text.split("PHẦN 2") if "PHẦN 2" in text else (text, "")
@@ -301,7 +311,7 @@ Dự đoán sự việc: Khách hàng đang mua sắm."""
                 action_desc = "<b>Đối tượng:</b><br>" + "<br>".join([f"- {p}" for p in detected_objects]) + f"<br><b>Dự đoán:</b> <i>{prediction}</i>"
                 
                 threading.Thread(target=record_short_clip, args=(list(recent_frames), alert_id), daemon=True).start()
-                push_log(client_id, f"[{datetime.now().strftime('%H:%M:%S')}] [{thread_name}] {safety_level.upper()}: {behavior_title} ({os_metrics_str})")
+                push_log(cid, f"[{datetime.now().strftime('%H:%M:%S')}] [{thread_name}] {safety_level.upper()}: {behavior_title} ({os_metrics_str})")
 
                 alert_obj = {
                     "id": alert_id,
@@ -320,12 +330,12 @@ Dự đoán sự việc: Khách hàng đang mua sắm."""
                     global_alerts.insert(0, alert_obj)
                     if len(global_alerts) > 50:
                         global_alerts.pop()
-                    if client_id in clients:
-                        clients[client_id]['alerts'].insert(0, alert_obj)
-                        if len(clients[client_id]['alerts']) > 20:
-                            clients[client_id]['alerts'].pop()
+                    if cid in clients:
+                        clients[cid]['alerts'].insert(0, alert_obj)
+                        if len(clients[cid]['alerts']) > 20:
+                            clients[cid]['alerts'].pop()
 
-                save_alert_to_mysql(client_id, rtsp_url, alert_obj, prediction)
+                save_alert_to_mysql(cid, rtsp_url, alert_obj, prediction)
             break 
             
         except Exception as e:
@@ -333,22 +343,23 @@ Dự đoán sự việc: Khách hàng đang mua sắm."""
             api_key, model_name, valid_apis = get_api_credentials() 
 
 def generate_frames(rtsp_url, client_id):
+    cid = sanitize_id(client_id)
     start_workers_if_needed() 
     
     os.environ["OPENCV_FFMPEG_READ_ATTEMPTS"] = "100"
     camera = cv2.VideoCapture(rtsp_url)
     
     with clients_lock:
-        if client_id in clients:
-            clients[client_id]['camera'] = camera
-            clients[client_id]['rtsp_url'] = rtsp_url
+        if cid in clients:
+            clients[cid]['camera'] = camera
+            clients[cid]['rtsp_url'] = rtsp_url
     
     recent_frames = [] 
     api_cooldown = 5 
 
     try:
         while True:
-            get_limiter('rtsp').try_acquire_stream(client_id)
+            get_limiter('rtsp').try_acquire_stream(cid)
             if not camera.isOpened(): break
             success, frame = camera.read()
             if not success: break
@@ -358,15 +369,15 @@ def generate_frames(rtsp_url, client_id):
             if len(recent_frames) > 45: recent_frames.pop(0)
             
             current_time = time.time()
-            with clients_lock: last_call = clients.get(client_id, {}).get('last_api_call_time', 0)
+            with clients_lock: last_call = clients.get(cid, {}).get('last_api_call_time', 0)
             
             countdown = max(0, int(api_cooldown - (current_time - last_call)))
             if countdown == 0 and not analysis_queue.full():
                 with clients_lock:
-                    if client_id in clients: clients[client_id]['last_api_call_time'] = current_time
+                    if cid in clients: clients[cid]['last_api_call_time'] = current_time
                 # Đặt tên chuẩn: rtsp_<tên_phiên>_<số_thứ_tự>
-                alert_id, _ = build_temp_filename('rtsp', client_id, '.webm')
-                analysis_queue.put((client_id, frame_resized.copy(), list(recent_frames), alert_id))
+                alert_id, _ = build_temp_filename('rtsp', cid, '.webm')
+                analysis_queue.put((cid, frame_resized.copy(), list(recent_frames), alert_id))
 
             cv2.putText(frame_resized, f"Wait: {countdown}s", (520, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0) if countdown==0 else (0,165,255), 2)
             ret, buffer = cv2.imencode('.jpg', frame_resized, [int(cv2.IMWRITE_JPEG_QUALITY), 50])
@@ -375,10 +386,10 @@ def generate_frames(rtsp_url, client_id):
                 yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
     finally:
         camera.release()
-        get_limiter('rtsp').release(client_id, cleanup_temp=True)
+        get_limiter('rtsp').release(cid, cleanup_temp=True)
         with clients_lock:
-            if client_id in clients and clients[client_id]['camera'] == camera:
-                clients[client_id]['camera'] = None
+            if cid in clients and clients[cid]['camera'] == camera:
+                clients[cid]['camera'] = None
 
 @rtsp_bp.route('/rtsp')
 def rtsp_page(): return render_template('rtsp.html')
@@ -386,27 +397,29 @@ def rtsp_page(): return render_template('rtsp.html')
 @rtsp_bp.route('/video_feed')
 def video_feed():
     rtsp_url = request.args.get('url', '')
-    client_id = request.args.get('client_id', 'guest')
+    raw_cid = request.args.get('client_id', 'guest')
+    cid = sanitize_id(raw_cid)
     if not rtsp_url: return "URL trống", 400
     
-    slot_info = get_limiter('rtsp').try_acquire_stream(client_id)
+    slot_info = get_limiter('rtsp').try_acquire_stream(cid)
     if not slot_info["allowed"]:
         return jsonify(slot_info), 429
         
-    init_client(client_id, rtsp_url)
-    push_log(client_id, f"[{datetime.now().strftime('%H:%M:%S')}] [SYSTEM] Bắt đầu kết nối Camera...")
-    return Response(generate_frames(rtsp_url, client_id), mimetype='multipart/x-mixed-replace; boundary=frame')
+    init_client(cid, rtsp_url)
+    push_log(cid, f"[{datetime.now().strftime('%H:%M:%S')}] [SYSTEM] Bắt đầu kết nối Camera...")
+    return Response(generate_frames(rtsp_url, cid), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @rtsp_bp.route('/api/rtsp/data')
 def rtsp_data():
-    client_id = request.args.get('client_id', '')
-    q_status = get_limiter('rtsp').get_status(client_id)
+    raw_cid = request.args.get('client_id', '').strip()
+    cid = sanitize_id(raw_cid) if raw_cid else ''
+    q_status = get_limiter('rtsp').get_status(cid)
+    
     with clients_lock:
-        c_data = clients.get(client_id)
+        c_data = clients.get(cid) if cid else None
         if not c_data:
-            db_alerts = load_recent_alerts_from_db(20)
             logs = []
-            alerts = db_alerts
+            alerts = load_recent_alerts_from_db(client_id=cid, limit=20) if cid else []
             active_api = '--'
             latest_metrics = None
         else:
@@ -445,18 +458,24 @@ def delete_temp(clip_id):
 
 @rtsp_bp.route('/api/rtsp/clear_cache', methods=['POST'])
 def clear_cache():
-    client_id = (request.get_json(silent=True) or {}).get('client_id', '') or request.headers.get('X-Client-ID', '')
-    if client_id:
-        cleanup_session_temp_files('rtsp', client_id)
+    raw_cid = (request.get_json(silent=True) or {}).get('client_id', '') or request.headers.get('X-Client-ID', '')
+    if not raw_cid:
+        return jsonify({"success": False, "message": "Thiếu client_id"}), 400
+        
+    cid = sanitize_id(raw_cid)
+    cleanup_session_temp_files('rtsp', cid)
+    
     with clients_lock:
-        global_alerts.clear()
-        if client_id in clients:
-            clients[client_id]['logs'].clear()
-            clients[client_id]['alerts'].clear()
+        if cid in clients:
+            clients[cid]['logs'].clear()
+            clients[cid]['alerts'].clear()
+        global global_alerts
+        global_alerts = [a for a in global_alerts if not str(a.get('id', '')).startswith(f"rtsp_{cid}_")]
+
     try:
         from app import app, db, RtspAlert
         with app.app_context():
-            db.session.query(RtspAlert).delete()
+            RtspAlert.query.filter_by(client_id=cid).delete()
             db.session.commit()
     except Exception:
         pass
@@ -465,13 +484,21 @@ def clear_cache():
 @rtsp_bp.route('/api/rtsp/stop', methods=['POST'])
 def stop_rtsp():
     data = request.get_json(force=True, silent=True) or {}
-    client_id = data.get('client_id', '') or request.headers.get('X-Client-ID', '')
+    raw_cid = data.get('client_id', '') or request.headers.get('X-Client-ID', '')
+    if not raw_cid:
+        return jsonify({"success": True})
+        
+    cid = sanitize_id(raw_cid)
     # Tự động xóa toàn bộ file temp rtsp_<client_id>_* khi dừng hoặc thoát trang
-    get_limiter('rtsp').release(client_id, cleanup_temp=True)
+    get_limiter('rtsp').release(cid, cleanup_temp=True)
     with clients_lock:
-        if client_id in clients and clients[client_id]['camera']:
-            clients[client_id]['camera'].release()
-            clients[client_id]['camera'] = None
+        if cid in clients:
+            if clients[cid]['camera']:
+                clients[cid]['camera'].release()
+                clients[cid]['camera'] = None
+            if is_auto_clean_enabled():
+                clients[cid]['logs'].clear()
+                clients[cid]['alerts'].clear()
     return jsonify({"success": True})
 
 @rtsp_bp.route('/api/rtsp/config', methods=['GET', 'POST'])

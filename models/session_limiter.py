@@ -17,10 +17,31 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 _temp_counter_lock = threading.Lock()
 _session_file_counters = {}  # { "rtsp_client_xyz": 1, "img_client_xyz": 2 }
+_protected_files_lock = threading.Lock()
+_protected_files = set()     # Các file đang trong quá trình đọc/ghi bởi OpenCV
 
 # Trạng thái Bật/Tắt tính năng Auto Clean toàn hệ thống (Mặc định: True)
 _auto_clean_lock = threading.Lock()
 _auto_clean_enabled = True
+
+
+def protect_temp_file(filepath: str):
+    if filepath:
+        with _protected_files_lock:
+            _protected_files.add(os.path.abspath(filepath))
+
+
+def unprotect_temp_file(filepath: str):
+    if filepath:
+        with _protected_files_lock:
+            _protected_files.discard(os.path.abspath(filepath))
+
+
+def is_file_protected(filepath: str) -> bool:
+    if not filepath:
+        return False
+    with _protected_files_lock:
+        return os.path.abspath(filepath) in _protected_files
 
 
 def is_auto_clean_enabled() -> bool:
@@ -73,7 +94,7 @@ def build_temp_filename(module_prefix: str, client_id: str, ext: str = '.webm') 
     return base_id, filepath
 
 
-def cleanup_session_temp_files(module_prefix: str, client_id: str) -> int:
+def cleanup_session_temp_files(module_prefix: str, client_id: str, force: bool = False) -> int:
     if not client_id:
         return 0
     cid = sanitize_id(client_id)
@@ -86,8 +107,9 @@ def cleanup_session_temp_files(module_prefix: str, client_id: str) -> int:
     removed_count = 0
     for prefix in prefixes:
         key = f"{prefix}_{cid}"
-        with _temp_counter_lock:
-            _session_file_counters.pop(key, None)
+        if force:
+            with _temp_counter_lock:
+                _session_file_counters.pop(key, None)
 
         for folder in (TEMP_FOLDER, UPLOAD_FOLDER):
             if not os.path.exists(folder):
@@ -103,6 +125,8 @@ def cleanup_session_temp_files(module_prefix: str, client_id: str) -> int:
                 for fpath in glob.glob(pattern):
                     try:
                         if os.path.isfile(fpath):
+                            if not force and is_file_protected(fpath):
+                                continue
                             os.remove(fpath)
                             removed_count += 1
                     except Exception:
@@ -125,6 +149,8 @@ def cleanup_source_temp_files(module_prefix: str) -> dict:
         for fname in os.listdir(folder):
             fpath = os.path.join(folder, fname)
             if not os.path.isfile(fpath) or fname.startswith('.'):
+                continue
+            if is_file_protected(fpath):
                 continue
             low = fname.lower()
             match = (
@@ -217,6 +243,8 @@ def clear_all_temp_files() -> dict:
         for fname in os.listdir(folder):
             fpath = os.path.join(folder, fname)
             if not os.path.isfile(fpath) or fname.startswith('.'):
+                continue
+            if is_file_protected(fpath):
                 continue
             try:
                 freed_bytes += os.path.getsize(fpath)
@@ -410,11 +438,11 @@ class ModuleQueueManager:
             }
 
 
-# Riêng module 'image' đặt auto_clean_on_timeout=False để chỉ xóa temp khi người dùng thoát Web hoặc Admin ra lệnh xóa
+# Riêng module 'image' và 'video' đặt auto_clean_on_timeout=False để không xóa nhầm file đang xem/phân tích
 MODULE_LIMITERS = {
     "realtime": ModuleQueueManager("realtime", max_concurrent=10, lease_timeout=18.0, auto_clean_on_timeout=True),
     "rtsp": ModuleQueueManager("rtsp", max_concurrent=10, lease_timeout=20.0, auto_clean_on_timeout=True),
-    "video": ModuleQueueManager("video", max_concurrent=10, lease_timeout=120.0, auto_clean_on_timeout=True),
+    "video": ModuleQueueManager("video", max_concurrent=10, lease_timeout=180.0, auto_clean_on_timeout=False),
     "image": ModuleQueueManager("image", max_concurrent=10, lease_timeout=25.0, auto_clean_on_timeout=False),
     "chatbot": ModuleQueueManager("chatbot", max_concurrent=10, lease_timeout=60.0, auto_clean_on_timeout=True),
 }
@@ -441,8 +469,7 @@ def api_release_slot():
     mod = str(data.get('module', '')).strip().lower()
     cid = str(data.get('client_id', '')).strip() or request.headers.get('X-Client-ID', '').strip()
     if mod in MODULE_LIMITERS and cid:
-        # Không tự xóa bộ nhớ đệm của image khi chỉ giải phóng slot; và tôn trọng trạng thái Auto Clean
-        should_clean = (mod != 'image') and is_auto_clean_enabled()
+        should_clean = (mod not in ('image', 'video')) and is_auto_clean_enabled()
         MODULE_LIMITERS[mod].release(cid, cleanup_temp=should_clean)
     return jsonify({"success": True})
 

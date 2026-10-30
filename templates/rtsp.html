@@ -365,15 +365,21 @@
 </div>
 
 <script>
-    const CLIENT_ID = typeof GLOBAL_CLIENT_ID !== 'undefined' ? GLOBAL_CLIENT_ID : ('client_' + Math.random().toString(36).substring(2, 10));
+    // Khởi tạo CLIENT_ID độc lập cho từng Tab (sessionStorage) để không bị lẫn dữ liệu giữa các phiên
+    let CLIENT_ID = sessionStorage.getItem('RTSP_SESSION_ID');
+    if (!CLIENT_ID) {
+        CLIENT_ID = 'client_' + Math.random().toString(36).substring(2, 10) + '_' + Date.now().toString(36);
+        sessionStorage.setItem('RTSP_SESSION_ID', CLIENT_ID);
+    }
+
     let pollInterval = null;
     let rtspApiList = [];
     let isRtspRunning = false;
     let latestAiCpu = "4.8%", latestAiRam = "38.2 MB", latestAiBw = "64 KB/req";
 
     window.addEventListener('DOMContentLoaded', () => {
-        fetch('/api/rtsp/stop', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({client_id: CLIENT_ID}) });
-        fetchRtspData();
+        fetch('/api/rtsp/stop', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({client_id: CLIENT_ID}) })
+        .then(() => fetchRtspData());
     });
 
     function openConfigWithPin() {
@@ -499,7 +505,11 @@
         });
         const checkData = await checkRes.json();
         if (!checkRes.ok || !checkData.allowed) {
-            showQueueWaitingModal(checkData, () => startStream());
+            if (typeof showQueueWaitingModal === 'function') {
+                showQueueWaitingModal(checkData, () => startStream());
+            } else {
+                alert(checkData.message || 'Hệ thống đang đầy, vui lòng chờ!');
+            }
             return;
         }
 
@@ -523,7 +533,8 @@
         document.getElementById('streamStatus').innerHTML = '<i class="fa-solid fa-circle-stop me-1"></i> Đã ngắt';
         updatePipelineResources(false);
         if(pollInterval) clearInterval(pollInterval);
-        fetch('/api/rtsp/stop', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({client_id: CLIENT_ID}) });
+        fetch('/api/rtsp/stop', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({client_id: CLIENT_ID}) })
+        .then(() => fetchRtspData());
     }
 
     function fetchRtspData() {
@@ -535,6 +546,8 @@
                     return `<div style="${color} margin-bottom: 4px;">> ${log}</div>`;
                 }).join('');
                 logBox.scrollTop = logBox.scrollHeight;
+            } else {
+                logBox.innerHTML = '<div style="color: #8c7b70;">> [HỆ THỐNG] Chờ kết nối camera...</div>';
             }
 
             if(data.stats) {
@@ -576,6 +589,8 @@
                         <td><button class="btn btn-sm btn-primary-cute btn-cute py-1 px-3" onclick="openTempVideo('${a.temp_video_url}')">Xem</button></td>
                     </tr>`;
                 }).join('');
+            } else {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-muted py-4 text-center">Chưa có ai ở đây cả~</td></tr>';
             }
         });
     }
@@ -592,7 +607,7 @@
     function clearCache() {
         fetch('/api/rtsp/clear_cache', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({client_id: CLIENT_ID}) })
         .then(() => {
-            document.getElementById('logConsole').innerHTML = '> [HỆ THỐNG] Đã xóa lịch sử...';
+            document.getElementById('logConsole').innerHTML = '<div style="color: #8c7b70;">> [HỆ THỐNG] Đã xóa lịch sử...</div>';
             document.getElementById('alertTableBody').innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">Chưa có ai ở đây cả~</td></tr>';
         });
     }

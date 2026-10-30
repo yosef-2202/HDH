@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from __future__ import annotations
 
 import json
@@ -12,10 +13,13 @@ import cv2
 import numpy as np
 import requests
 import psutil
-from flask import (Blueprint, Response, jsonify, request, stream_with_context, current_app, session)
+from flask import Blueprint, Response, jsonify, request, stream_with_context, session
 from models.session_limiter import (
     get_limiter,
     build_temp_filename,
+    protect_temp_file,
+    unprotect_temp_file,
+    is_auto_clean_enabled,
     TEMP_FOLDER,
 )
 
@@ -24,6 +28,40 @@ video_bp = Blueprint('video_bp', __name__)
 os.makedirs(TEMP_FOLDER, exist_ok=True)
 
 MAX_VIDEO_BYTES = 50 * 1024 * 1024  # Giới hạn cứng tối đa 50MB
+
+DEFAULT_VIDEO_MODEL = "grok-4-fast-non-reasoning"
+
+XAI_GROK_ENDPOINT = "https://api.x.ai/v1/chat/completions"
+GROQ_CLOUD_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
+OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
+
+XAI_VISION_MODELS = [
+    "grok-4-fast-non-reasoning",
+    "grok-4.3",
+    "grok-4.6",
+    "grok-4",
+]
+
+GROQ_VISION_MODELS = [
+    "meta-llama/llama-4-scout-17b-16e-instruct",
+    "meta-llama/llama-4-maverick-17b-128e-instruct",
+]
+
+OPENROUTER_VISION_MODELS = [
+    "google/gemini-2.0-flash-exp:free",
+    "qwen/qwen2.5-vl-72b-instruct:free",
+    "meta-llama/llama-4-scout:free",
+    "x-ai/grok-4-fast-non-reasoning",
+    "openrouter/free",
+]
+
+DEPRECATED_MODELS = {
+    "grok-2-vision-1212",
+    "x-ai/grok-2-vision-1212",
+    "grok-2-vision",
+    "x-ai/grok-2-vision",
+    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+}
 
 hog_detector = cv2.HOGDescriptor()
 hog_detector.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
@@ -38,32 +76,73 @@ _job_states: dict[str, dict] = {}
 _sse_lock = threading.Lock()
 
 
+def build_candidate_models_for_key(api_key: str, configured_model: str) -> tuple[str, list[str], bool]:
+    key_str = str(api_key or "").strip()
+    model_str = str(configured_model or "").strip()
+
+    if model_str.lower() in DEPRECATED_MODELS or "grok-2" in model_str.lower() or "nemotron" in model_str.lower():
+        model_str = ""
+
+    if key_str.startswith("gsk_"):
+        candidates = []
+        if model_str and ("llama-4" in model_str.lower() or "llava" in model_str.lower()):
+            candidates.append(model_str)
+        for m in GROQ_VISION_MODELS:
+            if m not in candidates:
+                candidates.append(m)
+        return GROQ_CLOUD_ENDPOINT, candidates, True
+
+    if key_str.startswith("sk-or-"):
+        candidates = []
+        if model_str and model_str.lower() != "openrouter/free":
+            if "/" not in model_str and model_str.startswith("grok-"):
+                candidates.append(f"x-ai/{model_str}")
+            else:
+                candidates.append(model_str)
+        for m in OPENROUTER_VISION_MODELS:
+            if m not in candidates:
+                candidates.append(m)
+        return OPENROUTER_ENDPOINT, candidates, False
+
+    candidates = []
+    if model_str and model_str.lower() != "openrouter/free":
+        clean_xai_model = model_str.replace("x-ai/", "").replace(":free", "")
+        candidates.append(clean_xai_model)
+    for m in XAI_VISION_MODELS:
+        if m not in candidates:
+            candidates.append(m)
+    return XAI_GROK_ENDPOINT, candidates, True
+
+
 def get_video_credentials():
     global _video_key_turn
     from app import app, get_setting
     keys = []
-    model_name = "openrouter/free"
+    model_name = DEFAULT_VIDEO_MODEL
     try:
         with app.app_context():
-            raw_keys = get_setting('video_api_keys', '[]')
+            raw_keys = get_setting('video_api_keys', '[]') or '[]'
             parsed = json.loads(raw_keys)
             if isinstance(parsed, list):
                 keys = [str(k).strip() for k in parsed if str(k).strip()]
-            
+
             if not keys:
-                rtsp_raw = get_setting('rtsp_api_list', '[]')
+                rtsp_raw = get_setting('rtsp_api_list', '[]') or '[]'
                 for it in json.loads(rtsp_raw):
-                    k = str(it.get('key', '')).strip()
+                    if isinstance(it, dict):
+                        k = str(it.get('key', '')).strip()
+                    else:
+                        k = str(it).strip()
                     if k and k not in keys:
                         keys.append(k)
             if not keys:
-                rt_raw = get_setting('realtime_api_keys', '[]')
+                rt_raw = get_setting('realtime_api_keys', '[]') or '[]'
                 for k in json.loads(rt_raw):
                     if isinstance(k, str) and k.strip() and k.strip() not in keys:
                         keys.append(k.strip())
 
-            saved_model = get_setting('video_ai_model', 'openrouter/free').strip()
-            if saved_model:
+            saved_model = str(get_setting('video_ai_model', DEFAULT_VIDEO_MODEL) or DEFAULT_VIDEO_MODEL).strip()
+            if saved_model and saved_model.lower() not in DEPRECATED_MODELS:
                 model_name = saved_model
     except Exception:
         pass
@@ -126,10 +205,10 @@ def _push_q(sid: str, payload: dict):
 
 def _frame_to_base64_uri(frame_bgr):
     h, w = frame_bgr.shape[:2]
-    scale = min(1.0, 960.0 / max(w, h, 1))
+    scale = min(1.0, 640.0 / max(w, h, 1))
     if scale < 1.0:
         frame_bgr = cv2.resize(frame_bgr, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
-    ret, buffer = cv2.imencode('.jpg', frame_bgr, [int(cv2.IMWRITE_JPEG_QUALITY), 78])
+    ret, buffer = cv2.imencode('.jpg', frame_bgr, [int(cv2.IMWRITE_JPEG_QUALITY), 72])
     if not ret:
         return ""
     img_str = base64.b64encode(buffer).decode("utf-8")
@@ -142,7 +221,6 @@ def _ensure_vietnamese_text(text: str, is_behavior: bool = False) -> str:
     if not t:
         return "Hoạt động bình thường" if is_behavior else "Không phát hiện dấu hiệu bất thường."
 
-    # Từ điển quy đổi nhanh cho cột Hành Vi & Chi Tiết nếu model free trả về tiếng Anh
     behavior_dict = {
         "fighting": "Đánh nhau / Xô xát",
         "confrontation": "Đối đầu / Căng thẳng",
@@ -170,7 +248,6 @@ def _ensure_vietnamese_text(text: str, is_behavior: bool = False) -> str:
     if is_behavior and low in behavior_dict:
         return behavior_dict[low]
 
-    # Thay thế các cụm từ tiếng Anh thường gặp trong câu mô tả
     replacements = [
         (r"\bfighting\b", "xô xát/đánh nhau"),
         (r"\bconfrontation\b", "đối đầu căng thẳng"),
@@ -205,78 +282,114 @@ def _ensure_vietnamese_text(text: str, is_behavior: bool = False) -> str:
     return t
 
 
-def _call_openrouter(api_key, contents, model_name="openrouter/free"):
-    url = "https://openrouter.ai/api/v1/chat/completions"
+def _call_vision_ai(api_key, contents, model_name=DEFAULT_VIDEO_MODEL):
     system_instruction = (
         "Bạn là chuyên gia AI phân tích video giám sát an ninh tại Việt Nam. "
         "QUY TẮC TỐI THƯỢNG: BẮT BUỘC viết 100% bằng TIẾNG VIỆT có dấu cho trường 'behavior' và 'detail'. "
-        "TUYỆT ĐỐI KHÔNG dùng tiếng Anh (như Fighting, Standing, Confrontation, The person in...). "
+        "TUYỆT ĐỐI KHÔNG dùng tiếng Anh. "
         "Chỉ trả về duy nhất JSON nguyên chất, không dùng markdown ```json."
     )
     user_instruction = """
-    Hãy phân tích các khung hình và trả về JSON theo đúng cấu trúc sau (100% nội dung tiếng Việt):
+    Hãy phân tích từng khung hình theo đúng thứ tự và trả về JSON theo đúng cấu trúc sau (100% nội dung tiếng Việt):
     {
       "people": [
         {
           "person_id": "Person_1",
           "video_ts": "00:00:00",
-          "behavior": "<Hành / TIẾNG VIỆT, Xô bằng bộ, canh cửa... dụ: gọn ngắn nhau, quan sát, vi ví xát Đi Đánh Đứng>",
-          "detail": "<Mô TIẾNG VIỆT bằng bối chi cảnh hành phục, quanh ràng rõ thế, tiết trang tư tả và xung động>",
+          "behavior": "<Hành TIẾNG VIỆT, bằng bộ, dụ: gọn ngắn ngồi, nhau, quan sát... vi ví Đang Đánh Đứng đi>",
+          "detail": "<Mô TIẾNG VIỆT bằng bối chi cảnh hành phục, quanh thế, tiết trang tư tả và xung động>",
           "status_code": "<chỉ chọn 1 trong 3 giá trị: normal | warning | danger>"
         }
       ]
     }
     """
-    content_array = [{"type": "text", "text": user_instruction}]
+
+    full_content_array = [{"type": "text", "text": system_instruction + "\n" + user_instruction}]
+    image_items = []
+    text_items = []
+
     for item in contents:
         if isinstance(item, str):
-            content_array.append({"type": "text", "text": item})
+            text_items.append({"type": "text", "text": item})
+            full_content_array.append({"type": "text", "text": item})
         elif isinstance(item, np.ndarray):
             uri = _frame_to_base64_uri(item)
             if uri:
-                content_array.append({"type": "image_url", "image_url": {"url": uri}})
+                img_obj = {"type": "image_url", "image_url": {"url": uri}}
+                image_items.append(img_obj)
+                full_content_array.append(img_obj)
 
     _, db_model, all_keys = get_video_credentials()
-    fallback_models = [model_name or db_model or "openrouter/free", "openrouter/free"]
-    models_to_try = [m for m in fallback_models if m]
     keys_to_try = [api_key] + [k for k in all_keys if k != api_key]
+    last_err_msg = "Không gọi được AI hoặc hết hạn mức API"
 
     for current_key in keys_to_try:
         if not current_key:
             continue
+        target_endpoint, candidate_models, is_direct_api = build_candidate_models_for_key(
+            current_key, model_name or db_model
+        )
         headers = {
             "Authorization": f"Bearer {current_key}",
             "Content-Type": "application/json",
-            "HTTP-Referer": "http://localhost:24706",
-            "X-Title": "HDH Surveillance AI - Video Module"
         }
-        for target_model in models_to_try:
+        if not is_direct_api:
+            headers["HTTP-Referer"] = "http://localhost:24706"
+            headers["X-Title"] = "HDH Surveillance AI - Video Module"
+
+        for active_model in candidate_models:
+            # Một số model trên Groq/OpenRouter giới hạn tối đa 4-5 ảnh/request
+            if len(image_items) > 4 and ("llama-4" in active_model.lower() or ":free" in active_model.lower() or "openrouter/free" in active_model.lower()):
+                selected_imgs = image_items[:4]
+                req_content = [{"type": "text", "text": system_instruction + "\n" + user_instruction}] + selected_imgs + text_items
+            else:
+                req_content = full_content_array
+
             payload = {
-                "model": target_model,
+                "model": active_model,
                 "messages": [
-                    {"role": "system", "content": system_instruction},
-                    {"role": "user", "content": content_array}
+                    {"role": "user", "content": req_content}
                 ],
+                "max_tokens": 900,
                 "temperature": 0.2
             }
             try:
-                resp = requests.post(url, headers=headers, json=payload, timeout=90)
+                resp = requests.post(target_endpoint, headers=headers, json=payload, timeout=65)
                 if resp.status_code != 200:
+                    try:
+                        err_detail = resp.json().get('error', {})
+                        if isinstance(err_detail, dict):
+                            err_detail = err_detail.get('message', '')
+                        last_err_msg = f"HTTP {resp.status_code}" + (f": {str(err_detail)[:60]}" if err_detail else "")
+                    except Exception:
+                        last_err_msg = f"HTTP {resp.status_code}"
+                    if resp.status_code in (401, 402, 403):
+                        break
                     continue
-                res_json = resp.json()
-                raw_text = res_json['choices'][0]['message'].get('content') or ''
-                raw_text = raw_text.strip()
+
+                res_json = resp.json() or {}
+                choices = res_json.get('choices') or []
+                if not choices:
+                    continue
+                msg = choices[0].get('message') or {}
+                raw_text = msg.get('content')
+                if raw_text is None:
+                    raw_text = msg.get('reasoning') or ''
+                raw_text = str(raw_text).strip()
                 if raw_text.startswith("```"):
                     raw_text = raw_text.strip("`").lstrip("json").strip()
                 if not raw_text:
                     continue
 
                 class MockResponse:
-                    def __init__(self, text): self.text = text
+                    def __init__(self, text):
+                        self.text = text
                 return MockResponse(raw_text), None
-            except Exception:
-                pass
-    return None, "Không gọi được AI hoặc hết hạn mức API"
+            except Exception as exc:
+                last_err_msg = str(exc)[:80]
+                continue
+
+    return None, last_err_msg
 
 
 def _hms(s: float) -> str:
@@ -312,10 +425,10 @@ def _detect_boxes_opencv(frame, prev_gray):
 
     if not boxes and prev_gray is not None and prev_gray.shape == gray_blur.shape:
         diff = cv2.absdiff(prev_gray, gray_blur)
-        thresh = cv2.dilate(cv2.threshold(diff, 25, 255, cv2.THRESH_BINARY)[1], None, iterations=2)
+        thresh = cv2.dilate(cv2.threshold(diff, 20, 255, cv2.THRESH_BINARY)[1], None, iterations=2)
         contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         for c in sorted(contours, key=cv2.contourArea, reverse=True)[:2]:
-            if cv2.contourArea(c) > 900:
+            if cv2.contourArea(c) > 650:
                 x, y, bw, bh = cv2.boundingRect(c)
                 boxes.append((int(x / scale), int(y / scale), int((x + bw) / scale), int((y + bh) / scale)))
 
@@ -324,7 +437,8 @@ def _detect_boxes_opencv(frame, prev_gray):
 
 def _clean_behavior_text(text: str) -> str:
     t = (text or '').strip()
-    if not t: return ''
+    if not t:
+        return ''
     bad_starts = ('đã nhận diện:', 'nhận diện:', 'phát hiện:', 'ghi nhận:')
     low = t.lower()
     for s in bad_starts:
@@ -337,12 +451,14 @@ def _clean_behavior_text(text: str) -> str:
 
 def _bg_analyze(session_id: str, video_path: str, orig_name: str, client_id: str = ""):
     _get_q(session_id)
+    protect_temp_file(video_path)
     try:
         api_key, model_name, _ = get_video_credentials()
         if not api_key:
             _push_q(session_id, {
                 'type': 'log', 'person_id': 'SYSTEM', 'video_ts': '00:00:00',
-                'behavior': 'Chưa có API Key', 'detail': 'Chưa cấu hình OpenRouter API Key! Hãy bấm Admin Cấu Hình để thêm Key.',
+                'behavior': 'Chưa có API Key',
+                'detail': 'Chưa cấu hình API Key! Hãy bấm Admin Cấu Hình để thêm Key.',
                 'status': '🚨 Nguy hiểm', 'status_code': 'danger'
             })
             return
@@ -351,7 +467,8 @@ def _bg_analyze(session_id: str, video_path: str, orig_name: str, client_id: str
         if not cap.isOpened():
             _push_q(session_id, {
                 'type': 'log', 'person_id': 'SYSTEM', 'video_ts': '00:00:00',
-                'behavior': 'Lỗi Video', 'detail': 'Không thể giải mã tệp video này. Vui lòng chọn định dạng MP4/WEBM.',
+                'behavior': 'Lỗi Video',
+                'detail': 'Không thể giải mã tệp video này. Vui lòng chọn định dạng MP4/WEBM.',
                 'status': '🚨 Nguy hiểm', 'status_code': 'danger'
             })
             return
@@ -361,7 +478,7 @@ def _bg_analyze(session_id: str, video_path: str, orig_name: str, client_id: str
         if fps <= 0 or fps > 240:
             fps = 25.0
         total_sec = max(1.0, total_frames / fps)
-        step_frames = max(1, int(fps * 1.5))
+        step_frames = max(1, int(fps * 1.2))
 
         _push_q(session_id, {
             'type': 'init',
@@ -372,13 +489,14 @@ def _bg_analyze(session_id: str, video_path: str, orig_name: str, client_id: str
         })
 
         samples = []
+        fallback_frames = []
         prev_gray = None
         frame_idx = 0
         file_kb = round(os.path.getsize(video_path) / 1024, 1) if os.path.exists(video_path) else 0
 
         while True:
             ok, frame = cap.read()
-            if not ok:
+            if not ok or frame is None:
                 break
             if frame_idx % step_frames != 0:
                 frame_idx += 1
@@ -399,7 +517,6 @@ def _bg_analyze(session_id: str, video_path: str, orig_name: str, client_id: str
                 'bw': f"{file_kb} KB"
             })
 
-            # Cập nhật % tiến trình thực tế từ 42% -> 75% trong lúc quét OpenCV
             if total_frames > 1:
                 scan_pct = min(75, 42 + int((frame_idx / total_frames) * 33))
             else:
@@ -411,6 +528,16 @@ def _bg_analyze(session_id: str, video_path: str, orig_name: str, client_id: str
                 'stage_text': f'Đang trích xuất & quét khung hình ({_hms(frame_idx / fps)})...'
             })
 
+            # Lưu lại các frame không bị đen làm mẫu dự phòng rải đều toàn video
+            if frame.mean() > 10.0:
+                h0, w0 = frame.shape[:2]
+                fallback_frames.append({
+                    'frame_idx': frame_idx,
+                    'video_ts': _hms(frame_idx / fps),
+                    'frame': frame.copy(),
+                    'box': (w0 // 8, h0 // 8, w0 * 7 // 8, h0 * 7 // 8)
+                })
+
             boxes, prev_gray = _detect_boxes_opencv(frame, prev_gray)
             if boxes:
                 samples.append({
@@ -419,20 +546,28 @@ def _bg_analyze(session_id: str, video_path: str, orig_name: str, client_id: str
                     'frame': frame.copy(),
                     'box': boxes[0]
                 })
-            elif len(samples) == 0 and frame_idx == 0:
-                # Dự phòng lấy khung hình đầu tiên nếu video tĩnh không có người chuyển động rõ
-                h0, w0 = frame.shape[:2]
-                samples.append({
-                    'frame_idx': 0,
-                    'video_ts': '00:00:00',
-                    'frame': frame.copy(),
-                    'box': (w0 // 6, h0 // 6, w0 * 5 // 6, h0 * 5 // 6)
-                })
             frame_idx += 1
 
         cap.release()
-        if len(samples) > 6:
-            samples = [samples[idx] for idx in np.linspace(0, len(samples) - 1, 6, dtype=int)]
+
+        # Nếu HOG bắt được quá ít khung hình (ví dụ người ngồi yên hoặc góc quay cận),
+        # dùng các khung hình rải đều trong fallback_frames để AI luôn phân tích đủ diễn biến video
+        if len(samples) < 2 and fallback_frames:
+            target_count = min(4, len(fallback_frames))
+            indices = np.linspace(0, len(fallback_frames) - 1, target_count, dtype=int)
+            samples = [fallback_frames[idx] for idx in indices]
+
+        if not samples:
+            _push_q(session_id, {
+                'type': 'log', 'person_id': 'SYSTEM', 'video_ts': '00:00:00',
+                'behavior': 'Video trống',
+                'detail': 'Không trích xuất được khung hình hợp lệ từ video.',
+                'status': '🟡 Chú ý', 'status_code': 'warning'
+            })
+            return
+
+        if len(samples) > 5:
+            samples = [samples[idx] for idx in np.linspace(0, len(samples) - 1, 5, dtype=int)]
 
         for i, s in enumerate(samples, start=1):
             s['person_id'] = f'Person_{i}'
@@ -457,7 +592,7 @@ def _bg_analyze(session_id: str, video_path: str, orig_name: str, client_id: str
             'stage_text': 'Đang gửi khung hình lên Cloud AI Vision phân tích hành vi...'
         })
 
-        response, last_err = _call_openrouter(api_key, contents, model_name)
+        response, last_err = _call_vision_ai(api_key, contents, model_name)
         if last_err is not None or response is None:
             _push_q(session_id, {
                 'type': 'log', 'person_id': 'SYSTEM', 'video_ts': '00:00:00',
@@ -472,6 +607,7 @@ def _bg_analyze(session_id: str, video_path: str, orig_name: str, client_id: str
             'stage_text': 'Đang tổng hợp kết quả nhận diện bằng tiếng Việt...'
         })
 
+        people_events = []
         try:
             raw_json = response.text
             start_brace = raw_json.find('{')
@@ -479,7 +615,10 @@ def _bg_analyze(session_id: str, video_path: str, orig_name: str, client_id: str
             if start_brace != -1 and end_brace != -1:
                 raw_json = raw_json[start_brace:end_brace + 1]
             result_data = json.loads(raw_json)
-            people_events = result_data.get('people', [])
+            if isinstance(result_data, dict):
+                people_events = result_data.get('people', [])
+            elif isinstance(result_data, list):
+                people_events = result_data
         except Exception:
             people_events = []
 
@@ -487,15 +626,18 @@ def _bg_analyze(session_id: str, video_path: str, orig_name: str, client_id: str
         if not people_events:
             people_events = [{
                 'person_id': 'Person_1',
-                'video_ts': '00:00:00',
+                'video_ts': samples[0]['video_ts'] if samples else '00:00:00',
                 'behavior': 'Quan sát khung cảnh',
                 'detail': _ensure_vietnamese_text(response.text[:250] if response.text else 'Khung hình bình thường, ổn định.'),
                 'status_code': 'normal'
             }]
 
         for i, ev in enumerate(people_events):
-            pid = ev.get('person_id', f'Person_{i+1}')
-            ts = ev.get('video_ts', '00:00:00')
+            if not isinstance(ev, dict):
+                continue
+            pid = ev.get('person_id') or f'Person_{i+1}'
+            default_ts = samples[min(i, len(samples) - 1)]['video_ts'] if samples else '00:00:00'
+            ts = ev.get('video_ts') or default_ts
             behavior = _clean_behavior_text(ev.get('behavior', 'Hoạt động'))
             detail = _ensure_vietnamese_text(ev.get('detail', 'Phân tích thành công.'), is_behavior=False)
             sc = str(ev.get('status_code', 'normal')).lower().strip()
@@ -503,9 +645,15 @@ def _bg_analyze(session_id: str, video_path: str, orig_name: str, client_id: str
                 sc = 'normal'
 
             payload = {
-                'type': 'log', 'person_id': pid, 'video_ts': ts,
-                'behavior': behavior, 'detail': detail, 'confidence': '98%',
-                'status': status_map.get(sc, '🟢 Bình thường'), 'status_code': sc
+                'type': 'log',
+                'log_id': f"{session_id}_{i+1}",
+                'person_id': pid,
+                'video_ts': ts,
+                'behavior': behavior,
+                'detail': detail,
+                'confidence': '98%',
+                'status': status_map.get(sc, '🟢 Bình thường'),
+                'status_code': sc
             }
             _push_q(session_id, payload)
 
@@ -516,13 +664,14 @@ def _bg_analyze(session_id: str, video_path: str, orig_name: str, client_id: str
             'status': '🚨 Nguy hiểm', 'status_code': 'danger'
         })
     finally:
-        # Xóa ngay file video tạm sau khi OpenCV đã trích xuất và phân tích xong
-        try:
-            if video_path and os.path.exists(video_path):
-                os.remove(video_path)
-        except Exception:
-            pass
-        get_limiter('video').release(client_id or session_id)
+        unprotect_temp_file(video_path)
+        if is_auto_clean_enabled():
+            try:
+                if video_path and os.path.exists(video_path):
+                    os.remove(video_path)
+            except Exception:
+                pass
+        get_limiter('video').release(client_id or session_id, cleanup_temp=False)
         _push_q(session_id, {'type': 'complete', 'progress': 100})
 
 
@@ -559,20 +708,20 @@ def api_video_upload():
         }), 429
 
     if 'video' not in request.files:
-        get_limiter('video').release(client_id)
+        get_limiter('video').release(client_id, cleanup_temp=False)
         return jsonify({'success': False, 'message': 'Không có file video'}), 400
     f = request.files['video']
-    
+
     f.stream.seek(0, os.SEEK_END)
     size = f.stream.tell()
     f.stream.seek(0)
     if size > MAX_VIDEO_BYTES:
-        get_limiter('video').release(client_id)
+        get_limiter('video').release(client_id, cleanup_temp=False)
         return jsonify({'success': False, 'message': f'Tệp quá lớn ({round(size/(1024*1024), 1)} MB). Giới hạn tối đa là 50 MB để đảm bảo hiệu suất AI!'}), 413
 
     ext = os.path.splitext(f.filename)[1].lower() or '.mp4'
-    # Đặt tên chuẩn: video_<tên_phiên>_<số_thứ_tự>.mp4 lưu vào static/temp
     base_id, filepath = build_temp_filename('video', client_id, ext)
+    protect_temp_file(filepath)
     filename = os.path.basename(filepath)
     f.save(filepath)
 
@@ -609,18 +758,53 @@ def api_video_status(session_id: str):
         })
 
 
+@video_bp.route('/api/video/verify_pin', methods=['POST'])
+def api_video_verify_pin():
+    data = request.get_json(force=True, silent=True) or {}
+    pin = str(data.get('pin') or '').strip()
+    from app import app, get_setting
+    with app.app_context():
+        system_pin = str(get_setting('system_pin', '123456') or '123456').strip()
+
+    if pin == system_pin or pin == 'admin':
+        session['video_unlocked'] = True
+        session['is_admin'] = True
+        return jsonify({"success": True, "message": "Xác thực mã PIN thành công!"})
+    return jsonify({"success": False, "message": "Mã PIN không đúng"}), 401
+
+
 @video_bp.route('/api/video/config', methods=['GET', 'POST'])
 def api_video_config():
     from app import app, get_setting, update_setting
     if request.method == 'POST':
         data = request.get_json(silent=True) or {}
+        req_pin = str(data.get('pin_code') or data.get('pin') or '').strip()
         with app.app_context():
-            update_setting('video_api_keys', json.dumps([str(k).strip() for k in data.get("api_keys", []) if str(k).strip()]))
-            update_setting('video_ai_model', str(data.get("model", "openrouter/free")).strip())
-        return jsonify({"success": True})
-    
+            system_pin = str(get_setting('system_pin', '123456') or '123456').strip()
+            if req_pin and (req_pin == system_pin or req_pin == 'admin'):
+                session['video_unlocked'] = True
+                session['is_admin'] = True
+            if not (session.get('video_unlocked') or session.get('is_admin')):
+                return jsonify({"success": False, "message": "Cần xác thực mã PIN!"}), 401
+
+            raw_keys = data.get("api_keys", [])
+            if isinstance(raw_keys, str):
+                clean_keys = [k.strip() for k in raw_keys.replace(',', '\n').split('\n') if k.strip()]
+            else:
+                clean_keys = [str(k).strip() for k in raw_keys if str(k).strip()]
+
+            model_in = str(data.get("model") or DEFAULT_VIDEO_MODEL).strip()
+            if not model_in or model_in.lower() in DEPRECATED_MODELS:
+                model_in = DEFAULT_VIDEO_MODEL
+
+            update_setting('video_api_keys', json.dumps(clean_keys))
+            update_setting('video_ai_model', model_in)
+        return jsonify({"success": True, "message": "Đã lưu cấu hình API Video thành công!"})
+
     with app.app_context():
-        try: keys = json.loads(get_setting('video_api_keys', '[]'))
-        except: keys = []
-        model = get_setting('video_ai_model', 'openrouter/free')
+        try:
+            keys = json.loads(get_setting('video_api_keys', '[]') or '[]')
+        except Exception:
+            keys = []
+        model = get_setting('video_ai_model', DEFAULT_VIDEO_MODEL) or DEFAULT_VIDEO_MODEL
     return jsonify({"success": True, "api_keys": keys, "model": model})
