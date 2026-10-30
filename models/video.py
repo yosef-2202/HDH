@@ -48,11 +48,11 @@ GROQ_VISION_MODELS = [
 ]
 
 OPENROUTER_VISION_MODELS = [
+    "x-ai/grok-4-fast-non-reasoning",
+    "x-ai/grok-4.3",
     "google/gemini-2.0-flash-exp:free",
     "qwen/qwen2.5-vl-72b-instruct:free",
     "meta-llama/llama-4-scout:free",
-    "x-ai/grok-4-fast-non-reasoning",
-    "openrouter/free",
 ]
 
 DEPRECATED_MODELS = {
@@ -60,6 +60,7 @@ DEPRECATED_MODELS = {
     "x-ai/grok-2-vision-1212",
     "grok-2-vision",
     "x-ai/grok-2-vision",
+    "openrouter/free",
     "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
 }
 
@@ -80,7 +81,12 @@ def build_candidate_models_for_key(api_key: str, configured_model: str) -> tuple
     key_str = str(api_key or "").strip()
     model_str = str(configured_model or "").strip()
 
-    if model_str.lower() in DEPRECATED_MODELS or "grok-2" in model_str.lower() or "nemotron" in model_str.lower():
+    if (
+        model_str.lower() in DEPRECATED_MODELS
+        or "grok-2" in model_str.lower()
+        or "nemotron" in model_str.lower()
+        or "openrouter/free" in model_str.lower()
+    ):
         model_str = ""
 
     if key_str.startswith("gsk_"):
@@ -94,7 +100,7 @@ def build_candidate_models_for_key(api_key: str, configured_model: str) -> tuple
 
     if key_str.startswith("sk-or-"):
         candidates = []
-        if model_str and model_str.lower() != "openrouter/free":
+        if model_str:
             if "/" not in model_str and model_str.startswith("grok-"):
                 candidates.append(f"x-ai/{model_str}")
             else:
@@ -105,7 +111,7 @@ def build_candidate_models_for_key(api_key: str, configured_model: str) -> tuple
         return OPENROUTER_ENDPOINT, candidates, False
 
     candidates = []
-    if model_str and model_str.lower() != "openrouter/free":
+    if model_str:
         clean_xai_model = model_str.replace("x-ai/", "").replace(":free", "")
         candidates.append(clean_xai_model)
     for m in XAI_VISION_MODELS:
@@ -115,37 +121,62 @@ def build_candidate_models_for_key(api_key: str, configured_model: str) -> tuple
 
 
 def get_video_credentials():
+    """
+    Lấy danh sách API Key từ cả video_api_keys, realtime_api_keys và rtsp_api_list.
+    Ưu tiên đưa các key trực tiếp (xAI Grok / Groq) lên đầu để đảm bảo tốc độ và độ ổn định.
+    """
     global _video_key_turn
     from app import app, get_setting
-    keys = []
+    raw_collected = []
     model_name = DEFAULT_VIDEO_MODEL
     try:
         with app.app_context():
-            raw_keys = get_setting('video_api_keys', '[]') or '[]'
-            parsed = json.loads(raw_keys)
-            if isinstance(parsed, list):
-                keys = [str(k).strip() for k in parsed if str(k).strip()]
+            # 1. Lấy key từ cấu hình Video
+            try:
+                v_keys = json.loads(get_setting('video_api_keys', '[]') or '[]')
+                if isinstance(v_keys, list):
+                    for k in v_keys:
+                        if isinstance(k, str) and k.strip():
+                            raw_collected.append(k.strip())
+            except Exception:
+                pass
 
-            if not keys:
-                rtsp_raw = get_setting('rtsp_api_list', '[]') or '[]'
-                for it in json.loads(rtsp_raw):
-                    if isinstance(it, dict):
-                        k = str(it.get('key', '')).strip()
-                    else:
-                        k = str(it).strip()
-                    if k and k not in keys:
-                        keys.append(k)
-            if not keys:
-                rt_raw = get_setting('realtime_api_keys', '[]') or '[]'
-                for k in json.loads(rt_raw):
-                    if isinstance(k, str) and k.strip() and k.strip() not in keys:
-                        keys.append(k.strip())
+            # 2. Gộp thêm key từ cấu hình Realtime Camera (nơi đã có sẵn key Grok hoạt động tốt)
+            try:
+                rt_keys = json.loads(get_setting('realtime_api_keys', '[]') or '[]')
+                if isinstance(rt_keys, list):
+                    for k in rt_keys:
+                        if isinstance(k, str) and k.strip() and k.strip() not in raw_collected:
+                            raw_collected.append(k.strip())
+            except Exception:
+                pass
+
+            # 3. Gộp thêm key từ RTSP nếu có
+            try:
+                rtsp_raw = json.loads(get_setting('rtsp_api_list', '[]') or '[]')
+                for it in rtsp_raw:
+                    k = str(it.get('key', '') if isinstance(it, dict) else it).strip()
+                    if k and k not in raw_collected:
+                        raw_collected.append(k)
+            except Exception:
+                pass
 
             saved_model = str(get_setting('video_ai_model', DEFAULT_VIDEO_MODEL) or DEFAULT_VIDEO_MODEL).strip()
-            if saved_model and saved_model.lower() not in DEPRECATED_MODELS:
+            if (
+                saved_model
+                and saved_model.lower() not in DEPRECATED_MODELS
+                and "grok-2" not in saved_model.lower()
+                and "nemotron" not in saved_model.lower()
+                and "openrouter/free" not in saved_model.lower()
+            ):
                 model_name = saved_model
     except Exception:
         pass
+
+    # Sắp xếp ưu tiên key Grok (xai-...) và Groq (gsk_...) lên trước key OpenRouter (sk-or-...)
+    direct_keys = [k for k in raw_collected if not k.startswith("sk-or-")]
+    or_keys = [k for k in raw_collected if k.startswith("sk-or-")]
+    keys = direct_keys + or_keys
 
     if not keys:
         return "", model_name, []
@@ -203,132 +234,160 @@ def _push_q(sid: str, payload: dict):
         pass
 
 
-def _frame_to_base64_uri(frame_bgr):
+def infer_behavior_from_description(desc: str) -> str:
+    low = desc.lower()
+    keyword_map = [
+        ("đánh nhau", "Đang đánh nhau"),
+        ("ẩu đả", "Đang đánh nhau"),
+        ("xô xát", "Đang xô xát"),
+        ("tung cú đá", "Đá / Tấn công"),
+        ("đá vào", "Đá / Tấn công"),
+        ("vung tay đánh", "Đấm / Xô xát"),
+        ("đấm", "Đấm / Xô xát"),
+        ("bóp cổ", "Đang bóp cổ"),
+        ("túm", "Giằng co / Xô xát"),
+        ("vật nhau", "Đang vật/đè nhau"),
+        ("đè nhau", "Đang đè nhau"),
+        ("hôn nhau", "Đang hôn nhau"),
+        ("ôm hôn", "Đang hôn nhau"),
+        ("cầm dao", "Cầm hung khí"),
+        ("vũ khí", "Cầm vũ khí"),
+        ("ngã", "Đang bị ngã"),
+        ("nằm bất động", "Nằm bất động"),
+        ("cãi", "Đang tranh cãi"),
+        ("chống cằm", "Đang ngồi chống cằm"),
+        ("điện thoại", "Đang dùng điện thoại"),
+        ("uống nước", "Đang uống nước"),
+        ("ăn", "Đang ăn uống"),
+        ("vẫy tay", "Đang vẫy tay"),
+        ("đi bộ", "Đang đi bộ"),
+        ("di chuyển", "Đang di chuyển"),
+        ("đứng", "Đang đứng"),
+        ("ngồi", "Đang ngồi"),
+    ]
+    for kw, label in keyword_map:
+        if kw in low:
+            return label
+
+    m = re.search(r'(đang\s+[^.,;]+)', desc, flags=re.IGNORECASE)
+    if m:
+        phrase = m.group(1).strip()
+        words = phrase.split()
+        short_phrase = " ".join(words[:4])
+        return short_phrase[:1].upper() + short_phrase[1:]
+
+    return "Đang hoạt động"
+
+
+def clean_ai_response_and_extract_status(raw_text: str) -> tuple[str, str, str]:
+    """
+    Trích xuất (status_code, behavior_label, clean_description)
+    từ định dạng chuẩn giống realtime_camera.py: [MỨC ĐỘ] [HÀNH VI] Mô tả chi tiết.
+    """
+    text = str(raw_text or "").strip()
+    if not text:
+        return "normal", "Đang quan sát", "Đối tượng đang hoạt động trong khung hình."
+
+    status_badge = "BÌNH THƯỜNG"
+    behavior_label = ""
+    remainder = text
+
+    tag_matches = list(re.finditer(r'\[(BÌNH THƯỜNG|CẢNH BÁO|NGUY HIỂM)\]', text, flags=re.IGNORECASE))
+    if tag_matches:
+        last_match = tag_matches[-1]
+        status_badge = last_match.group(1).upper()
+        tail = text[last_match.end():].strip()
+        if tail and not tail.upper().startswith(("OR ", "HOẶC ", "[CẢNH BÁO]", "[NGUY HIỂM]")):
+            remainder = tail
+    else:
+        m_start = re.match(r'^\s*(BÌNH THƯỜNG|CẢNH BÁO|NGUY HIỂM)\s*[:\-–—|]?\s*', text, flags=re.IGNORECASE)
+        if m_start:
+            status_badge = m_start.group(1).upper()
+            remainder = text[m_start.end():].strip()
+
+    beh_match = re.match(r'^[\s:,\-–—|]*\[([^\[\]]{2,45})\][\s:,\-–—|]*', remainder)
+    if beh_match:
+        candidate_beh = beh_match.group(1).strip()
+        if candidate_beh.upper() not in ("BÌNH THƯỜNG", "CẢNH BÁO", "NGUY HIỂM", "TÍCH CỰC"):
+            behavior_label = candidate_beh
+            remainder = remainder[beh_match.end():].strip()
+
+    if not behavior_label:
+        alt_match = re.match(r'^(?:Hành vi\s*:\s*)?([^.|:\n]{3,35})\s*[|–—-]\s*(.+)$', remainder, flags=re.IGNORECASE)
+        if alt_match:
+            behavior_label = alt_match.group(1).strip(" []\"'")
+            remainder = alt_match.group(2).strip()
+
+    cleaned_desc = re.sub(
+        r'^(\s*\[?(BÌNH THƯỜNG|CẢNH BÁO|NGUY HIỂM|TÍCH CỰC)\]?\s*[:\-–—|]?\s*)+',
+        '',
+        remainder,
+        flags=re.IGNORECASE
+    ).strip(" \"'”")
+
+    if not cleaned_desc:
+        cleaned_desc = "Đối tượng đang xuất hiện trong khung hình camera."
+
+    if not behavior_label:
+        behavior_label = infer_behavior_from_description(cleaned_desc)
+    else:
+        behavior_label = behavior_label[:1].upper() + behavior_label[1:]
+
+    # Quy đổi sang status_code cho bảng giao diện video.html
+    sc = "normal"
+    if "NGUY HIỂM" in status_badge:
+        sc = "danger"
+    elif "CẢNH BÁO" in status_badge:
+        sc = "warning"
+
+    # Kiểm tra từ khóa bạo lực để tự động nâng mức cảnh báo chính xác
+    combined_low = f"{behavior_label} {cleaned_desc}".lower()
+    if any(k in combined_low for k in ("đánh nhau", "xô xát", "ẩu đả", "đá ", "tung cú đá", "đấm", "tấn công", "bóp cổ", "vũ khí", "cầm dao", "ngã")):
+        sc = "danger"
+    elif sc == "normal" and any(k in combined_low for k in ("cãi", "giằng co", "xô đẩy", "đè nhau", "hôn nhau", "chặn")):
+        sc = "warning"
+
+    return sc, behavior_label, cleaned_desc
+
+
+def _analyze_single_frame_with_grok(frame_bgr, video_ts: str) -> tuple[str | None, str | None]:
+    """
+    Gửi 1 khung hình lên Grok (hoặc Groq/OpenRouter) y hệt cơ chế của realtime_camera.py.
+    Trả về (raw_text, error_msg).
+    """
+    api_key, model_name, valid_apis = get_video_credentials()
+    if not api_key:
+        return None, "Chưa cấu hình API Key"
+
     h, w = frame_bgr.shape[:2]
     scale = min(1.0, 640.0 / max(w, h, 1))
     if scale < 1.0:
-        frame_bgr = cv2.resize(frame_bgr, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
-    ret, buffer = cv2.imencode('.jpg', frame_bgr, [int(cv2.IMWRITE_JPEG_QUALITY), 72])
+        frame_resized = cv2.resize(frame_bgr, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
+    else:
+        frame_resized = frame_bgr
+
+    ret, buffer = cv2.imencode('.jpg', frame_resized, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
     if not ret:
-        return ""
-    img_str = base64.b64encode(buffer).decode("utf-8")
-    return f"data:image/jpeg;base64,{img_str}"
+        return None, "Lỗi mã hóa khung hình"
+    img_b64 = base64.b64encode(buffer).decode('utf-8')
 
-
-def _ensure_vietnamese_text(text: str, is_behavior: bool = False) -> str:
-    """Đảm bảo văn bản trả về từ AI hoàn toàn bằng tiếng Việt, dịch nhanh các cụm từ tiếng Anh phổ biến."""
-    t = (text or "").strip()
-    if not t:
-        return "Hoạt động bình thường" if is_behavior else "Không phát hiện dấu hiệu bất thường."
-
-    behavior_dict = {
-        "fighting": "Đánh nhau / Xô xát",
-        "confrontation": "Đối đầu / Căng thẳng",
-        "threatening": "Đe dọa / Khiêu khích",
-        "standing/guarding": "Đứng canh / Chặn cửa",
-        "standing": "Đứng quan sát",
-        "guarding": "Đứng canh giữ",
-        "walking": "Đang đi bộ",
-        "running": "Đang chạy",
-        "sitting": "Đang ngồi",
-        "talking": "Đang trò chuyện",
-        "arguing": "Tranh cãi",
-        "attacking": "Tấn công",
-        "kicking": "Đá / Tấn công",
-        "punching": "Đấm / Xô xát",
-        "watching": "Đứng xem / Quan sát",
-        "bystander": "Người đứng xem",
-        "entering": "Đi vào khu vực",
-        "leaving": "Rời khỏi khu vực",
-        "suspicious": "Hành vi đáng ngờ",
-        "normal": "Hoạt động bình thường",
-    }
-
-    low = t.lower().strip()
-    if is_behavior and low in behavior_dict:
-        return behavior_dict[low]
-
-    replacements = [
-        (r"\bfighting\b", "xô xát/đánh nhau"),
-        (r"\bconfrontation\b", "đối đầu căng thẳng"),
-        (r"\bthreatening\b", "đe dọa"),
-        (r"\bstanding/guarding\b", "đứng canh/chặn lối"),
-        (r"\bstanding in front of the doorway\b", "đứng trước cửa ra vào"),
-        (r"\bstanding in front of\b", "đứng phía trước"),
-        (r"\bstanding\b", "đang đứng"),
-        (r"\bguarding\b", "đứng canh"),
-        (r"\bwalking\b", "đang đi bộ"),
-        (r"\brunning\b", "đang chạy"),
-        (r"\bsitting\b", "đang ngồi"),
-        (r"\bkicking\b", "đang tung cú đá"),
-        (r"\bpunching\b", "đang vung tay đánh"),
-        (r"\bthe person in the green shirt\b", "Người mặc áo xanh lá"),
-        (r"\bthe person in the pink shirt\b", "Người mặc áo hồng"),
-        (r"\bthe person in the black shirt\b", "Người mặc áo đen"),
-        (r"\bthe person in the white shirt\b", "Người mặc áo trắng"),
-        (r"\bthe person in black\b", "người mặc đồ đen"),
-        (r"\bthe person in white\b", "người mặc đồ trắng"),
-        (r"\bthe person in pink\b", "người mặc đồ hồng"),
-        (r"\bthe person in green\b", "người mặc đồ xanh"),
-        (r"\bwearing a helmet\b", "đội mũ bảo hiểm"),
-        (r"\bfacing\b", "hướng mặt về phía"),
-        (r"\bwho is inside\b", "đang ở bên trong"),
-        (r"\bin the doorway\b", "ngay lối cửa ra vào"),
-        (r"\bthe scene\b", "hiện trường"),
-    ]
-    for pattern, vn_str in replacements:
-        t = re.sub(pattern, vn_str, t, flags=re.IGNORECASE)
-
-    return t
-
-
-def _call_vision_ai(api_key, contents, model_name=DEFAULT_VIDEO_MODEL):
-    system_instruction = (
-        "Bạn là chuyên gia AI phân tích video giám sát an ninh tại Việt Nam. "
-        "QUY TẮC TỐI THƯỢNG: BẮT BUỘC viết 100% bằng TIẾNG VIỆT có dấu cho trường 'behavior' và 'detail'. "
-        "TUYỆT ĐỐI KHÔNG dùng tiếng Anh. "
-        "Chỉ trả về duy nhất JSON nguyên chất, không dùng markdown ```json."
+    prompt = (
+        f"Bạn là hệ thống camera AI nhận diện hành vi tại mốc thời gian {video_ts} trong video. "
+        "BẮT BUỘC TRẢ LỜI ĐÚNG 1 DÒNG TIẾNG VIỆT THEO ĐỊNH DẠNG SAU:\n"
+        "[MỨC ĐỘ] [HÀNH VI CỤ THỂ] Mô tả chi tiết người, trang phục và hành động đang diễn ra.\n"
+        "Quy tắc bắt buộc:\n"
+        "1. [MỨC ĐỘ] chỉ chọn 1 trong 3: [BÌNH THƯỜNG], [CẢNH BÁO], hoặc [NGUY HIỂM]. "
+        "(Dùng [BÌNH THƯỜNG] cho đi lại, đứng, ngồi bình thường; dùng [CẢNH BÁO] cho cãi vã, giằng co, ôm hôn, đè nhau; dùng [NGUY HIỂM] cho đánh nhau, đá nhau, đấm nhau, xô xát, bóp cổ, cầm vũ khí, ngã gục).\n"
+        "2. [HÀNH VI CỤ THỂ] phải chỉ đích danh hành động ngắn gọn từ 2-5 chữ trong ngoặc vuông (Ví dụ: [Đang đánh nhau], [Tung cú đá tấn công], [Đang xô xát], [Đang đứng nói chuyện], [Đang đi bộ]).\n"
+        "Ví dụ chuẩn: [NGUY HIỂM] [Đang đánh nhau] Hai thanh niên đang xô xát trước cửa quán, người mặc áo hồng đội mũ bảo hiểm đang tung cú đá vào người mặc áo đen."
     )
-    user_instruction = """
-    Hãy phân tích từng khung hình theo đúng thứ tự và trả về JSON theo đúng cấu trúc sau (100% nội dung tiếng Việt):
-    {
-      "people": [
-        {
-          "person_id": "Person_1",
-          "video_ts": "00:00:00",
-          "behavior": "<Hành TIẾNG VIỆT, bằng bộ, dụ: gọn ngắn ngồi, nhau, quan sát... vi ví Đang Đánh Đứng đi>",
-          "detail": "<Mô TIẾNG VIỆT bằng bối chi cảnh hành phục, quanh thế, tiết trang tư tả và xung động>",
-          "status_code": "<chỉ chọn 1 trong 3 giá trị: normal | warning | danger>"
-        }
-      ]
-    }
-    """
 
-    full_content_array = [{"type": "text", "text": system_instruction + "\n" + user_instruction}]
-    image_items = []
-    text_items = []
-
-    for item in contents:
-        if isinstance(item, str):
-            text_items.append({"type": "text", "text": item})
-            full_content_array.append({"type": "text", "text": item})
-        elif isinstance(item, np.ndarray):
-            uri = _frame_to_base64_uri(item)
-            if uri:
-                img_obj = {"type": "image_url", "image_url": {"url": uri}}
-                image_items.append(img_obj)
-                full_content_array.append(img_obj)
-
-    _, db_model, all_keys = get_video_credentials()
-    keys_to_try = [api_key] + [k for k in all_keys if k != api_key]
-    last_err_msg = "Không gọi được AI hoặc hết hạn mức API"
+    last_error = "Không gọi được AI"
+    keys_to_try = [api_key] + [k for k in valid_apis if k != api_key]
 
     for current_key in keys_to_try:
-        if not current_key:
-            continue
-        target_endpoint, candidate_models, is_direct_api = build_candidate_models_for_key(
-            current_key, model_name or db_model
-        )
+        target_endpoint, candidate_models, is_direct_api = build_candidate_models_for_key(current_key, model_name)
+
         headers = {
             "Authorization": f"Bearer {current_key}",
             "Content-Type": "application/json",
@@ -338,58 +397,53 @@ def _call_vision_ai(api_key, contents, model_name=DEFAULT_VIDEO_MODEL):
             headers["X-Title"] = "HDH Surveillance AI - Video Module"
 
         for active_model in candidate_models:
-            # Một số model trên Groq/OpenRouter giới hạn tối đa 4-5 ảnh/request
-            if len(image_items) > 4 and ("llama-4" in active_model.lower() or ":free" in active_model.lower() or "openrouter/free" in active_model.lower()):
-                selected_imgs = image_items[:4]
-                req_content = [{"type": "text", "text": system_instruction + "\n" + user_instruction}] + selected_imgs + text_items
-            else:
-                req_content = full_content_array
-
             payload = {
                 "model": active_model,
-                "messages": [
-                    {"role": "user", "content": req_content}
-                ],
-                "max_tokens": 900,
+                "messages": [{
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}}
+                    ]
+                }],
+                "max_tokens": 300,
                 "temperature": 0.2
             }
+
             try:
-                resp = requests.post(target_endpoint, headers=headers, json=payload, timeout=65)
-                if resp.status_code != 200:
+                response = requests.post(target_endpoint, headers=headers, json=payload, timeout=30)
+                if response.status_code != 200:
                     try:
-                        err_detail = resp.json().get('error', {})
+                        err_json = response.json()
+                        err_detail = err_json.get('error', {})
                         if isinstance(err_detail, dict):
                             err_detail = err_detail.get('message', '')
-                        last_err_msg = f"HTTP {resp.status_code}" + (f": {str(err_detail)[:60]}" if err_detail else "")
+                        else:
+                            err_detail = str(err_detail)
                     except Exception:
-                        last_err_msg = f"HTTP {resp.status_code}"
-                    if resp.status_code in (401, 402, 403):
+                        err_detail = ''
+                    last_error = f"HTTP {response.status_code}" + (f" ({err_detail[:45]})" if err_detail else "")
+
+                    if response.status_code in (401, 402, 403, 429):
                         break
                     continue
 
-                res_json = resp.json() or {}
+                res_json = response.json() or {}
                 choices = res_json.get('choices') or []
-                if not choices:
-                    continue
-                msg = choices[0].get('message') or {}
-                raw_text = msg.get('content')
-                if raw_text is None:
-                    raw_text = msg.get('reasoning') or ''
-                raw_text = str(raw_text).strip()
-                if raw_text.startswith("```"):
-                    raw_text = raw_text.strip("`").lstrip("json").strip()
-                if not raw_text:
-                    continue
+                if choices and isinstance(choices[0], dict):
+                    msg = choices[0].get('message') or {}
+                    content_str = str(msg.get('content') or '').strip()
+                    if content_str:
+                        return content_str, None
+                    else:
+                        last_error = f"Model {active_model} trả về rỗng"
+                else:
+                    last_error = "Empty choices"
+            except Exception as req_err:
+                last_error = str(req_err)[:60]
+                break
 
-                class MockResponse:
-                    def __init__(self, text):
-                        self.text = text
-                return MockResponse(raw_text), None
-            except Exception as exc:
-                last_err_msg = str(exc)[:80]
-                continue
-
-    return None, last_err_msg
+    return None, last_error
 
 
 def _hms(s: float) -> str:
@@ -435,30 +489,17 @@ def _detect_boxes_opencv(frame, prev_gray):
     return boxes, gray_blur
 
 
-def _clean_behavior_text(text: str) -> str:
-    t = (text or '').strip()
-    if not t:
-        return ''
-    bad_starts = ('đã nhận diện:', 'nhận diện:', 'phát hiện:', 'ghi nhận:')
-    low = t.lower()
-    for s in bad_starts:
-        if low.startswith(s):
-            t = t[len(s):].strip()
-            break
-    t = t.strip(' -—–,:;')
-    return _ensure_vietnamese_text(t, is_behavior=True)
-
-
 def _bg_analyze(session_id: str, video_path: str, orig_name: str, client_id: str = ""):
     _get_q(session_id)
     protect_temp_file(video_path)
     try:
-        api_key, model_name, _ = get_video_credentials()
+        api_key, _, _ = get_video_credentials()
         if not api_key:
             _push_q(session_id, {
-                'type': 'log', 'person_id': 'SYSTEM', 'video_ts': '00:00:00',
+                'type': 'log', 'log_id': f"{session_id}_err_key",
+                'person_id': 'SYSTEM', 'video_ts': '00:00:00',
                 'behavior': 'Chưa có API Key',
-                'detail': 'Chưa cấu hình API Key! Hãy bấm Admin Cấu Hình để thêm Key.',
+                'detail': 'Chưa cấu hình API Key! Hãy bấm Admin Cấu Hình để thêm Key Grok/OpenRouter.',
                 'status': '🚨 Nguy hiểm', 'status_code': 'danger'
             })
             return
@@ -466,7 +507,8 @@ def _bg_analyze(session_id: str, video_path: str, orig_name: str, client_id: str
         cap = cv2.VideoCapture(video_path)
         if not cap.isOpened():
             _push_q(session_id, {
-                'type': 'log', 'person_id': 'SYSTEM', 'video_ts': '00:00:00',
+                'type': 'log', 'log_id': f"{session_id}_err_cap",
+                'person_id': 'SYSTEM', 'video_ts': '00:00:00',
                 'behavior': 'Lỗi Video',
                 'detail': 'Không thể giải mã tệp video này. Vui lòng chọn định dạng MP4/WEBM.',
                 'status': '🚨 Nguy hiểm', 'status_code': 'danger'
@@ -485,7 +527,7 @@ def _bg_analyze(session_id: str, video_path: str, orig_name: str, client_id: str
             'total_hms': _hms(total_sec),
             'total_frames': total_frames,
             'progress': 42,
-            'stage_text': 'Đang quét khung hình bằng OpenCV HOG...'
+            'stage_text': 'Đang quét chuyển động bằng OpenCV...'
         })
 
         samples = []
@@ -518,17 +560,16 @@ def _bg_analyze(session_id: str, video_path: str, orig_name: str, client_id: str
             })
 
             if total_frames > 1:
-                scan_pct = min(75, 42 + int((frame_idx / total_frames) * 33))
+                scan_pct = min(70, 42 + int((frame_idx / total_frames) * 28))
             else:
-                scan_pct = min(75, 45 + len(samples) * 5)
+                scan_pct = min(70, 45 + len(samples) * 5)
 
             _push_q(session_id, {
                 'type': 'progress',
                 'progress': scan_pct,
-                'stage_text': f'Đang trích xuất & quét khung hình ({_hms(frame_idx / fps)})...'
+                'stage_text': f'Đang trích xuất khung hình ({_hms(frame_idx / fps)})...'
             })
 
-            # Lưu lại các frame không bị đen làm mẫu dự phòng rải đều toàn video
             if frame.mean() > 10.0:
                 h0, w0 = frame.shape[:2]
                 fallback_frames.append({
@@ -550,116 +591,75 @@ def _bg_analyze(session_id: str, video_path: str, orig_name: str, client_id: str
 
         cap.release()
 
-        # Nếu HOG bắt được quá ít khung hình (ví dụ người ngồi yên hoặc góc quay cận),
-        # dùng các khung hình rải đều trong fallback_frames để AI luôn phân tích đủ diễn biến video
         if len(samples) < 2 and fallback_frames:
-            target_count = min(4, len(fallback_frames))
+            target_count = min(3, len(fallback_frames))
             indices = np.linspace(0, len(fallback_frames) - 1, target_count, dtype=int)
             samples = [fallback_frames[idx] for idx in indices]
 
         if not samples:
             _push_q(session_id, {
-                'type': 'log', 'person_id': 'SYSTEM', 'video_ts': '00:00:00',
+                'type': 'log', 'log_id': f"{session_id}_empty",
+                'person_id': 'SYSTEM', 'video_ts': '00:00:00',
                 'behavior': 'Video trống',
                 'detail': 'Không trích xuất được khung hình hợp lệ từ video.',
                 'status': '🟡 Chú ý', 'status_code': 'warning'
             })
             return
 
-        if len(samples) > 5:
-            samples = [samples[idx] for idx in np.linspace(0, len(samples) - 1, 5, dtype=int)]
-
-        for i, s in enumerate(samples, start=1):
-            s['person_id'] = f'Person_{i}'
-
-        contents = []
-        lines = []
-        for s in samples:
-            annotated = _annotate_person(s['frame'], s['box'], s['person_id'])
-            contents.append(annotated)
-            lines.append(f"- {s['person_id']} tại mốc {s['video_ts']}")
-
-        prompt = (
-            "Phân tích các khung hình video an ninh sau đây. "
-            "LƯU Ý QUAN TRỌNG: Bắt buộc phải viết tất cả nội dung mô tả 'behavior' và 'detail' bằng TIẾNG VIỆT 100%, "
-            "không được viết bằng tiếng Anh:\n" + "\n".join(lines)
-        )
-        contents.append(prompt)
-
-        _push_q(session_id, {
-            'type': 'progress',
-            'progress': 82,
-            'stage_text': 'Đang gửi khung hình lên Cloud AI Vision phân tích hành vi...'
-        })
-
-        response, last_err = _call_vision_ai(api_key, contents, model_name)
-        if last_err is not None or response is None:
-            _push_q(session_id, {
-                'type': 'log', 'person_id': 'SYSTEM', 'video_ts': '00:00:00',
-                'behavior': 'Lỗi Gọi AI', 'detail': str(last_err),
-                'status': '🚨 Nguy hiểm', 'status_code': 'danger'
-            })
-            return
-
-        _push_q(session_id, {
-            'type': 'progress',
-            'progress': 94,
-            'stage_text': 'Đang tổng hợp kết quả nhận diện bằng tiếng Việt...'
-        })
-
-        people_events = []
-        try:
-            raw_json = response.text
-            start_brace = raw_json.find('{')
-            end_brace = raw_json.rfind('}')
-            if start_brace != -1 and end_brace != -1:
-                raw_json = raw_json[start_brace:end_brace + 1]
-            result_data = json.loads(raw_json)
-            if isinstance(result_data, dict):
-                people_events = result_data.get('people', [])
-            elif isinstance(result_data, list):
-                people_events = result_data
-        except Exception:
-            people_events = []
+        # Chọn tối đa 3 mốc thời gian tiêu biểu trong video để Grok phân tích nhanh và chi tiết
+        if len(samples) > 3:
+            samples = [samples[idx] for idx in np.linspace(0, len(samples) - 1, 3, dtype=int)]
 
         status_map = {'normal': '🟢 Bình thường', 'warning': '🟡 Chú ý', 'danger': '🚨 Nguy hiểm'}
-        if not people_events:
-            people_events = [{
-                'person_id': 'Person_1',
-                'video_ts': samples[0]['video_ts'] if samples else '00:00:00',
-                'behavior': 'Quan sát khung cảnh',
-                'detail': _ensure_vietnamese_text(response.text[:250] if response.text else 'Khung hình bình thường, ổn định.'),
-                'status_code': 'normal'
-            }]
+        total_samples = len(samples)
+        success_count = 0
+        last_err_msg = ""
 
-        for i, ev in enumerate(people_events):
-            if not isinstance(ev, dict):
-                continue
-            pid = ev.get('person_id') or f'Person_{i+1}'
-            default_ts = samples[min(i, len(samples) - 1)]['video_ts'] if samples else '00:00:00'
-            ts = ev.get('video_ts') or default_ts
-            behavior = _clean_behavior_text(ev.get('behavior', 'Hoạt động'))
-            detail = _ensure_vietnamese_text(ev.get('detail', 'Phân tích thành công.'), is_behavior=False)
-            sc = str(ev.get('status_code', 'normal')).lower().strip()
-            if sc not in status_map:
-                sc = 'normal'
+        for idx, s in enumerate(samples, start=1):
+            pid = f'Person_{idx}'
+            ts = s['video_ts']
+            pct = 72 + int((idx / total_samples) * 24)
 
-            payload = {
+            _push_q(session_id, {
+                'type': 'progress',
+                'progress': min(96, pct),
+                'stage_text': f'Grok AI đang phân tích khung hình {idx}/{total_samples} (mốc {ts})...'
+            })
+
+            raw_text, err = _analyze_single_frame_with_grok(s['frame'], ts)
+            if raw_text:
+                sc, behavior_label, clean_desc = clean_ai_response_and_extract_status(raw_text)
+                _push_q(session_id, {
+                    'type': 'log',
+                    'log_id': f"{session_id}_{idx}",
+                    'person_id': pid,
+                    'video_ts': ts,
+                    'behavior': behavior_label,
+                    'detail': clean_desc,
+                    'confidence': '98%',
+                    'status': status_map.get(sc, '🟢 Bình thường'),
+                    'status_code': sc
+                })
+                success_count += 1
+            else:
+                last_err_msg = err or "Lỗi kết nối API"
+
+        if success_count == 0:
+            _push_q(session_id, {
                 'type': 'log',
-                'log_id': f"{session_id}_{i+1}",
-                'person_id': pid,
-                'video_ts': ts,
-                'behavior': behavior,
-                'detail': detail,
-                'confidence': '98%',
-                'status': status_map.get(sc, '🟢 Bình thường'),
-                'status_code': sc
-            }
-            _push_q(session_id, payload)
+                'log_id': f"{session_id}_fail",
+                'person_id': 'SYSTEM',
+                'video_ts': '00:00:00',
+                'behavior': 'Lỗi Gọi AI',
+                'detail': f"Không thể phân tích khung hình ({last_err_msg}). Hãy kiểm tra API Key trong Admin Cấu Hình.",
+                'status': '🚨 Nguy hiểm',
+                'status_code': 'danger'
+            })
 
     except Exception as exc:
         _push_q(session_id, {
-            'type': 'log', 'person_id': 'SYSTEM', 'video_ts': '00:00:00',
+            'type': 'log', 'log_id': f"{session_id}_exc",
+            'person_id': 'SYSTEM', 'video_ts': '00:00:00',
             'behavior': 'Lỗi Xử Lý', 'detail': str(exc),
             'status': '🚨 Nguy hiểm', 'status_code': 'danger'
         })
@@ -794,7 +794,7 @@ def api_video_config():
                 clean_keys = [str(k).strip() for k in raw_keys if str(k).strip()]
 
             model_in = str(data.get("model") or DEFAULT_VIDEO_MODEL).strip()
-            if not model_in or model_in.lower() in DEPRECATED_MODELS:
+            if not model_in or model_in.lower() in DEPRECATED_MODELS or "openrouter/free" in model_in.lower():
                 model_in = DEFAULT_VIDEO_MODEL
 
             update_setting('video_api_keys', json.dumps(clean_keys))
@@ -804,7 +804,11 @@ def api_video_config():
     with app.app_context():
         try:
             keys = json.loads(get_setting('video_api_keys', '[]') or '[]')
+            if not keys:
+                keys = json.loads(get_setting('realtime_api_keys', '[]') or '[]')
         except Exception:
             keys = []
         model = get_setting('video_ai_model', DEFAULT_VIDEO_MODEL) or DEFAULT_VIDEO_MODEL
+        if model.lower() in DEPRECATED_MODELS or "openrouter/free" in model.lower():
+            model = DEFAULT_VIDEO_MODEL
     return jsonify({"success": True, "api_keys": keys, "model": model})
